@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Search, Plus, Home, MessageSquare, Star, Trash2, ChevronRight } from 'lucide-react';
+import { Search, Trash2, ChevronRight } from 'lucide-react';
 import { Thread, Screen } from '../types';
+import { db } from '../lib/db';
 
 interface ThreadsProps {
   threads: Thread[];
@@ -18,9 +19,10 @@ export default function Threads({ threads, setThreads, onNavigate, onOpenThread,
     t.preview.toLowerCase().includes(search.toLowerCase())
   );
 
-  const deleteThread = (e: React.MouseEvent, id: string) => {
+  const deleteThread = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     setThreads(prev => prev.filter(t => t.id !== id));
+    await db.deleteThread(id);
   };
 
   return (

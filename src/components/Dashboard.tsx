@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { Home, MessageSquare, Star, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { Task, Screen } from '../types';
 import TaskItem from './TaskItem';
 import AddTaskModal from './AddTaskModal';
 import EditTaskModal from './EditTaskModal';
+import { db } from '../lib/db';
 
 interface DashboardProps {
   tasks: Task[];
@@ -48,32 +49,48 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onNewThread, on
       });
   }, [tasks, selectedDate, today]);
 
-  const toggleTask = (id: string) => {
-    const updated = tasks.map(t => t.id === id ? { ...t, done: !t.done } : t);
+  const toggleTask = async (id: string) => {
+    const updated = tasks.map(t => {
+      if (t.id === id) {
+        const newTask = { ...t, done: !t.done };
+        db.saveTask(newTask);
+        return newTask;
+      }
+      return t;
+    });
     setTasks(updated);
   };
 
-  const addTask = (name: string, time: string, date: string) => {
+  const addTask = async (name: string, time: string, date: string) => {
     const newTask: Task = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       name,
       time,
       date,
       done: false
     };
     setTasks([...tasks, newTask]);
+    await db.saveTask(newTask);
     setIsAddModalOpen(false);
   };
 
-  const updateTask = (id: string, name: string, time: string, date: string) => {
-    const updated = tasks.map(t => t.id === id ? { ...t, name, time, date } : t);
+  const updateTask = async (id: string, name: string, time: string, date: string) => {
+    const updated = tasks.map(t => {
+      if (t.id === id) {
+        const newTask = { ...t, name, time, date };
+        db.saveTask(newTask);
+        return newTask;
+      }
+      return t;
+    });
     setTasks(updated);
     setEditingTask(null);
   };
 
-  const deleteTask = (id: string) => {
+  const deleteTask = async (id: string) => {
     const updated = tasks.filter(t => t.id !== id);
     setTasks(updated);
+    await db.deleteTask(id);
     setEditingTask(null);
   };
 

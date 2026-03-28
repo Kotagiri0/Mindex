@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { storage } from './lib/storage';
+import { db } from './lib/db';
 import { Screen, Task, Thread, Settings } from './types';
 import Onboarding from './components/Onboarding';
 import Dashboard from './components/Dashboard';
@@ -20,20 +20,48 @@ export default function App() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [settings, setSettings] = useState<Settings>({ agent: true, confirm: true, notifs: true });
   const [curTh, setCurTh] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setTasks(storage.getTasks());
-    setThreads(storage.getThreads());
-    setSettings(storage.getSettings());
-    if (storage.getOnboardingComplete()) {
-      setScreen('dash');
+    // Telegram Mini App initialization
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      tg.setHeaderColor('#FFFFFF');
     }
+
+    const initData = async () => {
+      try {
+        const [profile, fetchedTasks, fetchedThreads] = await Promise.all([
+          db.getProfile(),
+          db.getTasks(),
+          db.getThreads()
+        ]);
+
+        if (profile) {
+          setSettings(profile.settings);
+          if (profile.onboarding_complete) {
+            setScreen('dash');
+          }
+        }
+        setTasks(fetchedTasks);
+        setThreads(fetchedThreads);
+      } catch (error) {
+        console.error('Failed to initialize data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initData();
   }, []);
 
   const updateTasks = (newTasks: Task[] | ((prev: Task[]) => Task[])) => {
     setTasks(prev => {
       const updated = typeof newTasks === 'function' ? newTasks(prev) : newTasks;
-      storage.setTasks(updated);
+      // We don't await here to keep UI snappy, but we should handle errors in db.ts
+      // For a more robust app, we'd use a sync queue or optimistic updates with rollback
       return updated;
     });
   };
@@ -41,34 +69,42 @@ export default function App() {
   const updateThreads = (newThreads: Thread[] | ((prev: Thread[]) => Thread[])) => {
     setThreads(prev => {
       const updated = typeof newThreads === 'function' ? newThreads(prev) : newThreads;
-      storage.setThreads(updated);
       return updated;
     });
   };
 
-  const updateSettings = (newSettings: Settings) => {
+  const updateSettings = async (newSettings: Settings) => {
     setSettings(newSettings);
-    storage.setSettings(newSettings);
+    await db.upsertProfile(true, newSettings);
   };
 
-  const handleOnboardingComplete = () => {
-    storage.setOnboardingComplete(true);
+  const handleOnboardingComplete = async () => {
+    await db.upsertProfile(true, settings);
     setScreen('dash');
   };
 
-  const startNewThread = () => {
+  const startNewThread = async () => {
     const newTh: Thread = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       title: 'Новая мысль',
       preview: '',
       messages: [],
       createdAt: Date.now()
     };
     const updated = [newTh, ...threads];
-    updateThreads(updated);
+    setThreads(updated);
+    await db.saveThread(newTh);
     setCurTh(newTh.id);
     setScreen('ai');
   };
+
+  if (loading) {
+    return (
+      <div className="w-full h-screen flex items-center justify-center bg-bg">
+        <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-bg">

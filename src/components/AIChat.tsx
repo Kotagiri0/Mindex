@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, Settings, Send } from 'lucide-react';
 import { Thread, Screen, Message, Task } from '../types';
 import { generateResponse, getGroqClient, tools, SYSTEM_INSTRUCTION } from '../lib/groq';
+import { db } from '../lib/db';
 
 interface AIChatProps {
   threadId: string | null;
@@ -39,16 +40,23 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     
     const userMsg: Message = { role: 'user', content: text, time: ft() };
     
+    let updatedThread: Thread | undefined;
+
     setThreads(prev => prev.map(t => {
       if (t.id === threadId) {
-        return {
+        updatedThread = {
           ...t,
           messages: [...t.messages, userMsg],
           preview: text.length > 60 ? text.slice(0, 60) + '…' : text
         };
+        return updatedThread;
       }
       return t;
     }));
+    
+    if (updatedThread) {
+      db.saveThread(updatedThread);
+    }
     
     setIsTyping(true);
 
@@ -79,7 +87,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           } else if (name === 'add_task') {
             const { name: taskName, time, date } = args;
             const newTask: Task = {
-              id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+              id: crypto.randomUUID(),
               name: taskName,
               time: time || '',
               date: date || new Date().toISOString().split('T')[0],
@@ -87,20 +95,29 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
               threadId: threadId || undefined
             };
             setTasks(prev => [...prev, newTask]);
+            db.saveTask(newTask);
             result = { status: "success", task: newTask };
           } else if (name === 'update_task') {
             const { id: taskId, done, name: taskName, time, date } = args;
-            setTasks(prev => prev.map(t => t.id === taskId ? { 
-              ...t, 
-              done: done !== undefined ? done : t.done, 
-              name: taskName || t.name,
-              time: time !== undefined ? time : t.time,
-              date: date !== undefined ? date : t.date
-            } : t));
+            setTasks(prev => prev.map(t => {
+              if (t.id === taskId) {
+                const updated = { 
+                  ...t, 
+                  done: done !== undefined ? done : t.done, 
+                  name: taskName || t.name,
+                  time: time !== undefined ? time : t.time,
+                  date: date !== undefined ? date : t.date
+                };
+                db.saveTask(updated);
+                return updated;
+              }
+              return t;
+            }));
             result = { status: "success" };
           } else if (name === 'delete_task') {
             const { id: taskId } = args;
             setTasks(prev => prev.filter(t => t.id !== taskId));
+            db.deleteTask(taskId);
             result = { status: "success" };
           }
           
@@ -132,11 +149,13 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       
       setThreads(prev => prev.map(t => {
         if (t.id === threadId) {
-          return {
+          const updated = {
             ...t,
             messages: [...t.messages, assistantMsg],
             preview: assistantMsg.content.slice(0, 60) + '…'
           };
+          db.saveThread(updated);
+          return updated;
         }
         return t;
       }));
@@ -145,7 +164,9 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       const errorMsg: Message = { role: 'assistant', content: 'Произошла ошибка при обращении к ИИ.', time: ft() };
       setThreads(prev => prev.map(t => {
         if (t.id === threadId) {
-          return { ...t, messages: [...t.messages, errorMsg] };
+          const updated = { ...t, messages: [...t.messages, errorMsg] };
+          db.saveThread(updated);
+          return updated;
         }
         return t;
       }));

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, User, Camera, ChevronRight } from 'lucide-react';
 import { Settings } from '../types';
+import { db } from '../lib/db';
 
 interface SettingsProps {
   settings: Settings;
@@ -9,6 +10,8 @@ interface SettingsProps {
 }
 
 export default function SettingsScreen({ settings, setSettings, onBack }: SettingsProps) {
+  const [isConfirmingClear, setIsConfirmingClear] = useState(false);
+
   const handleToggle = (key: keyof Settings) => {
     setSettings({ ...settings, [key]: !settings[key] });
   };
@@ -31,9 +34,9 @@ export default function SettingsScreen({ settings, setSettings, onBack }: Settin
     }
   };
 
-  const clearMemory = () => {
-    if (!confirm('Очистить память модели? Это удалит все ваши переписки.')) return;
-    localStorage.removeItem('mx_threads');
+  const clearMemory = async () => {
+    const threads = await db.getThreads();
+    await Promise.all(threads.map(t => db.deleteThread(t.id)));
     window.location.reload();
   };
 
@@ -98,13 +101,38 @@ export default function SettingsScreen({ settings, setSettings, onBack }: Settin
 
         <div className="mx-[14px] mb-3 bg-surface rounded-[14px] overflow-hidden">
           <LinkRow title="Расскажи о себе" />
-          <LinkRow title="Очистить память модели" onClick={clearMemory} />
+          <LinkRow title="Очистить память модели" onClick={() => setIsConfirmingClear(true)} />
           <LinkRow title="Как ИИ стоит себя вести?" />
           <LinkRow title="Обратная связь с нами" />
         </div>
         
         <div className="h-10" />
       </div>
+
+      {isConfirmingClear && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+          <div className="bg-white rounded-[24px] w-full max-w-[320px] p-6 flex flex-col gap-4">
+            <div className="text-[19px] font-bold text-text-primary text-center">Очистить память?</div>
+            <div className="text-[15px] text-text-tertiary text-center leading-relaxed">
+              Это удалит все ваши переписки без возможности восстановления.
+            </div>
+            <div className="flex flex-col gap-2 mt-2">
+              <button 
+                onClick={clearMemory}
+                className="h-12 bg-red-500 text-white rounded-full font-bold text-[15px] active:scale-95 transition-transform"
+              >
+                Удалить всё
+              </button>
+              <button 
+                onClick={() => setIsConfirmingClear(false)}
+                className="h-12 bg-surface2 text-text-primary rounded-full font-bold text-[15px] active:scale-95 transition-transform"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
