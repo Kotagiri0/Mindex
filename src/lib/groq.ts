@@ -1,22 +1,4 @@
-import Groq from "groq-sdk";
 import { Message } from "../types";
-
-let groqClient: Groq | null = null;
-
-export function getGroqClient(): Groq {
-  if (!groqClient) {
-    const apiKey = process.env.GROQ_API_KEY;
-    console.log("Initializing Groq with API key:", apiKey ? "EXISTS" : "MISSING");
-    if (!apiKey || apiKey === "MY_GROQ_API_KEY" || apiKey === "") {
-      throw new Error("GROQ_API_KEY is missing. Please add it in the Secrets panel in AI Studio.");
-    }
-    groqClient = new Groq({ 
-      apiKey,
-      dangerouslyAllowBrowser: true 
-    });
-  }
-  return groqClient;
-}
 
 export const SYSTEM_INSTRUCTION = `Ты — Майндекс, умный ИИ-ассистент для управления мыслями и задачами. 
 Отвечай на русском языке, лаконично и по делу. 
@@ -127,11 +109,13 @@ export const tools: any[] = [
 ];
 
 export async function generateResponse(messages: Message[]) {
-  const client = getGroqClient();
-  const chatCompletion = await client.chat.completions.create({
-    messages: [
-      { role: "system", content: SYSTEM_INSTRUCTION },
-      ...messages.map(m => {
+  const response = await fetch("/api/chat", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messages: messages.map(m => {
         const msg: any = {
           role: m.role,
           content: m.content
@@ -139,14 +123,17 @@ export async function generateResponse(messages: Message[]) {
         if (m.tool_calls) msg.tool_calls = m.tool_calls;
         if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
         return msg;
-      })
-    ],
-    model: "llama-3.3-70b-versatile",
-    tools,
-    tool_choice: "auto",
-    temperature: 0.7,
-    max_tokens: 1024,
+      }),
+      systemInstruction: SYSTEM_INSTRUCTION,
+      tools,
+      tool_choice: "auto",
+    }),
   });
 
-  return chatCompletion.choices[0].message;
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to generate response from server");
+  }
+
+  return await response.json();
 }

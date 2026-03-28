@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Settings, Send } from 'lucide-react';
 import { Thread, Screen, Message, Task } from '../types';
-import { generateResponse, getGroqClient, tools, SYSTEM_INSTRUCTION } from '../lib/groq';
+import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
 
 interface AIChatProps {
