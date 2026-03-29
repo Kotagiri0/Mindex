@@ -131,13 +131,18 @@ export async function generateResponse(messages: Message[]) {
   });
 
   if (!response.ok) {
-    let errorMessage = "Failed to generate response from server";
+    let errorMessage = `Server error: ${response.status}`;
     try {
       const errorData = await response.json();
       errorMessage = errorData.error || errorMessage;
     } catch (e) {
-      // If not JSON, use status text
-      errorMessage = response.statusText || errorMessage;
+      // If not JSON, try to get text
+      try {
+        const text = await response.text();
+        if (text) errorMessage = text.slice(0, 100);
+      } catch (e2) {
+        errorMessage = response.statusText || errorMessage;
+      }
     }
     throw new Error(errorMessage);
   }

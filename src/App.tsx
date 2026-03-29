@@ -58,7 +58,15 @@ export default function App() {
     };
 
     // Small delay ensures initDataUnsafe is populated
-    const timer = setTimeout(initData, 50);
+    const timer = setTimeout(() => {
+      const userId = db.getUserId();
+      if (db.isInTelegram() && !userId) {
+        // If in Telegram but user not found yet, wait a bit longer
+        setTimeout(initData, 200);
+      } else {
+        initData();
+      }
+    }, 50);
     return () => clearTimeout(timer);
   }, []);
 

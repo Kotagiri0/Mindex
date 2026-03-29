@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import Groq from "groq-sdk";
 import dotenv from "dotenv";
+import cors from "cors";
 
 dotenv.config();
 
@@ -12,7 +13,13 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3000;
 
+app.use(cors());
 app.use(express.json());
+
+// Health check
+app.get("/api/chat", (req, res) => {
+  res.json({ status: "ok", message: "Local Chat API is running" });
+});
 
 // Локальный прокси для Groq (дублирует логику api/chat.ts)
 app.post("/api/chat", async (req, res) => {

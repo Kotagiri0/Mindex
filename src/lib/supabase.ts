@@ -13,6 +13,11 @@ export const isSupabaseConfigured = () => {
   return !!import.meta.env.VITE_SUPABASE_URL && !!import.meta.env.VITE_SUPABASE_ANON_KEY;
 };
 
+export const isInTelegram = () => {
+  const tg = (window as any).Telegram?.WebApp;
+  return !!tg?.initData;
+};
+
 export const getTelegramUser = () => {
   const tg = (window as any).Telegram?.WebApp;
   const user = tg?.initDataUnsafe?.user;

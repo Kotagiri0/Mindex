@@ -1,4 +1,4 @@
-import { supabase, getTelegramUser, isSupabaseConfigured } from './supabase';
+import { supabase, getTelegramUser, isSupabaseConfigured, isInTelegram } from './supabase';
 import { Task, Thread, Settings } from '../types';
 import { storage } from './storage';
 
@@ -38,16 +38,17 @@ import { storage } from './storage';
 const getUserId = () => getTelegramUser()?.id;
 
 export const db = {
+  getUserId: () => getTelegramUser()?.id,
+  isInTelegram: () => isInTelegram(),
   // Profiles & Settings
   getProfile: async () => {
-    if (!isSupabaseConfigured()) {
+    const userId = getUserId();
+    if (!isSupabaseConfigured() || !userId) {
       return {
         settings: storage.getSettings(),
         onboarding_complete: storage.getOnboardingComplete()
       };
     }
-    const userId = getUserId();
-    if (!userId) return null;
     
     const { data, error } = await supabase
       .from('profiles')
@@ -62,13 +63,12 @@ export const db = {
   },
   
   upsertProfile: async (onboardingComplete: boolean, settings: Settings) => {
-    if (!isSupabaseConfigured()) {
+    const userId = getUserId();
+    if (!isSupabaseConfigured() || !userId) {
       storage.setOnboardingComplete(onboardingComplete);
       storage.setSettings(settings);
       return;
     }
-    const userId = getUserId();
-    if (!userId) return;
     
     const { error } = await supabase
       .from('profiles')
@@ -84,11 +84,10 @@ export const db = {
 
   // Threads
   getThreads: async (): Promise<Thread[]> => {
-    if (!isSupabaseConfigured()) {
+    const userId = getUserId();
+    if (!isSupabaseConfigured() || !userId) {
       return storage.getThreads();
     }
-    const userId = getUserId();
-    if (!userId) return [];
     
     const { data, error } = await supabase
       .from('threads')
@@ -111,7 +110,8 @@ export const db = {
   },
   
   saveThread: async (thread: Thread) => {
-    if (!isSupabaseConfigured()) {
+    const userId = getUserId();
+    if (!isSupabaseConfigured() || !userId) {
       const threads = storage.getThreads();
       const index = threads.findIndex(t => t.id === thread.id);
       if (index >= 0) {
@@ -122,8 +122,6 @@ export const db = {
       storage.setThreads(threads);
       return;
     }
-    const userId = getUserId();
-    if (!userId) return;
     
     const { error } = await supabase
       .from('threads')
@@ -140,13 +138,12 @@ export const db = {
   },
   
   deleteThread: async (id: string) => {
-    if (!isSupabaseConfigured()) {
+    const userId = getUserId();
+    if (!isSupabaseConfigured() || !userId) {
       const threads = storage.getThreads().filter(t => t.id !== id);
       storage.setThreads(threads);
       return;
     }
-    const userId = getUserId();
-    if (!userId) return;
     
     const { error } = await supabase
       .from('threads')
@@ -159,11 +156,10 @@ export const db = {
 
   // Tasks
   getTasks: async (): Promise<Task[]> => {
-    if (!isSupabaseConfigured()) {
+    const userId = getUserId();
+    if (!isSupabaseConfigured() || !userId) {
       return storage.getTasks();
     }
-    const userId = getUserId();
-    if (!userId) return [];
     
     const { data, error } = await supabase
       .from('tasks')
@@ -186,7 +182,8 @@ export const db = {
   },
   
   saveTask: async (task: Task) => {
-    if (!isSupabaseConfigured()) {
+    const userId = getUserId();
+    if (!isSupabaseConfigured() || !userId) {
       const tasks = storage.getTasks();
       const index = tasks.findIndex(t => t.id === task.id);
       if (index >= 0) {
@@ -197,8 +194,6 @@ export const db = {
       storage.setTasks(tasks);
       return;
     }
-    const userId = getUserId();
-    if (!userId) return;
     
     const { error } = await supabase
       .from('tasks')
@@ -215,13 +210,12 @@ export const db = {
   },
   
   deleteTask: async (id: string) => {
-    if (!isSupabaseConfigured()) {
+    const userId = getUserId();
+    if (!isSupabaseConfigured() || !userId) {
       const tasks = storage.getTasks().filter(t => t.id !== id);
       storage.setTasks(tasks);
       return;
     }
-    const userId = getUserId();
-    if (!userId) return;
     
     const { error } = await supabase
       .from('tasks')
