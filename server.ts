@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import Groq from "groq-sdk";
@@ -17,12 +16,14 @@ app.use(express.json());
 
 // Groq Proxy Route
 app.post("/api/chat", async (req, res) => {
+  console.log("Received chat request at /api/chat");
   try {
     const { messages, systemInstruction, tools, tool_choice } = req.body;
     
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: "GROQ_API_KEY is missing on server" });
+      console.error("GROQ_API_KEY is missing on server");
+      return res.status(500).json({ error: "GROQ_API_KEY is missing on server. Please add it to Vercel environment variables." });
     }
 
     const groq = new Groq({ apiKey });
@@ -46,29 +47,44 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-async function setupVite() {
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
+// Health check
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", env: process.env.NODE_ENV, vercel: !!process.env.VERCEL });
+});
+
+// Development Setup
+if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+  const startDevServer = async () => {
+    try {
+      const { createServer } = await import("vite");
+      const vite = await createServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+      app.listen(PORT, "0.0.0.0", () => {
+        console.log(`Development server running on http://localhost:${PORT}`);
+      });
+    } catch (err) {
+      console.error("Failed to start dev server:", err);
+    }
+  };
+  startDevServer();
+} else {
+  // In production (Vercel or Cloud Run), we serve static files if we are not on Vercel
+  // On Vercel, static files are handled by vercel.json and @vercel/static-build
+  if (!process.env.VERCEL) {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
+      if (req.path.startsWith('/api/')) return;
       res.sendFile(path.join(distPath, 'index.html'));
     });
-  }
-}
-
-// Start server if not running as a Vercel function
-if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
-  setupVite().then(() => {
+    
     app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+      console.log(`Production server running on http://localhost:${PORT}`);
     });
-  });
+  }
 }
 
 export default app;

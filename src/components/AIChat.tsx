@@ -159,9 +159,13 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         }
         return t;
       }));
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      const errorMsg: Message = { role: 'assistant', content: 'Произошла ошибка при обращении к ИИ.', time: ft() };
+      const errorMsg: Message = { 
+        role: 'assistant', 
+        content: `Ошибка: ${err.message || 'Произошла ошибка при обращении к ИИ.'}`, 
+        time: ft() 
+      };
       setThreads(prev => prev.map(t => {
         if (t.id === threadId) {
           const updated = { ...t, messages: [...t.messages, errorMsg] };
