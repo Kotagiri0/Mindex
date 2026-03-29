@@ -5,7 +5,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS для Telegram WebView
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  console.log(`[API] Request received: ${req.method} from ${req.headers['user-agent']}`);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();

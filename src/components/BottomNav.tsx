@@ -11,7 +11,7 @@ interface BottomNavProps {
 
 const SparkleIcon = ({ size = 24, color = "currentColor" }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 3C12 3 13.5 10.5 21 12C13.5 13.5 12 21 12 21C12 21 10.5 13.5 3 12C10.5 10.5 12 3 12 3Z" fill={color} />
+    <path d="M12 2C12 2 14 10 22 12C14 14 12 22 12 22C12 22 10 14 2 12C10 10 12 2 12 2Z" fill={color} />
   </svg>
 );
 
@@ -37,9 +37,14 @@ export default function BottomNav({ activeScreen, onNavigate, onNewThread }: Bot
               <button
                 key={tab.id}
                 onClick={onNewThread}
-                className="relative w-16 h-16 rounded-full bg-[#4880FF] flex items-center justify-center shadow-[0_4px_16px_rgba(72,128,255,0.4)] active:scale-90 transition-transform"
+                className="relative w-20 h-20 rounded-full bg-[#4880FF] flex items-center justify-center shadow-[0_8px_24px_rgba(72,128,255,0.5)] active:scale-95 transition-all -mt-6 border-4 border-[#F2F2F7]"
               >
-                <SparkleIcon size={32} color="white" />
+                <SparkleIcon size={44} color="white" />
+                <motion.div 
+                  animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.8, 0.5] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                  className="absolute inset-0 rounded-full bg-white/20 -z-10"
+                />
               </button>
             );
           }

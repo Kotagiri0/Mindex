@@ -109,48 +109,68 @@ export const tools: any[] = [
 ];
 
 export async function generateResponse(messages: Message[]) {
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  const apiUrl = `${baseUrl}/api/chat`;
+  // Use relative URL for better compatibility with same-origin requests in WebViews
+  const apiUrl = "/api/chat";
 
   console.log(`Calling AI API at: ${apiUrl}`);
 
-  const response = await fetch(apiUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-    },
-    body: JSON.stringify({
-      messages: messages.map(m => {
-        const msg: any = {
-          role: m.role,
-          content: m.content
-        };
-        if (m.tool_calls) msg.tool_calls = m.tool_calls;
-        if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
-        return msg;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      // Ensure no cookies/credentials are sent to avoid potential WebView blocks
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
+      signal: controller.signal,
+      body: JSON.stringify({
+        messages: messages.map(m => {
+          const msg: any = {
+            role: m.role,
+            content: m.content
+          };
+          if (m.tool_calls) msg.tool_calls = m.tool_calls;
+          if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
+          return msg;
+        }),
+        systemInstruction: SYSTEM_INSTRUCTION,
+        tools,
+        tool_choice: "auto",
       }),
-      systemInstruction: SYSTEM_INSTRUCTION,
-      tools,
-      tool_choice: "auto",
-    }),
-  });
+    });
 
-  if (!response.ok) {
-    let errorMessage = `Server error: ${response.status} (${response.statusText})`;
-    try {
-      const errorData = await response.json();
-      errorMessage = errorData.error || errorMessage;
-    } catch (e) {
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      let errorMessage = `Server error: ${response.status} (${response.statusText})`;
       try {
-        const text = await response.text();
-        if (text) errorMessage = `Server returned: ${text.slice(0, 100)}`;
-      } catch (e2) {
-        // Fallback to status text
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch (e) {
+        try {
+          const text = await response.text();
+          if (text) errorMessage = `Server returned: ${text.slice(0, 100)}`;
+        } catch (e2) {
+          // Fallback to status text
+        }
       }
+      throw new Error(errorMessage);
     }
-    throw new Error(errorMessage);
-  }
 
-  return await response.json();
+    return await response.json();
+  } catch (e: any) {
+    clearTimeout(timeoutId);
+    if (e.name === 'AbortError') {
+      throw new Error("Превышено время ожидания ответа от ИИ (20 сек). Возможно, сервер перегружен.");
+    }
+    if (e.message.includes('Failed to fetch')) {
+      throw new Error("Ошибка сети: Не удалось отправить запрос. Проверьте интернет или настройки Telegram WebView.");
+    }
+    throw e;
+  }
 }
