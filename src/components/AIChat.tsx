@@ -68,12 +68,22 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       // Build conversation history
       let conversationHistory: Message[] = [...currentThread.messages, userMsg];
 
+      const turnMessages: Message[] = [];
+
       let response = await generateResponse(conversationHistory);
       
       // Handle function calls
       while (response.tool_calls) {
         const toolResults: Message[] = [];
         
+        const assistantToolCallMsg: Message = {
+          role: 'assistant',
+          content: response.content || '',
+          tool_calls: response.tool_calls,
+          time: ft()
+        };
+        turnMessages.push(assistantToolCallMsg);
+
         for (const call of response.tool_calls) {
           const { name } = call.function;
           const args = JSON.parse(call.function.arguments);
@@ -129,15 +139,12 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           });
         }
         
+        turnMessages.push(...toolResults);
+
         // Add the assistant message with tool calls and the tool results to history
         conversationHistory = [
           ...conversationHistory,
-          {
-            role: 'assistant',
-            content: response.content || '',
-            tool_calls: response.tool_calls,
-            time: ft()
-          },
+          assistantToolCallMsg,
           ...toolResults
         ];
 
@@ -149,9 +156,15 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       
       setThreads(prev => prev.map(t => {
         if (t.id === threadId) {
+          // Ensure user message is in history (fix for race conditions in some environments)
+          const hasUserMsg = t.messages.some(
+            m => m.role === 'user' && m.content === userMsg.content && m.time === userMsg.time
+          );
+          const baseMessages = hasUserMsg ? t.messages : [...t.messages, userMsg];
+          
           const updated = {
             ...t,
-            messages: [...t.messages, assistantMsg],
+            messages: [...baseMessages, ...turnMessages, assistantMsg],
             preview: assistantMsg.content.slice(0, 60) + '…'
           };
           db.saveThread(updated);
@@ -168,7 +181,12 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       };
       setThreads(prev => prev.map(t => {
         if (t.id === threadId) {
-          const updated = { ...t, messages: [...t.messages, errorMsg] };
+          const hasUserMsg = t.messages.some(
+            m => m.role === 'user' && m.content === userMsg.content && m.time === userMsg.time
+          );
+          const baseMessages = hasUserMsg ? t.messages : [...t.messages, userMsg];
+          
+          const updated = { ...t, messages: [...baseMessages, errorMsg] };
           db.saveThread(updated);
           return updated;
         }
@@ -194,7 +212,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-[20px_16px_8px] flex flex-col gap-3 scrollbar-hide min-h-0">
-        {thread.messages.length === 0 ? (
+        {thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls).length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-2">
             <div className="text-[28px] font-extrabold text-text-primary text-center leading-[1.25]">
               Привет!<br />Есть мысли?
@@ -204,7 +222,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             </div>
           </div>
         ) : (
-          thread.messages.map((m, i) => (
+          thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls).map((m, i) => (
             <div key={i} className={`flex flex-col max-w-[80%] gap-[3px] ${m.role === 'user' ? 'self-end items-end' : 'self-start items-start'}`}>
               <div className={`p-[10px_14px] rounded-[18px] text-[15px] leading-[1.5] ${
                 m.role === 'user' ? 'bg-accent text-white rounded-br-[4px]' : 'bg-surface2 text-text-primary rounded-bl-[4px]'
