@@ -109,10 +109,16 @@ export const tools: any[] = [
 ];
 
 export async function generateResponse(messages: Message[]) {
-  const response = await fetch("/api/chat", {
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const apiUrl = `${baseUrl}/api/chat`;
+
+  console.log(`Calling AI API at: ${apiUrl}`);
+
+  const response = await fetch(apiUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "Accept": "application/json",
     },
     body: JSON.stringify({
       messages: messages.map(m => {
@@ -131,17 +137,16 @@ export async function generateResponse(messages: Message[]) {
   });
 
   if (!response.ok) {
-    let errorMessage = `Server error: ${response.status}`;
+    let errorMessage = `Server error: ${response.status} (${response.statusText})`;
     try {
       const errorData = await response.json();
       errorMessage = errorData.error || errorMessage;
     } catch (e) {
-      // If not JSON, try to get text
       try {
         const text = await response.text();
-        if (text) errorMessage = text.slice(0, 100);
+        if (text) errorMessage = `Server returned: ${text.slice(0, 100)}`;
       } catch (e2) {
-        errorMessage = response.statusText || errorMessage;
+        // Fallback to status text
       }
     }
     throw new Error(errorMessage);

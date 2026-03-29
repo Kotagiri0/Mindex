@@ -173,12 +173,15 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         return t;
       }));
     } catch (err: any) {
-      console.error(err);
+      console.error('AI Error:', err);
       const errorMsg: Message = { 
         role: 'assistant', 
-        content: `Ошибка: ${err.message || 'Произошла ошибка при обращении к ИИ.'}`, 
+        content: `Ошибка: ${err.message || 'Не удалось связаться с ИИ. Проверь интернет или настройки.'}`, 
         time: ft() 
       };
+      if (err.name === 'TypeError' && err.message === 'Failed to fetch') {
+        errorMsg.content = "Ошибка сети: Не удалось отправить запрос (возможно, заблокировано WebView или нет интернета).";
+      }
       setThreads(prev => prev.map(t => {
         if (t.id === threadId) {
           const hasUserMsg = t.messages.some(
