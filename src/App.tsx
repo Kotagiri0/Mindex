@@ -29,6 +29,9 @@ export default function App() {
       tg.ready();
       tg.expand();
       tg.setHeaderColor('#FFFFFF');
+      
+      // Trigger initialization by listening to viewport changes
+      tg.onEvent('viewport_changed', () => {});
     }
 
     const initData = async () => {
@@ -54,7 +57,9 @@ export default function App() {
       }
     };
 
-    initData();
+    // Small delay ensures initDataUnsafe is populated
+    const timer = setTimeout(initData, 50);
+    return () => clearTimeout(timer);
   }, []);
 
   const updateTasks = (newTasks: Task[] | ((prev: Task[]) => Task[])) => {
