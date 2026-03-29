@@ -1,18 +1,20 @@
 import { Message } from "../types";
 
-export const SYSTEM_INSTRUCTION = `Ты — Майндекс, умный ИИ-ассистент для управления мыслями и задачами. 
-Отвечай на русском языке, лаконично и по делу. 
-Твоя главная фишка — интеграция с календарем. Ты можешь просматривать, добавлять, изменять и удалять задачи пользователя.
+export const SYSTEM_INSTRUCTION = `Ты — ассистент по имени "Мысль". Твоя цель — помогать пользователю организовывать дела, превращая хаос мыслей в четкие планы.
+Отвечай на русском языке, лаконично и по делу.
 
-ПРАВИЛА РАБОТЫ С ЗАДАЧАМИ:
-1. Если пользователь просит что-то запланировать НОВОЕ, чего еще не было в диалоге, используй add_task.
-2. Если пользователь спрашивает о планах, используй get_tasks.
-3. Если пользователь просит ПЕРЕНЕСТИ, ИЗМЕНИТЬ время/дату или ДОПОЛНИТЬ информацию (например, добавить время к только что созданной задаче), ОБЯЗАТЕЛЬНО используй update_task. 
-4. Если ты только что создал задачу без времени, а пользователь говорит "в 15:00", ты должен обновить ту же самую задачу через update_task, а не создавать новую.
-5. Если ты не знаешь ID задачи, сначала вызови get_tasks, чтобы найти её.
+Если пользователь просит помочь с чем-то сложным, спланировать проект или разбить задачу на шаги, ты ДОЛЖЕН использовать инструмент 'start_planning'.
+Этот инструмент запустит интерактивный опросник, чтобы уточнить детали.
 
-Сегодняшняя дата: ${new Date().toISOString().split('T')[0]}.
-Будь конкретным и полезным. Твоя цель — помочь пользователю структурировать хаос в голове.`;
+ПРАВИЛА ИСПОЛЬЗОВАНИЯ ИНСТРУМЕНТОВ:
+1. Используй только предоставленные инструменты.
+2. НЕ выдумывай свой формат вызова функций (например, <function=...>), используй стандартный механизм tool_calls.
+3. Если пользователь просит что-то запланировать НОВОЕ, чего еще не было в диалоге, используй add_task.
+4. Если пользователь спрашивает о планах, используй get_tasks.
+5. Если пользователь просит ПЕРЕНЕСТИ, ИЗМЕНИТЬ время/дату или ДОПОЛНИТЬ информацию, ОБЯЗАТЕЛЬНО используй update_task.
+6. Если ты не знаешь ID задачи, сначала вызови get_tasks, чтобы найти её.
+
+Сегодняшняя дата: ${new Date().toISOString().split('T')[0]}.`;
 
 export const tools: any[] = [
   {
@@ -105,12 +107,41 @@ export const tools: any[] = [
         required: ["id"],
       },
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "start_planning",
+      description: "Запускает процесс декомпозиции сложной задачи или планирования (опросник). Используй это, когда пользователь просит что-то спланировать или когда задача кажется сложной.",
+      parameters: {
+        type: "object",
+        properties: {
+          questions: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                question: { type: "string", description: "Текст вопроса" },
+                options: { 
+                  type: "array", 
+                  items: { type: "string" },
+                  description: "3-4 коротких варианта ответа"
+                },
+              },
+              required: ["id", "question", "options"]
+            }
+          }
+        },
+        required: ["questions"]
+      }
+    }
   }
 ];
 
-export async function generateResponse(messages: Message[]) {
-  // Use relative URL for better compatibility with same-origin requests in WebViews
-  const apiUrl = "/api/chat";
+export async function generateResponse(messages: Message[], options: { tools?: any[], tool_choice?: string } = {}) {
+  // Use absolute URL to avoid potential issues in some environments (like Telegram WebView)
+  const apiUrl = `${window.location.origin}/api/chat`;
 
   console.log(`Calling AI API at: ${apiUrl}`);
 
@@ -124,9 +155,6 @@ export async function generateResponse(messages: Message[]) {
         "Content-Type": "application/json",
         "Accept": "application/json",
       },
-      // Ensure no cookies/credentials are sent to avoid potential WebView blocks
-      credentials: "omit",
-      referrerPolicy: "no-referrer",
       signal: controller.signal,
       body: JSON.stringify({
         messages: messages.map(m => {
@@ -139,30 +167,41 @@ export async function generateResponse(messages: Message[]) {
           return msg;
         }),
         systemInstruction: SYSTEM_INSTRUCTION,
-        tools,
-        tool_choice: "auto",
+        tools: options.tools !== undefined ? options.tools : tools,
+        tool_choice: options.tool_choice || "auto",
       }),
     });
 
     clearTimeout(timeoutId);
 
+    const text = await response.text();
+    
     if (!response.ok) {
       let errorMessage = `Server error: ${response.status} (${response.statusText})`;
       try {
-        const errorData = await response.json();
+        const errorData = JSON.parse(text);
         errorMessage = errorData.error || errorMessage;
       } catch (e) {
-        try {
-          const text = await response.text();
-          if (text) errorMessage = `Server returned: ${text.slice(0, 100)}`;
-        } catch (e2) {
-          // Fallback to status text
+        if (text) {
+          if (text.includes("<!doctype html>") || text.includes("<html>")) {
+            errorMessage = "Сервер вернул HTML вместо JSON. Возможно, ошибка в маршрутизации или авторизации.";
+          } else {
+            errorMessage = `Server returned: ${text.slice(0, 100)}`;
+          }
         }
       }
       throw new Error(errorMessage);
     }
 
-    return await response.json();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      console.error("Failed to parse JSON response:", text);
+      if (text.includes("<!doctype html>") || text.includes("<html>")) {
+        throw new Error("Ошибка: Сервер вернул HTML-страницу вместо ответа ИИ. Попробуйте перезагрузить страницу.");
+      }
+      throw new Error(`Ошибка парсинга ответа ИИ: ${text.slice(0, 100)}`);
+    }
   } catch (e: any) {
     clearTimeout(timeoutId);
     if (e.name === 'AbortError') {

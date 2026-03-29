@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Settings, Send } from 'lucide-react';
-import { Thread, Screen, Message, Task } from '../types';
+import { X, Settings, Send, Check, Trash2, ChevronDown, ChevronRight, Star, Plus, Edit2 } from 'lucide-react';
+import { Thread, Screen, Message, Task, SubTask } from '../types';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface AIChatProps {
   threadId: string | null;
@@ -20,6 +21,8 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const thread = threads.find(t => t.id === threadId);
+
+  if (!thread) return null;
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -107,6 +110,27 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             setTasks(prev => [...prev, newTask]);
             db.saveTask(newTask);
             result = { status: "success", task: newTask };
+          } else if (name === 'start_planning') {
+            const { questions } = args;
+            const planningMsg: Message = {
+              role: 'assistant',
+              content: 'Чтобы составить лучший план, мне нужно уточнить пару деталей:',
+              time: ft(),
+              planning_data: {
+                questions,
+                status: 'questionnaire'
+              }
+            };
+            setThreads(prev => prev.map(t => {
+              if (t.id === threadId) {
+                const updated = { ...t, messages: [...t.messages, planningMsg] };
+                db.saveThread(updated);
+                return updated;
+              }
+              return t;
+            }));
+            setIsTyping(false);
+            return; // Stop the standard flow, wait for user input
           } else if (name === 'update_task') {
             const { id: taskId, done, name: taskName, time, date } = args;
             setTasks(prev => prev.map(t => {
@@ -200,6 +224,185 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     }
   };
 
+  const handleAnswer = async (msgIndex: number, questionId: string, answer: string) => {
+    if (!threadId) return;
+    
+    setThreads(prev => prev.map(t => {
+      if (t.id === threadId) {
+        const newMessages = [...t.messages];
+        const msg = { ...newMessages[msgIndex] };
+        if (msg.planning_data) {
+          msg.planning_data = {
+            ...msg.planning_data,
+            answers: { ...msg.planning_data.answers, [questionId]: answer }
+          };
+          
+          // If all questions are answered, move to plan generation
+          const allAnswered = msg.planning_data.questions.every(q => 
+            msg.planning_data?.answers?.[q.id] || q.id === questionId
+          );
+          
+          if (allAnswered) {
+            msg.planning_data.status = 'plan_generated';
+            // Trigger AI to generate plan based on answers
+            setTimeout(() => generatePlanFromAnswers(t, msg.planning_data!), 100);
+          }
+        }
+        newMessages[msgIndex] = msg;
+        const updated = { ...t, messages: newMessages };
+        db.saveThread(updated);
+        return updated;
+      }
+      return t;
+    }));
+  };
+
+  const generatePlanFromAnswers = async (t: Thread, planningData: any) => {
+    setIsTyping(true);
+    try {
+      const answersText = Object.entries(planningData.answers)
+        .map(([id, ans]) => {
+          const q = planningData.questions.find((q: any) => q.id === id);
+          return `Вопрос: ${q?.question}\nОтвет: ${ans}`;
+        }).join('\n\n');
+
+      const prompt = `Пользователь ответил на уточняющие вопросы:\n\n${answersText}\n\nНа основе этих ответов составь пошаговый план действий (to-do list).
+Отвечай СТРОГО в формате JSON:
+{
+  "title": "Название плана",
+  "steps": ["шаг 1", "шаг 2", ...]
+}`;
+
+      const response = await generateResponse([
+        ...t.messages,
+        { role: 'user', content: prompt, time: ft() }
+      ], { tool_choice: 'none' });
+
+      if (!response || !response.content) {
+        throw new Error('AI вернул пустой ответ при генерации плана.');
+      }
+
+      // Extract JSON from response content (in case it's wrapped in markdown)
+      let jsonContent = response.content.trim();
+      if (jsonContent.includes('```json')) {
+        jsonContent = jsonContent.split('```json')[1].split('```')[0].trim();
+      } else if (jsonContent.includes('```')) {
+        jsonContent = jsonContent.split('```')[1].split('```')[0].trim();
+      }
+
+      const plan = JSON.parse(jsonContent);
+      
+      setThreads(prev => prev.map(th => {
+        if (th.id === threadId) {
+          const newMessages = [...th.messages];
+          const lastMsg = { ...newMessages[newMessages.length - 1] };
+          if (lastMsg.planning_data) {
+            lastMsg.planning_data = {
+              ...lastMsg.planning_data,
+              plan,
+              status: 'plan_generated'
+            };
+          }
+          newMessages[newMessages.length - 1] = lastMsg;
+          const updated = { ...th, messages: newMessages };
+          db.saveThread(updated);
+          return updated;
+        }
+        return th;
+      }));
+    } catch (err) {
+      console.error('Plan generation error:', err);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const handleAcceptPlan = async (msgIndex: number) => {
+    if (!threadId || !thread) return;
+    const msg = thread.messages[msgIndex];
+    if (!msg.planning_data?.plan) return;
+
+    const { title, steps } = msg.planning_data.plan;
+    const subtasks: SubTask[] = steps.map(s => ({
+      id: crypto.randomUUID(),
+      name: s,
+      done: false
+    }));
+
+    const newTask: Task = {
+      id: crypto.randomUUID(),
+      name: title,
+      time: '',
+      date: new Date().toISOString().split('T')[0],
+      done: false,
+      threadId: threadId,
+      type: 'thought',
+      subtasks
+    };
+
+    setTasks(prev => [...prev, newTask]);
+    db.saveTask(newTask);
+
+    setThreads(prev => prev.map(t => {
+      if (t.id === threadId) {
+        const newMessages = [...t.messages];
+        const m = { ...newMessages[msgIndex] };
+        if (m.planning_data) {
+          m.planning_data.status = 'accepted';
+        }
+        newMessages[msgIndex] = m;
+        const updated = { ...t, messages: [...newMessages, { 
+          role: 'assistant' as const, 
+          content: 'Отлично! План добавлен в календарь. Ты найдешь его в списке задач со звездочкой.', 
+          time: ft() 
+        }] };
+        db.saveThread(updated);
+        return updated;
+      }
+      return t;
+    }));
+  };
+
+  const handleRejectPlan = (msgIndex: number) => {
+    setThreads(prev => prev.map(t => {
+      if (t.id === threadId) {
+        const newMessages = [...t.messages];
+        const m = { ...newMessages[msgIndex] };
+        if (m.planning_data) {
+          m.planning_data.status = 'rejected';
+        }
+        newMessages[msgIndex] = m;
+        const updated = { ...t, messages: [...newMessages, { 
+          role: 'assistant' as const, 
+          content: 'Хорошо, давай попробуем по-другому или просто продолжим общение.', 
+          time: ft() 
+        }] };
+        db.saveThread(updated);
+        return updated;
+      }
+      return t;
+    }));
+  };
+
+  const updatePlanStep = (msgIndex: number, stepIndex: number, newName: string) => {
+    setThreads(prev => prev.map(t => {
+      if (t.id === threadId) {
+        const newMessages = [...t.messages];
+        const m = { ...newMessages[msgIndex] };
+        if (m.planning_data?.plan) {
+          const newSteps = [...m.planning_data.plan.steps];
+          newSteps[stepIndex] = newName;
+          m.planning_data.plan.steps = newSteps;
+        }
+        newMessages[msgIndex] = m;
+        const updated = { ...t, messages: newMessages };
+        db.saveThread(updated);
+        return updated;
+      }
+      return t;
+    }));
+  };
+
   return (
     <div className="flex flex-col h-full bg-surface">
       <div className="p-[12px_16px] flex items-center justify-between border-b border-border flex-shrink-0 pt-[max(12px,env(safe-area-inset-top,12px))]">
@@ -226,11 +429,94 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           </div>
         ) : (
           thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls).map((m, i) => (
-            <div key={i} className={`flex flex-col max-w-[80%] gap-[3px] ${m.role === 'user' ? 'self-end items-end' : 'self-start items-start'}`}>
+            <div key={i} className={`flex flex-col max-w-[85%] gap-[3px] ${m.role === 'user' ? 'self-end items-end' : 'self-start items-start'}`}>
               <div className={`p-[10px_14px] rounded-[18px] text-[15px] leading-[1.5] ${
                 m.role === 'user' ? 'bg-accent text-white rounded-br-[4px]' : 'bg-surface2 text-text-primary rounded-bl-[4px]'
               }`}>
                 {m.content}
+                
+                {m.planning_data && (
+                  <div className="mt-3 flex flex-col gap-3">
+                    {m.planning_data.status === 'questionnaire' && (
+                      <div className="flex flex-col gap-4">
+                        {m.planning_data.questions.map((q) => {
+                          const isAnswered = m.planning_data?.answers?.[q.id];
+                          if (isAnswered) return (
+                            <div key={q.id} className="bg-white/50 p-2 rounded-lg text-[13px] text-text-primary">
+                              <div className="text-text-tertiary text-[11px] mb-1">{q.question}</div>
+                              <div className="font-semibold">{m.planning_data?.answers?.[q.id]}</div>
+                            </div>
+                          );
+                          
+                          return (
+                            <div key={q.id} className="flex flex-col gap-2">
+                              <div className="text-[14px] font-bold text-text-primary">{q.question}</div>
+                              <div className="grid grid-cols-1 gap-1.5">
+                                {q.options.map((opt) => (
+                                  <button
+                                    key={opt}
+                                    onClick={() => handleAnswer(i, q.id, opt)}
+                                    className="text-left p-2 bg-white rounded-xl text-[13px] text-text-primary active:scale-95 transition-transform border border-border/50"
+                                  >
+                                    {opt}
+                                  </button>
+                                ))}
+                                <div className="relative">
+                                  <input 
+                                    placeholder="Свой вариант..."
+                                    className="w-full p-2 bg-white rounded-xl text-[13px] text-text-primary border border-border/50 outline-none focus:border-accent"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
+                                        handleAnswer(i, q.id, (e.target as HTMLInputElement).value.trim());
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {m.planning_data.status === 'plan_generated' && m.planning_data.plan && (
+                      <div className="bg-white rounded-2xl p-4 shadow-sm border border-border/50 flex flex-col gap-3">
+                        <div className="text-[16px] font-bold text-accent flex items-center gap-2">
+                          <Star size={18} fill="currentColor" />
+                          {m.planning_data.plan.title}
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          {m.planning_data.plan.steps.map((step, sIdx) => (
+                            <div key={sIdx} className="flex items-start gap-2 group">
+                              <div className="w-5 h-5 rounded-full bg-accent/10 text-accent flex items-center justify-center text-[10px] font-bold mt-0.5 flex-shrink-0">
+                                {sIdx + 1}
+                              </div>
+                              <input 
+                                value={step}
+                                onChange={(e) => updatePlanStep(i, sIdx, e.target.value)}
+                                className="flex-1 bg-transparent text-[13px] text-text-primary outline-none focus:text-accent"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          <button 
+                            onClick={() => handleAcceptPlan(i)}
+                            className="flex-1 h-10 bg-accent text-white rounded-xl text-[13px] font-bold active:scale-95 transition-transform"
+                          >
+                            Принять
+                          </button>
+                          <button 
+                            onClick={() => handleRejectPlan(i)}
+                            className="flex-1 h-10 bg-surface2 text-text-primary rounded-xl text-[13px] font-bold active:scale-95 transition-transform"
+                          >
+                            Отмена
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="text-[11px] text-text-tertiary px-1">{m.time}</div>
             </div>

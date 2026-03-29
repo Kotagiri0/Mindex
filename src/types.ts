@@ -1,3 +1,9 @@
+export interface SubTask {
+  id: string;
+  name: string;
+  done: boolean;
+}
+
 export interface Task {
   id: string;
   name: string;
@@ -5,6 +11,8 @@ export interface Task {
   date: string;
   done: boolean;
   threadId?: string;
+  type?: 'regular' | 'thought';
+  subtasks?: SubTask[];
 }
 
 export interface Message {
@@ -13,6 +21,19 @@ export interface Message {
   time: string;
   tool_calls?: any[];
   tool_call_id?: string;
+  planning_data?: {
+    questions: {
+      id: string;
+      question: string;
+      options: string[];
+    }[];
+    answers?: Record<string, string>;
+    plan?: {
+      title: string;
+      steps: string[];
+    };
+    status: 'questionnaire' | 'plan_generated' | 'accepted' | 'rejected';
+  };
 }
 
 export interface Thread {

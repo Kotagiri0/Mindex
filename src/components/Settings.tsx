@@ -55,12 +55,14 @@ export default function SettingsScreen({ settings, setSettings, onBack }: Settin
         <div className="mx-[14px] mb-3.5 bg-surface rounded-[14px] p-4 flex items-center gap-3.5">
           <div 
             onClick={() => document.getElementById('av-inp')?.click()}
-            className="w-[54px] h-[54px] rounded-full bg-gradient-to-br from-accent to-[#a56bff] flex-shrink-0 overflow-hidden cursor-pointer relative flex items-center justify-center group"
+            className="w-[54px] h-[54px] rounded-full bg-surface2 flex-shrink-0 overflow-hidden cursor-pointer relative flex items-center justify-center group"
           >
             {settings.avatar ? (
               <img src={settings.avatar} className="absolute inset-0 w-full h-full object-cover rounded-full" />
             ) : (
-              <User size={22} className="text-white/80" />
+              <div className="w-full h-full bg-[#E5E5EA] flex items-center justify-center">
+                <User size={22} className="text-[#8E8E93]" />
+              </div>
             )}
             <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               <Camera size={16} color="white" />
@@ -70,7 +72,7 @@ export default function SettingsScreen({ settings, setSettings, onBack }: Settin
           
           <div className="flex-1">
             <div className="text-[17px] font-bold text-text-primary">
-              {settings.name || 'Как вас зовут?'}
+              {settings.name || 'Имя'}
             </div>
           </div>
           <button onClick={editName} className="w-8 h-8 rounded-full bg-surface2 flex items-center justify-center text-[13px]">

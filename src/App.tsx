@@ -42,11 +42,31 @@ export default function App() {
           db.getThreads()
         ]);
 
-        if (profile) {
-          setSettings(profile.settings);
-          if (profile.onboarding_complete) {
-            setScreen('dash');
+        const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
+        let currentSettings = profile?.settings || settings;
+        let changed = false;
+
+        if (tgUser) {
+          if (!currentSettings.name) {
+            currentSettings = { 
+              ...currentSettings, 
+              name: `${tgUser.first_name}${tgUser.last_name ? ' ' + tgUser.last_name : ''}`.trim() 
+            };
+            changed = true;
           }
+          if (!currentSettings.avatar && tgUser.photo_url) {
+            currentSettings = { ...currentSettings, avatar: tgUser.photo_url };
+            changed = true;
+          }
+        }
+
+        setSettings(currentSettings);
+        if (changed) {
+          db.upsertProfile(profile?.onboarding_complete || false, currentSettings);
+        }
+
+        if (profile?.onboarding_complete) {
+          setScreen('dash');
         }
         setTasks(fetchedTasks);
         setThreads(fetchedThreads);

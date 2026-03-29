@@ -27,7 +27,7 @@ export default function BottomNav({ activeScreen, onNavigate, onNewThread }: Bot
 
   return (
     <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] w-[340px]">
-      <div className="bg-[#F2F2F7] rounded-full p-1.5 flex items-center justify-between shadow-[0_8px_32px_rgba(0,0,0,0.08)] border border-white/50">
+      <div className="bg-[#F2F2F7] rounded-full p-1 flex items-center justify-between shadow-[0_8px_32px_rgba(0,0,0,0.08)] border border-white/50 h-[67px]">
         {tabs.map((tab) => {
           const isActive = activeScreen === tab.id;
           const isCenter = tab.id === 'ai';
@@ -37,7 +37,7 @@ export default function BottomNav({ activeScreen, onNavigate, onNewThread }: Bot
               <button
                 key={tab.id}
                 onClick={onNewThread}
-                className="relative w-20 h-20 rounded-full bg-[#4880FF] flex items-center justify-center shadow-[0_8px_24px_rgba(72,128,255,0.5)] active:scale-95 transition-all -mt-6 border-4 border-[#F2F2F7]"
+                className="relative w-[85px] h-[85px] rounded-full bg-[#4880FF] flex items-center justify-center shadow-[0_8px_24px_rgba(72,128,255,0.5)] active:scale-95 transition-all -mt-1.5 border-4 border-[#F2F2F7]"
               >
                 <SparkleIcon size={44} color="white" />
                 <motion.div 
@@ -53,12 +53,12 @@ export default function BottomNav({ activeScreen, onNavigate, onNewThread }: Bot
             <button
               key={tab.id}
               onClick={() => onNavigate(tab.id as Screen)}
-              className="relative w-28 h-14 flex items-center justify-center"
+              className="relative w-28 h-12 flex items-center justify-center"
             >
               {isActive && (
                 <motion.div
                   layoutId="nav-indicator"
-                  className="absolute inset-x-2 inset-y-1 bg-[#DCE7FF] rounded-full"
+                  className="absolute inset-x-2 inset-y-0 bg-[#DCE7FF] rounded-full"
                   transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
                 />
               )}

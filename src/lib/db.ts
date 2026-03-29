@@ -31,6 +31,8 @@ import { storage } from './storage';
  *   time text,
  *   date text,
  *   done boolean default false,
+ *   type text default 'regular',
+ *   subtasks jsonb default '[]',
  *   created_at timestamp with time zone default now()
  * );
  */
@@ -177,7 +179,9 @@ export const db = {
       name: t.name,
       time: t.time,
       date: t.date,
-      done: t.done
+      done: t.done,
+      type: t.type,
+      subtasks: t.subtasks
     }));
   },
   
@@ -203,7 +207,9 @@ export const db = {
         name: task.name,
         time: task.time,
         date: task.date,
-        done: task.done
+        done: task.done,
+        type: task.type,
+        subtasks: task.subtasks
       });
       
     if (error) console.error('Error saving task:', error);

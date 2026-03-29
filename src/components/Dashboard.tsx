@@ -61,6 +61,21 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onNewThread, on
     setTasks(updated);
   };
 
+  const toggleSubtask = async (taskId: string, subtaskId: string) => {
+    const updated = tasks.map(t => {
+      if (t.id === taskId && t.subtasks) {
+        const newSubtasks = t.subtasks.map(st => 
+          st.id === subtaskId ? { ...st, done: !st.done } : st
+        );
+        const newTask = { ...t, subtasks: newSubtasks };
+        db.saveTask(newTask);
+        return newTask;
+      }
+      return t;
+    });
+    setTasks(updated);
+  };
+
   const addTask = async (name: string, time: string, date: string) => {
     const newTask: Task = {
       id: crypto.randomUUID(),
@@ -173,6 +188,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onNewThread, on
                   key={t.id} 
                   task={t} 
                   onToggle={() => toggleTask(t.id)} 
+                  onToggleSubtask={toggleSubtask}
                   onClick={() => setEditingTask(t)} 
                 />
               ))}
