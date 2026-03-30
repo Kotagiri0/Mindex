@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import axios from "axios";
 import FormData from "form-data";
+import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
@@ -95,7 +96,13 @@ app.post("/api/webhook", async (req, res) => {
     const taskInfo = JSON.parse(completion.choices[0].message.content);
     const { name, time, date, missing_time } = taskInfo;
 
-    // 3. Save to Supabase
+    // 3. Ensure Profile exists (Upsert)
+    await supabase.from("profiles").upsert({
+      id: userId,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'id' });
+
+    // 4. Save to Supabase
     const taskId = crypto.randomUUID();
     const threadId = crypto.randomUUID();
 
@@ -106,8 +113,7 @@ app.post("/api/webhook", async (req, res) => {
       name,
       time,
       date,
-      done: false,
-      thread_id: threadId
+      done: false
     });
 
     // Create Thread
@@ -126,7 +132,7 @@ app.post("/api/webhook", async (req, res) => {
       created_at: now.toISOString()
     });
 
-    // 4. Reply to Telegram
+    // 5. Reply to Telegram
     let reply = `✅ Создал задачу: "${name}"`;
     if (time) reply += ` на ${time}`;
     if (date !== new Date().toISOString().split('T')[0]) reply += ` (${date})`;
