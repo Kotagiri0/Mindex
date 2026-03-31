@@ -43,12 +43,16 @@ export default function App() {
           const configRes = await fetch('/api/config');
           if (configRes.ok) {
             const config = await configRes.json();
+            console.log('[Sync] Config fetched:', config.supabaseUrl ? 'URL OK' : 'URL Missing');
             if (config.supabaseUrl && config.supabaseAnonKey) {
-              initSupabase(config.supabaseUrl, config.supabaseAnonKey);
+              const success = initSupabase(config.supabaseUrl, config.supabaseAnonKey);
+              console.log('[Sync] Supabase initialized:', success);
             }
+          } else {
+            console.error('[Sync] Config fetch failed:', configRes.status);
           }
         } catch (e) {
-          console.warn('Failed to fetch dynamic config');
+          console.error('[Sync] Error fetching dynamic config:', e);
         }
 
         // 2. Ждем, пока Telegram WebApp предоставит данные пользователя

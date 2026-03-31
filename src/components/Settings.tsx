@@ -168,17 +168,20 @@ export default function SettingsScreen({ settings, setSettings, onBack }: Settin
                 <span>Активна</span>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 text-text-tertiary text-[13px] font-bold">
+              <button 
+                onClick={() => window.location.reload()} 
+                className="flex items-center gap-1.5 text-text-tertiary hover:text-text-primary transition-colors text-[13px] font-bold"
+              >
                 <AlertCircle size={16} />
-                <span>Локальный режим</span>
-              </div>
+                <span>Локальный режим (Обновить)</span>
+              </button>
             )}
           </div>
           <div className="text-[12px] text-text-tertiary leading-relaxed">
             {db.getUserId() ? (
               dbStatus.configured ? 
               `Ваши данные привязаны к Telegram ID: ${db.getUserId()} и сохраняются в облаке.` :
-              'Telegram ID найден, но облачное хранилище не настроено или недоступно. Данные сохраняются только на этом устройстве.'
+              'Telegram ID найден, но облачное хранилище не настроено или недоступно. Добавьте VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY в Secrets проекта.'
             ) : (
               'Приложение открыто вне Telegram. Данные сохраняются только в памяти этого устройства.'
             )}

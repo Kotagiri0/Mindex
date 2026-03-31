@@ -56,8 +56,9 @@ app.post("/api/webhook", async (req, res) => {
   if (!message || (!message.text && !message.voice)) return res.sendStatus(200);
 
   const chatId = message.chat.id;
-  const userId = message.from.id; // Используем число (bigint в БД)
+  const userId = message.from.id.toString(); // Use string for safe bigint handling
   let userText = message.text || "";
+  console.log(`[Webhook] Message from ${userId}: "${userText || (message.voice ? 'VOICE' : '')}"`);
 
   // Проверка конфигурации Supabase
   if (!process.env.VITE_SUPABASE_URL || !process.env.VITE_SUPABASE_ANON_KEY) {
@@ -94,17 +95,33 @@ app.post("/api/webhook", async (req, res) => {
     }
 
     // 2. Extract Task Info
+    const today = new Date().toISOString().split('T')[0];
     const completion = await groq.chat.completions.create({
       messages: [
-        { role: "system", content: BOT_SYSTEM_PROMPT },
+        { 
+          role: "system", 
+          content: `${BOT_SYSTEM_PROMPT}\nСегодняшняя дата: ${today}` 
+        },
         { role: "user", content: userText }
       ],
       model: "llama-3.3-70b-versatile",
       response_format: { type: "json_object" }
     });
 
-    const taskInfo = JSON.parse(completion.choices[0].message.content);
+    let taskInfo;
+    try {
+      const content = completion.choices[0].message.content;
+      console.log(`[Webhook] AI response: ${content}`);
+      taskInfo = JSON.parse(content);
+    } catch (e) {
+      console.error("[Webhook] JSON Parse Error:", e, completion.choices[0].message.content);
+      throw new Error("Не удалось разобрать ответ ИИ");
+    }
+    
     const { name, time, date, missing_time } = taskInfo;
+    const safeTime = time || "";
+    const safeDate = date || today;
+    console.log(`[Webhook] Task: "${name}", Time: "${safeTime}", Date: "${safeDate}"`);
 
     // 3. Ensure Profile exists (Upsert)
     const { error: profileError } = await supabase.from("profiles").upsert({
@@ -115,17 +132,30 @@ app.post("/api/webhook", async (req, res) => {
     if (profileError) console.error("[Webhook] Profile upsert error:", profileError);
 
     // 4. Save to Supabase
-    const taskId = crypto.randomUUID();
-    const threadId = crypto.randomUUID();
+    // Fallback for randomUUID if not available
+    const generateUUID = () => {
+      try {
+        return crypto.randomUUID();
+      } catch (e) {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        });
+      }
+    };
+
+    const taskId = generateUUID();
+    const threadId = generateUUID();
 
     // Create Task
     const { error: taskError } = await supabase.from("tasks").insert({
       id: taskId,
       user_id: userId,
       name,
-      time,
-      date,
-      done: false
+      time: safeTime,
+      date: safeDate,
+      done: false,
+      type: 'regular'
     });
     
     if (taskError) console.error("[Webhook] Task insert error:", taskError);
@@ -141,7 +171,7 @@ app.post("/api/webhook", async (req, res) => {
       preview: userText,
       messages: [
         { role: "user", content: userText, time: ft() },
-        { role: "assistant", content: `Создал задачу: ${name}${time ? ' на ' + time : ''}.`, time: ft() }
+        { role: "assistant", content: `Создал задачу: ${name}${safeTime ? ' на ' + safeTime : ''}.`, time: ft() }
       ],
       created_at: now.toISOString()
     });
@@ -150,8 +180,8 @@ app.post("/api/webhook", async (req, res) => {
 
     // 5. Reply to Telegram
     let reply = `✅ Создал задачу: "${name}"`;
-    if (time) reply += ` на ${time}`;
-    if (date !== new Date().toISOString().split('T')[0]) reply += ` (${date})`;
+    if (safeTime) reply += ` на ${safeTime}`;
+    if (safeDate !== today) reply += ` (${safeDate})`;
     
     if (missing_time) {
       reply += `\n\n💡 Я не уверен насчёт времени. Если нужно другое — просто напиши мне!`;
@@ -231,7 +261,7 @@ app.get("/api/bot-status", adminAuth, async (req, res) => {
 });
 
 // Проверка статуса базы данных (Supabase) на сервере
-app.get("/api/db-status", adminAuth, (req, res) => {
+app.get("/api/db-status", (req, res) => {
   const isConfigured = !!process.env.VITE_SUPABASE_URL && !!process.env.VITE_SUPABASE_ANON_KEY;
   res.json({ 
     configured: isConfigured,
@@ -240,10 +270,16 @@ app.get("/api/db-status", adminAuth, (req, res) => {
 });
 
 // Эндпоинт для получения конфигурации Supabase клиентом
-app.get("/api/config", adminAuth, (req, res) => {
+app.get("/api/config", (req, res) => {
+  // We use process.env directly to ensure we get the latest values from the environment
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+  
+  console.log(`[API] Serving config: URL=${supabaseUrl ? 'Set' : 'Not Set'}, Key=${supabaseAnonKey ? 'Set' : 'Not Set'}`);
+  
   res.json({
-    supabaseUrl: process.env.VITE_SUPABASE_URL,
-    supabaseAnonKey: process.env.VITE_SUPABASE_ANON_KEY,
+    supabaseUrl,
+    supabaseAnonKey,
   });
 });
 
@@ -299,8 +335,16 @@ if (process.env.NODE_ENV !== "production") {
         appType: "spa",
       });
       app.use(vite.middlewares);
-      app.listen(PORT, "0.0.0.0", () => {
+      app.listen(PORT, "0.0.0.0", async () => {
         console.log(`Локальный сервер запущен: http://localhost:${PORT}`);
+        if (BOT_TOKEN) {
+          try {
+            const info = await axios.get(`https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo`);
+            console.log("[Bot] Webhook Info:", info.data.result);
+          } catch (e) {
+            console.error("[Bot] Error getting webhook info:", e);
+          }
+        }
       });
     } catch (err) {
       console.error("Ошибка запуска Vite:", err);
@@ -316,8 +360,16 @@ if (process.env.NODE_ENV !== "production") {
     res.sendFile(path.join(distPath, 'index.html'));
   });
   
-  app.listen(PORT, "0.0.0.0", () => {
+  app.listen(PORT, "0.0.0.0", async () => {
     console.log(`Продакшн сервер запущен: http://localhost:${PORT}`);
+    if (BOT_TOKEN) {
+      try {
+        const info = await axios.get(`https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo`);
+        console.log("[Bot] Webhook Info:", info.data.result);
+      } catch (e) {
+        console.error("[Bot] Error getting webhook info:", e);
+      }
+    }
   });
 }
 
