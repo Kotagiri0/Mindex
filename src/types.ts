@@ -50,6 +50,7 @@ export interface Settings {
   notifs: boolean;
   name?: string;
   avatar?: string;
+  email?: string;
 }
 
 export type Screen = 'ob' | 'dash' | 'ai' | 'threads' | 'settings';

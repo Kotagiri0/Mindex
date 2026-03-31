@@ -46,12 +46,14 @@ export const db = {
   getProfile: async () => {
     const userId = getUserId();
     if (!isSupabaseConfigured() || !userId) {
+      console.log('Using LOCAL storage for profile (No Supabase or No User ID)');
       return {
         settings: storage.getSettings(),
         onboarding_complete: storage.getOnboardingComplete()
       };
     }
     
+    console.log(`Fetching profile from CLOUD for user: ${userId}`);
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
@@ -88,9 +90,11 @@ export const db = {
   getThreads: async (): Promise<Thread[]> => {
     const userId = getUserId();
     if (!isSupabaseConfigured() || !userId) {
+      console.log('Using LOCAL storage for threads');
       return storage.getThreads();
     }
     
+    console.log(`Fetching threads from CLOUD for user: ${userId}`);
     const { data, error } = await supabase
       .from('threads')
       .select('*')
@@ -160,9 +164,11 @@ export const db = {
   getTasks: async (): Promise<Task[]> => {
     const userId = getUserId();
     if (!isSupabaseConfigured() || !userId) {
+      console.log('Using LOCAL storage for tasks');
       return storage.getTasks();
     }
     
+    console.log(`Fetching tasks from CLOUD for user: ${userId}`);
     const { data, error } = await supabase
       .from('tasks')
       .select('*')

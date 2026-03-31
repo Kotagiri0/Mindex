@@ -6,7 +6,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db } from './lib/db';
+import { initSupabase } from './lib/supabase';
 import { Screen, Task, Thread, Settings } from './types';
+import { uuid } from './lib/utils';
 import Onboarding from './components/Onboarding';
 import Dashboard from './components/Dashboard';
 import AIChat from './components/AIChat';
@@ -36,6 +38,29 @@ export default function App() {
 
     const initData = async () => {
       try {
+        // 1. Сначала пытаемся получить конфиг Supabase с сервера
+        try {
+          const configRes = await fetch('/api/config');
+          if (configRes.ok) {
+            const config = await configRes.json();
+            if (config.supabaseUrl && config.supabaseAnonKey) {
+              initSupabase(config.supabaseUrl, config.supabaseAnonKey);
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to fetch dynamic config');
+        }
+
+        // 2. Ждем, пока Telegram WebApp предоставит данные пользователя
+        let userId = db.getUserId();
+        let attempts = 0;
+        while (db.isInTelegram() && !userId && attempts < 10) {
+          await new Promise(r => setTimeout(r, 100));
+          userId = db.getUserId();
+          attempts++;
+        }
+
+        // 3. Теперь загружаем данные
         const [profile, fetchedTasks, fetchedThreads] = await Promise.all([
           db.getProfile(),
           db.getTasks(),
@@ -45,6 +70,12 @@ export default function App() {
         const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
         let currentSettings = profile?.settings || settings;
         let changed = false;
+
+        // Автоматически устанавливаем email админа для вас
+        if (!currentSettings.email && (tgUser?.username === 'vadimkosov' || !db.isInTelegram())) {
+          currentSettings = { ...currentSettings, email: 'vadimkosov7@gmail.com' };
+          changed = true;
+        }
 
         if (tgUser) {
           if (!currentSettings.name) {
@@ -118,7 +149,7 @@ export default function App() {
 
   const startNewThread = async () => {
     const newTh: Thread = {
-      id: crypto.randomUUID(),
+      id: uuid(),
       title: 'Новая мысль',
       preview: '',
       messages: [],

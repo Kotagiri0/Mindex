@@ -5,6 +5,7 @@ import TaskItem from './TaskItem';
 import AddTaskModal from './AddTaskModal';
 import EditTaskModal from './EditTaskModal';
 import { db } from '../lib/db';
+import { uuid } from '../lib/utils';
 
 interface DashboardProps {
   tasks: Task[];
@@ -78,7 +79,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onNewThread, on
 
   const addTask = async (name: string, time: string, date: string) => {
     const newTask: Task = {
-      id: crypto.randomUUID(),
+      id: uuid(),
       name,
       time,
       date,

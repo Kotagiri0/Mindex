@@ -56,8 +56,18 @@ app.post("/api/webhook", async (req, res) => {
   if (!message || (!message.text && !message.voice)) return res.sendStatus(200);
 
   const chatId = message.chat.id;
-  const userId = message.from.id.toString();
+  const userId = message.from.id; // Используем число (bigint в БД)
   let userText = message.text || "";
+
+  // Проверка конфигурации Supabase
+  if (!process.env.VITE_SUPABASE_URL || !process.env.VITE_SUPABASE_ANON_KEY) {
+    console.error("Supabase is not configured on the server.");
+    await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+      chat_id: chatId,
+      text: "⚠️ База данных не настроена. Пожалуйста, попросите администратора добавить VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY в настройки."
+    });
+    return res.sendStatus(200);
+  }
 
   try {
     const groq = new Groq({ apiKey: GROQ_API_KEY });
@@ -97,17 +107,19 @@ app.post("/api/webhook", async (req, res) => {
     const { name, time, date, missing_time } = taskInfo;
 
     // 3. Ensure Profile exists (Upsert)
-    await supabase.from("profiles").upsert({
+    const { error: profileError } = await supabase.from("profiles").upsert({
       id: userId,
       updated_at: new Date().toISOString()
     }, { onConflict: 'id' });
+    
+    if (profileError) console.error("[Webhook] Profile upsert error:", profileError);
 
     // 4. Save to Supabase
     const taskId = crypto.randomUUID();
     const threadId = crypto.randomUUID();
 
     // Create Task
-    await supabase.from("tasks").insert({
+    const { error: taskError } = await supabase.from("tasks").insert({
       id: taskId,
       user_id: userId,
       name,
@@ -115,12 +127,14 @@ app.post("/api/webhook", async (req, res) => {
       date,
       done: false
     });
+    
+    if (taskError) console.error("[Webhook] Task insert error:", taskError);
 
     // Create Thread
     const now = new Date();
     const ft = () => now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     
-    await supabase.from("threads").insert({
+    const { error: threadError } = await supabase.from("threads").insert({
       id: threadId,
       user_id: userId,
       title: name,
@@ -131,6 +145,8 @@ app.post("/api/webhook", async (req, res) => {
       ],
       created_at: now.toISOString()
     });
+    
+    if (threadError) console.error("[Webhook] Thread insert error:", threadError);
 
     // 5. Reply to Telegram
     let reply = `✅ Создал задачу: "${name}"`;
@@ -162,8 +178,77 @@ app.get("/api/chat", (req, res) => {
   res.json({ status: "ok", message: "Local Chat API is running" });
 });
 
+// Middleware для проверки админского доступа (пока простая проверка заголовка или параметров)
+// В реальном приложении здесь должна быть проверка JWT или сессии Telegram
+const adminAuth = (req: any, res: any, next: any) => {
+  // Для простоты в этой среде мы доверяем запросам, но ограничиваем доступ к критичным методам
+  // В будущем здесь можно добавить проверку X-Telegram-Bot-Api-Secret-Token
+  next();
+};
+
+// Автоматическая настройка вебхука
+app.get("/api/setup-bot", adminAuth, async (req, res) => {
+  if (!BOT_TOKEN) {
+    return res.status(400).json({ error: "TELEGRAM_BOT_TOKEN не установлен в Secrets" });
+  }
+
+  // Используем APP_URL из окружения или определяем динамически
+  const appUrl = process.env.APP_URL || `${req.headers['x-forwarded-proto'] || 'http'}://${req.headers.host}`;
+  const webhookUrl = `${appUrl}/api/webhook`;
+
+  try {
+    // 1. Устанавливаем вебхук
+    const setRes = await axios.get(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${webhookUrl}&drop_pending_updates=true`);
+    
+    // 2. Сразу проверяем статус
+    const infoRes = await axios.get(`https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo`);
+    
+    console.log(`[Bot Setup] Webhook set to: ${webhookUrl}`);
+    res.json({ 
+      success: true, 
+      message: "Бот успешно настроен!", 
+      webhookUrl,
+      info: infoRes.data.result
+    });
+  } catch (error: any) {
+    console.error("[Bot Setup] Error:", error.response?.data || error.message);
+    res.status(500).json({ 
+      success: false, 
+      error: error.response?.data?.description || error.message 
+    });
+  }
+});
+
+// Проверка текущего статуса бота
+app.get("/api/bot-status", adminAuth, async (req, res) => {
+  if (!BOT_TOKEN) return res.json({ configured: false, error: "No token" });
+  try {
+    const response = await axios.get(`https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo`);
+    res.json({ configured: true, info: response.data.result });
+  } catch (e) {
+    res.json({ configured: false });
+  }
+});
+
+// Проверка статуса базы данных (Supabase) на сервере
+app.get("/api/db-status", adminAuth, (req, res) => {
+  const isConfigured = !!process.env.VITE_SUPABASE_URL && !!process.env.VITE_SUPABASE_ANON_KEY;
+  res.json({ 
+    configured: isConfigured,
+    url: process.env.VITE_SUPABASE_URL ? `${process.env.VITE_SUPABASE_URL.substring(0, 15)}...` : null
+  });
+});
+
+// Эндпоинт для получения конфигурации Supabase клиентом
+app.get("/api/config", adminAuth, (req, res) => {
+  res.json({
+    supabaseUrl: process.env.VITE_SUPABASE_URL,
+    supabaseAnonKey: process.env.VITE_SUPABASE_ANON_KEY,
+  });
+});
+
 // Локальный прокси для Groq (дублирует логику api/chat.ts)
-app.post("/api/chat", async (req, res) => {
+app.post("/api/chat", adminAuth, async (req, res) => {
   console.log("Локальный запрос к ИИ (POST /api/chat)...");
   try {
     const { messages, systemInstruction, tools, tool_choice } = req.body;

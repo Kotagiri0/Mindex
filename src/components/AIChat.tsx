@@ -3,6 +3,7 @@ import { X, Settings, Send, Check, Trash2, ChevronDown, ChevronRight, Star, Plus
 import { Thread, Screen, Message, Task, SubTask } from '../types';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
+import { uuid } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface AIChatProps {
@@ -100,7 +101,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           } else if (name === 'add_task') {
             const { name: taskName, time, date } = args;
             const newTask: Task = {
-              id: crypto.randomUUID(),
+              id: uuid(),
               name: taskName,
               time: time || '',
               date: date || new Date().toISOString().split('T')[0],
@@ -324,13 +325,13 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
 
     const { title, steps } = msg.planning_data.plan;
     const subtasks: SubTask[] = steps.map(s => ({
-      id: crypto.randomUUID(),
+      id: uuid(),
       name: s,
       done: false
     }));
 
     const newTask: Task = {
-      id: crypto.randomUUID(),
+      id: uuid(),
       name: title,
       time: '',
       date: new Date().toISOString().split('T')[0],

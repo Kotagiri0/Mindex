@@ -1,5 +1,6 @@
 {
-  "name": "react-example",
+  "name": "mindex",
+  "description": "AI-powered task management app for Telegram Web Apps.",
   "private": true,
   "version": "0.0.0",
   "type": "module",
