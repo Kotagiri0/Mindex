@@ -29,13 +29,12 @@ export const getTelegramUser = () => {
   const tg = (window as any).Telegram?.WebApp;
   const user = tg?.initDataUnsafe?.user;
   
-  // Fallback for development OR cases where Telegram is not yet initialized
   if (!user) {
-    if (import.meta.env.DEV) {
-      return { id: 12345678, first_name: 'Dev', last_name: 'User', username: 'devuser' };
-    }
     return null;
   }
   
-  return user;
+  return {
+    ...user,
+    id: user.id.toString()
+  };
 };

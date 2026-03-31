@@ -165,25 +165,42 @@ export default function SettingsScreen({ settings, setSettings, onBack }: Settin
             {db.getUserId() && db.isInTelegram() && dbStatus.configured ? (
               <div className="flex items-center gap-1.5 text-green-500 text-[13px] font-bold">
                 <CheckCircle2 size={16} />
-                <span>Активна</span>
+                <span>Активна (Облако)</span>
               </div>
             ) : (
-              <button 
-                onClick={() => window.location.reload()} 
-                className="flex items-center gap-1.5 text-text-tertiary hover:text-text-primary transition-colors text-[13px] font-bold"
-              >
-                <AlertCircle size={16} />
-                <span>Локальный режим (Обновить)</span>
-              </button>
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex items-center gap-1.5 text-text-tertiary text-[13px] font-bold">
+                  <AlertCircle size={16} />
+                  <span>Локальный режим</span>
+                </div>
+                <button 
+                  onClick={() => window.location.reload()} 
+                  className="text-accent text-[11px] font-bold underline"
+                >
+                  Обновить
+                </button>
+              </div>
             )}
           </div>
-          <div className="text-[12px] text-text-tertiary leading-relaxed">
+          <div className="text-[12px] text-text-tertiary leading-relaxed space-y-2">
             {db.getUserId() ? (
               dbStatus.configured ? 
-              `Ваши данные привязаны к Telegram ID: ${db.getUserId()} и сохраняются в облаке.` :
-              'Telegram ID найден, но облачное хранилище не настроено или недоступно. Добавьте VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY в Secrets проекта.'
+              <p>Ваши данные привязаны к Telegram ID: <code className="bg-surface2 px-1 rounded">{db.getUserId()}</code> и сохраняются в облаке Supabase.</p> :
+              <div className="p-3 bg-red-50 rounded-xl border border-red-100">
+                <p className="text-red-600 font-medium mb-1">Облако не настроено!</p>
+                <p>Telegram ID найден, но база данных не подключена. Если вы на Vercel — добавьте <code>VITE_SUPABASE_URL</code> и <code>VITE_SUPABASE_ANON_KEY</code> в настройки Vercel.</p>
+              </div>
             ) : (
-              'Приложение открыто вне Telegram. Данные сохраняются только в памяти этого устройства.'
+              <div className="space-y-2">
+                <p>Приложение открыто вне Telegram или Telegram не передал данные пользователя.</p>
+                <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+                  <p className="text-blue-600 font-medium mb-1">Как синхронизировать?</p>
+                  <ol className="list-decimal list-inside text-blue-800 space-y-1">
+                    <li>Открой приложение <strong>только через бота</strong> в Telegram.</li>
+                    <li>Если ты на Vercel — убедись, что добавил Secrets в панель Vercel.</li>
+                  </ol>
+                </div>
+              </div>
             )}
           </div>
         </div>

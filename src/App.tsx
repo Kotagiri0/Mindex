@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db } from './lib/db';
-import { initSupabase } from './lib/supabase';
+import { supabase, initSupabase, isSupabaseConfigured } from './lib/supabase';
 import { Screen, Task, Thread, Settings } from './types';
 import { uuid } from './lib/utils';
 import Onboarding from './components/Onboarding';
@@ -23,6 +23,7 @@ export default function App() {
   const [settings, setSettings] = useState<Settings>({ agent: true, confirm: true, notifs: true });
   const [curTh, setCurTh] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(false);
 
   useEffect(() => {
     // Telegram Mini App initialization
@@ -43,13 +44,9 @@ export default function App() {
           const configRes = await fetch('/api/config');
           if (configRes.ok) {
             const config = await configRes.json();
-            console.log('[Sync] Config fetched:', config.supabaseUrl ? 'URL OK' : 'URL Missing');
             if (config.supabaseUrl && config.supabaseAnonKey) {
-              const success = initSupabase(config.supabaseUrl, config.supabaseAnonKey);
-              console.log('[Sync] Supabase initialized:', success);
+              initSupabase(config.supabaseUrl, config.supabaseAnonKey);
             }
-          } else {
-            console.error('[Sync] Config fetch failed:', configRes.status);
           }
         } catch (e) {
           console.error('[Sync] Error fetching dynamic config:', e);
@@ -58,11 +55,22 @@ export default function App() {
         // 2. Ждем, пока Telegram WebApp предоставит данные пользователя
         let userId = db.getUserId();
         let attempts = 0;
-        while (db.isInTelegram() && !userId && attempts < 10) {
+        const maxAttempts = 20;
+        
+        while (!userId && attempts < maxAttempts) {
           await new Promise(r => setTimeout(r, 100));
           userId = db.getUserId();
           attempts++;
         }
+
+        if (!userId) {
+          console.error('[Auth] User ID not found after attempts');
+          setAuthError(true);
+          setLoading(false);
+          return;
+        }
+
+        console.log(`[Auth] User identified: ${userId}`);
 
         // 3. Теперь загружаем данные
         const [profile, fetchedTasks, fetchedThreads] = await Promise.all([
@@ -125,6 +133,44 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    const userId = db.getUserId();
+    if (!userId || !isSupabaseConfigured() || loading) return;
+
+    const channel = supabase
+      .channel('tasks-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'tasks',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const newTask = payload.new as any;
+          const task: Task = {
+            id: newTask.id,
+            name: newTask.name,
+            time: newTask.time || '',
+            date: newTask.date,
+            done: newTask.done,
+            type: newTask.type || 'regular'
+          };
+          
+          setTasks((prev) => {
+            if (prev.some(t => t.id === task.id)) return prev;
+            return [task, ...prev];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loading]);
+
   const updateTasks = (newTasks: Task[] | ((prev: Task[]) => Task[])) => {
     setTasks(prev => {
       const updated = typeof newTasks === 'function' ? newTasks(prev) : newTasks;
@@ -170,6 +216,22 @@ export default function App() {
     return (
       <div className="w-full h-screen flex items-center justify-center bg-bg">
         <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (authError) {
+    return (
+      <div className="w-full h-screen flex flex-col items-center justify-center bg-bg p-6 text-center">
+        <div className="w-16 h-16 mb-6 text-accent">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+        </div>
+        <h1 className="text-xl font-bold text-ink mb-2">Доступ ограничен</h1>
+        <p className="text-ink/60">Открой приложение через Telegram, чтобы получить доступ к своим данным.</p>
       </div>
     );
   }

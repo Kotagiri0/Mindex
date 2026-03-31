@@ -44,9 +44,9 @@ export const db = {
   isInTelegram: () => isInTelegram(),
   // Profiles & Settings
   getProfile: async () => {
-    const userId = getUserId();
+    const userId = db.getUserId();
     if (!isSupabaseConfigured() || !userId) {
-      console.log('Using LOCAL storage for profile (No Supabase or No User ID)');
+      console.log('Using LOCAL storage for profile (No Supabase or No User ID)', { configured: isSupabaseConfigured(), userId });
       return {
         settings: storage.getSettings(),
         onboarding_complete: storage.getOnboardingComplete()
@@ -164,30 +164,26 @@ export const db = {
   getTasks: async (): Promise<Task[]> => {
     const userId = getUserId();
     if (!isSupabaseConfigured() || !userId) {
-      console.log('Using LOCAL storage for tasks');
+      console.log('Using LOCAL storage for tasks', { configured: isSupabaseConfigured(), userId });
       return storage.getTasks();
     }
     
-    console.log(`Fetching tasks from CLOUD for user: ${userId}`);
     const { data, error } = await supabase
       .from('tasks')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
       
-    if (error) {
-      console.error('Error fetching tasks:', error);
-      return [];
-    }
+    if (error) return [];
     
     return data.map(t => ({
       id: t.id,
       name: t.name,
-      time: t.time,
+      time: t.time || '',
       date: t.date,
       done: t.done,
-      type: t.type,
-      subtasks: t.subtasks
+      type: t.type || 'regular',
+      subtasks: t.subtasks || []
     }));
   },
   
@@ -196,29 +192,22 @@ export const db = {
     if (!isSupabaseConfigured() || !userId) {
       const tasks = storage.getTasks();
       const index = tasks.findIndex(t => t.id === task.id);
-      if (index >= 0) {
-        tasks[index] = task;
-      } else {
-        tasks.unshift(task);
-      }
+      if (index >= 0) tasks[index] = task;
+      else tasks.unshift(task);
       storage.setTasks(tasks);
       return;
     }
     
-    const { error } = await supabase
-      .from('tasks')
-      .upsert({
-        id: task.id.includes('.') ? undefined : task.id,
-        user_id: userId,
-        name: task.name,
-        time: task.time,
-        date: task.date,
-        done: task.done,
-        type: task.type,
-        subtasks: task.subtasks
-      });
-      
-    if (error) console.error('Error saving task:', error);
+    await supabase.from("tasks").upsert({
+      id: task.id.includes('.') ? undefined : task.id,
+      user_id: userId,
+      name: task.name,
+      time: task.time,
+      date: task.date,
+      done: task.done,
+      type: task.type || 'regular',
+      subtasks: task.subtasks || []
+    });
   },
   
   deleteTask: async (id: string) => {
@@ -229,12 +218,6 @@ export const db = {
       return;
     }
     
-    const { error } = await supabase
-      .from('tasks')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', userId);
-      
-    if (error) console.error('Error deleting task:', error);
+    await supabase.from("tasks").delete().eq('id', id).eq('user_id', userId);
   }
 };
