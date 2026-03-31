@@ -26,8 +26,17 @@ export default function App() {
   const [authError, setAuthError] = useState(false);
 
   useEffect(() => {
-    // Telegram Mini App initialization
+    // 1. Очистка устаревшего кэша ID, если он не совпадает с текущим TG ID
     const tg = (window as any).Telegram?.WebApp;
+    const telegramId = tg?.initDataUnsafe?.user?.id;
+    const storedId = localStorage.getItem('userId'); // Проверка на случай старых версий
+
+    if (storedId && telegramId && String(storedId) !== String(telegramId)) {
+      console.log('[Auth] ID mismatch detected, clearing cache');
+      localStorage.clear(); // Полная очистка для безопасности
+    }
+
+    // Telegram Mini App initialization
     if (tg) {
       tg.ready();
       tg.expand();
@@ -55,7 +64,7 @@ export default function App() {
         // 2. Ждем, пока Telegram WebApp предоставит данные пользователя
         let userId = db.getUserId();
         let attempts = 0;
-        const maxAttempts = 20;
+        const maxAttempts = 30; // 3 seconds
         
         while (!userId && attempts < maxAttempts) {
           await new Promise(r => setTimeout(r, 100));
@@ -64,13 +73,16 @@ export default function App() {
         }
 
         if (!userId) {
-          console.error('[Auth] User ID not found after attempts');
+          console.error(`[Auth] User ID not found after ${attempts} attempts. Host: ${window.location.hostname}`);
           setAuthError(true);
           setLoading(false);
           return;
         }
 
-        console.log(`[Auth] User identified: ${userId}`);
+        console.log(`[Auth] User identified: ${userId} (after ${attempts} attempts)`);
+        
+        // Сохраняем текущий ID для будущих проверок (если нужно)
+        localStorage.setItem('userId', userId);
 
         // 3. Теперь загружаем данные
         const [profile, fetchedTasks, fetchedThreads] = await Promise.all([

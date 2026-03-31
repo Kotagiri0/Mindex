@@ -30,6 +30,18 @@ export const getTelegramUser = () => {
   const user = tg?.initDataUnsafe?.user;
   
   if (!user) {
+    // Разрешаем fallback ID ТОЛЬКО для локальной разработки или превью в AI Studio
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const isPreview = window.location.hostname.includes('.run.app');
+    
+    if (isLocal || isPreview) {
+      return { 
+        id: 'dev_user_777', 
+        first_name: 'Preview', 
+        last_name: 'User', 
+        username: 'preview_user' 
+      };
+    }
     return null;
   }
   
