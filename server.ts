@@ -203,6 +203,58 @@ app.post("/api/webhook", async (req, res) => {
   res.sendStatus(200);
 });
 
+// Простой вебхук для добавления задач (api/telegram)
+app.post("/api/telegram", async (req, res) => {
+  const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+  if (!BOT_TOKEN) {
+    console.error("[Telegram API] Missing BOT_TOKEN");
+    return res.sendStatus(200);
+  }
+
+  const { message } = req.body;
+  if (!message || !message.text || !message.from) {
+    return res.sendStatus(200);
+  }
+
+  const telegramId = message.from.id.toString();
+  const text = message.text;
+  const chatId = message.chat.id;
+
+  // Игнорируем команды
+  if (text.startsWith('/')) {
+    return res.sendStatus(200);
+  }
+
+  try {
+    const today = new Date().toISOString().split('T')[0];
+
+    // Вставляем задачу в базу
+    const { error } = await supabase.from("tasks").insert({
+      user_id: telegramId,
+      name: text,
+      date: today,
+      done: false,
+      type: 'regular'
+    });
+
+    if (error) {
+      console.error("[Telegram API] Supabase insert error:", error);
+      return res.sendStatus(200);
+    }
+
+    // Отправляем подтверждение
+    await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+      chat_id: chatId,
+      text: "✅ Задача добавлена!"
+    });
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("[Telegram API] Error:", error);
+    res.sendStatus(200);
+  }
+});
+
 // Health check
 app.get("/api/chat", (req, res) => {
   res.json({ status: "ok", message: "Local Chat API is running" });
