@@ -27,24 +27,41 @@ export const isInTelegram = () => {
 
 export const getTelegramUser = () => {
   const tg = (window as any).Telegram?.WebApp;
-  const user = tg?.initDataUnsafe?.user;
-  
+
+  // Try initDataUnsafe first (normal case)
+  let user = tg?.initDataUnsafe?.user;
+
+  // Fallback: parse initData string manually.
+  // Android Telegram sometimes doesn't populate initDataUnsafe.user
+  // even though initData (raw URL-encoded string) contains the user object.
+  if (!user && tg?.initData) {
+    try {
+      const params = new URLSearchParams(tg.initData);
+      const userStr = params.get('user');
+      if (userStr) {
+        user = JSON.parse(decodeURIComponent(userStr));
+      }
+    } catch (e) {
+      console.error('[Auth] Failed to parse initData manually:', e);
+    }
+  }
+
   if (!user) {
-    // Разрешаем fallback ID ТОЛЬКО для локальной разработки или превью в AI Studio
+    // Fallback ONLY for local dev / preview environments
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const isPreview = window.location.hostname.includes('.run.app');
-    
+
     if (isLocal || isPreview) {
-      return { 
-        id: 'dev_user_777', 
-        first_name: 'Preview', 
-        last_name: 'User', 
-        username: 'preview_user' 
+      return {
+        id: 'dev_user_777',
+        first_name: 'Preview',
+        last_name: 'User',
+        username: 'preview_user'
       };
     }
     return null;
   }
-  
+
   return {
     ...user,
     id: user.id.toString()

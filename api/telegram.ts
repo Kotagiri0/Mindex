@@ -364,7 +364,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const groqKey = process.env.GROQ_API_KEY;
 
   if (!BOT_TOKEN || !supabaseUrl || !supabaseKey || !groqKey) {
-    console.error('[Bot] Missing env vars');
+    console.error('[Bot] Missing env vars:', {
+      BOT_TOKEN: !!BOT_TOKEN,
+      supabaseUrl: !!supabaseUrl,
+      supabaseKey: !!supabaseKey,
+      groqKey: !!groqKey,
+    });
     return res.status(200).end();
   }
 
