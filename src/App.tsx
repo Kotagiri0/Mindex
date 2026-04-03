@@ -238,18 +238,31 @@ export default function App() {
 
   if (authError) {
     const inTelegram = (window as any).Telegram?.WebApp?.initData;
+
+    if (inTelegram) {
+      // Внутри Telegram, но initData не отдал user — бесконечная загрузка с кнопкой ретрая
+      return (
+        <div className="w-full h-screen flex flex-col items-center justify-center bg-bg p-6 text-center gap-4">
+          <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+          <p className="text-ink/60 text-sm max-w-xs">
+            Загружаем ваш профиль...
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-2 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-medium"
+          >
+            Попробовать снова
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div className="w-full h-screen flex flex-col items-center justify-center bg-bg p-6 text-center gap-4">
-        <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center text-2xl">
-          {inTelegram ? '⚠️' : '✈️'}
-        </div>
-        <h1 className="text-xl font-bold text-ink">
-          {inTelegram ? 'Не удалось загрузить профиль' : 'Открой в Telegram'}
-        </h1>
+        <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center text-2xl">✈️</div>
+        <h1 className="text-xl font-bold text-ink">Открой в Telegram</h1>
         <p className="text-ink/60 text-sm max-w-xs">
-          {inTelegram
-            ? 'Telegram не передал данные пользователя. Попробуй закрыть и открыть приложение снова.'
-            : 'Мысль работает только внутри Telegram. Найди бота и открой приложение через кнопку в чате.'}
+          Мысль работает только внутри Telegram. Найди бота и открой приложение через кнопку в чате.
         </p>
         <button
           onClick={() => window.location.reload()}
