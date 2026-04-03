@@ -20,7 +20,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const protocol = req.headers['x-forwarded-proto'] || 'https';
   const host = req.headers.host;
   const appUrl = `${protocol}://${host}`;
-  const webhookUrl = `${appUrl}/api/webhook`;
+  const webhookUrl = `${appUrl}/api/telegram`;
 
   try {
     // 1. Устанавливаем вебхук
