@@ -22,7 +22,8 @@ export const isSupabaseConfigured = () => {
 
 export const isInTelegram = () => {
   const tg = (window as any).Telegram?.WebApp;
-  return !!tg?.initData;
+  // platform is set synchronously by the SDK — unlike initData which can arrive late on Android
+  return !!tg && tg.platform !== 'unknown';
 };
 
 export const getTelegramUser = () => {
@@ -64,6 +65,6 @@ export const getTelegramUser = () => {
 
   return {
     ...user,
-    id: user.id.toString()
+    id: Number(user.id)
   };
 };

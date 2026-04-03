@@ -237,7 +237,8 @@ export default function App() {
   }
 
   if (authError) {
-    const inTelegram = (window as any).Telegram?.WebApp?.initData;
+    const tgApp = (window as any).Telegram?.WebApp;
+    const inTelegram = !!tgApp && tgApp.platform !== 'unknown';
 
     if (inTelegram) {
       // Внутри Telegram, но initData не отдал user — бесконечная загрузка с кнопкой ретрая
