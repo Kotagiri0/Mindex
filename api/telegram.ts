@@ -272,7 +272,7 @@ async function ensureProfile(supabase: SupabaseClient, userId: number) {
   await supabase
     .from('profiles')
     .upsert(
-      { id: userId, settings: { agent: true, confirm: true, notifs: true }, onboarding_complete: false },
+      { id: userId, settings: { agent: true, confirm: true, notifs: true }, onboarding_complete: true },
       { onConflict: 'id', ignoreDuplicates: true }
     );
 }
