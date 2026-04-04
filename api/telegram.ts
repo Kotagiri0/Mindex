@@ -163,11 +163,41 @@ async function executeTool(name: string, args: any, supabase: SupabaseClient, us
 
 function toGroqFormat(msgs: StoredMessage[]) {
   return msgs.map(m => {
-    const msg: any = { role: m.role, content: m.content ?? '' };
+    const msg: any = { role: m.role, content: typeof m.content === 'string' ? m.content : '' };
     if (m.tool_calls) msg.tool_calls = m.tool_calls;
     if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
     return msg;
   });
+}
+
+function buildSafeHistory(msgs: StoredMessage[]): any[] {
+  const raw = toGroqFormat(msgs.slice(-CONTEXT_WINDOW));
+  const safe: any[] = [];
+  let i = 0;
+  while (i < raw.length) {
+    const m = raw[i];
+    if (m.role === 'assistant' && m.tool_calls?.length > 0) {
+      const toolIds: string[] = m.tool_calls.map((tc: any) => tc.id);
+      const following = raw.slice(i + 1, i + 1 + toolIds.length);
+      const allPresent = toolIds.every((id: string) =>
+        following.some((f: any) => f.role === 'tool' && f.tool_call_id === id)
+      );
+      if (!allPresent) { i++; continue; } // skip broken chain
+      safe.push(m);
+      for (let j = 0; j < toolIds.length; j++) safe.push(raw[i + 1 + j]);
+      i += 1 + toolIds.length;
+    } else if (m.role === 'tool') {
+      // tool without preceding assistant+tool_calls — skip
+      const prev = safe[safe.length - 1];
+      if (!prev || prev.role !== 'assistant' || !prev.tool_calls?.length) { i++; continue; }
+      safe.push(m);
+      i++;
+    } else {
+      safe.push(m);
+      i++;
+    }
+  }
+  return safe;
 }
 
 async function processWithAI(
@@ -181,7 +211,7 @@ async function processWithAI(
   const userMsg: StoredMessage = { role: 'user', content: userText, time: now() };
 
   const loopMessages = [
-    ...toGroqFormat(threadMessages.slice(-CONTEXT_WINDOW)),
+    ...buildSafeHistory(threadMessages),
     { role: 'user' as const, content: userText }
   ];
   const newMessages: StoredMessage[] = [userMsg];
@@ -201,27 +231,28 @@ async function processWithAI(
     if (msg.tool_calls && msg.tool_calls.length > 0) {
       const assistantEntry: StoredMessage = {
         role: 'assistant',
-        content: msg.content ?? '',
+        content: typeof msg.content === 'string' ? msg.content : '',
         time: now(),
         tool_calls: msg.tool_calls
       };
-      loopMessages.push({ role: 'assistant', content: msg.content ?? '', tool_calls: msg.tool_calls });
+      loopMessages.push({ role: 'assistant', content: typeof msg.content === 'string' ? msg.content : '', tool_calls: msg.tool_calls });
       newMessages.push(assistantEntry);
 
       for (const toolCall of msg.tool_calls) {
         const args = JSON.parse(toolCall.function.arguments ?? '{}');
         const result = await executeTool(toolCall.function.name, args, supabase, userId);
+        const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
         const toolEntry: StoredMessage = {
           role: 'tool',
-          content: JSON.stringify(result),
+          content: resultStr,
           time: now(),
           tool_call_id: toolCall.id
         };
-        loopMessages.push({ role: 'tool', content: JSON.stringify(result), tool_call_id: toolCall.id });
+        loopMessages.push({ role: 'tool', content: resultStr, tool_call_id: toolCall.id });
         newMessages.push(toolEntry);
       }
     } else {
-      const text = msg.content ?? 'Не могу ответить прямо сейчас.';
+      const text = typeof msg.content === 'string' && msg.content ? msg.content : 'Не могу ответить прямо сейчас.';
       newMessages.push({ role: 'assistant', content: text, time: now() });
       return { aiResponse: text, newMessages };
     }
