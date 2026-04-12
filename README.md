@@ -37,3 +37,26 @@ http://localhost:3000
 npm run build
 npm run preview
 ```
+
+## Запуск в Docker
+
+1. Подготовь `.env` (минимум `GROQ_API_KEY`).
+
+2. Собери и подними контейнер:
+
+```bash
+docker compose up --build -d
+```
+
+3. Открой приложение:
+
+```bash
+http://localhost:3000
+```
+
+Полезные команды:
+
+```bash
+docker compose logs -f
+docker compose down
+```
