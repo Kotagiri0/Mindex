@@ -13,10 +13,11 @@ Mindex — персональный AI-ассистент для планиро�
 npm install
 ```
 
-2. Создай файл `.env` на основе `.env.example` и заполни ключ Groq:
+2. Создай файл `.env` на основе `.env.example` и заполни ключи:
 
 ```bash
 GROQ_API_KEY=
+DATABASE_URL=postgresql://mindex:mindex@postgres:5432/mindex
 ```
 
 3. Запусти dev-сервер:
@@ -40,7 +41,7 @@ npm run preview
 
 ## Запуск в Docker
 
-1. Подготовь `.env` (минимум `GROQ_API_KEY`).
+1. Подготовь `.env` (`GROQ_API_KEY` и `DATABASE_URL`).
 
 2. Собери и подними контейнер:
 
@@ -60,3 +61,5 @@ http://localhost:3000
 docker compose logs -f
 docker compose down
 ```
+
+После запуска регистрация и вход сохраняются в Postgres (`auth_users`).

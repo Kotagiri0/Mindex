@@ -1,19 +1,34 @@
 import { LocalUser } from '../types';
 import { storage } from './storage';
 
-const hashSecret = async (value: string) => {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(value);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
-};
-
 const normalizeUsername = (value: string) => value.trim().toLowerCase();
 
 export const getCurrentUser = (): LocalUser | null => {
-  const userId = storage.getSessionUserId();
-  if (!userId) return null;
-  return storage.getUsers().find((user) => user.id === userId) || null;
+  return storage.getCurrentUser();
+};
+
+const mapApiUser = (user: any): LocalUser => ({
+  id: String(user.id),
+  username: String(user.username),
+  displayName: String(user.displayName),
+  createdAt: Number(user.createdAt),
+});
+
+const authRequest = async (endpoint: 'register' | 'login', payload: { username: string; password: string; displayName?: string }) => {
+  const response = await fetch(`${window.location.origin}/api/auth/${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json().catch(() => ({ error: 'Некорректный ответ сервера.' }));
+  if (!response.ok) {
+    throw new Error(data.error || 'Ошибка авторизации.');
+  }
+
+  return mapApiUser(data.user);
 };
 
 export const registerLocalUser = async (input: { username: string; password: string; displayName?: string }) => {
@@ -32,42 +47,31 @@ export const registerLocalUser = async (input: { username: string; password: str
     throw new Error('Пароль должен быть не короче 4 символов.');
   }
 
-  const users = storage.getUsers();
-  if (users.some((user) => user.username === username)) {
-    throw new Error('Такой пользователь уже существует.');
-  }
-
-  const user: LocalUser = {
-    id: crypto.randomUUID(),
+  const user = await authRequest('register', {
     username,
-    displayName: displayName || username,
-    passwordHash: await hashSecret(`${username}:${input.password}`),
-    createdAt: Date.now(),
-  };
+    password: input.password,
+    displayName,
+  });
 
-  storage.setUsers([user, ...users]);
   storage.setSessionUserId(user.id);
+  storage.setCurrentUser(user);
   return user;
 };
 
 export const loginLocalUser = async (input: { username: string; password: string }) => {
   const username = normalizeUsername(input.username);
-  const users = storage.getUsers();
-  const user = users.find((item) => item.username === username);
 
-  if (!user) {
-    throw new Error('Пользователь не найден.');
-  }
-
-  const passwordHash = await hashSecret(`${username}:${input.password}`);
-  if (passwordHash !== user.passwordHash) {
-    throw new Error('Неверный пароль.');
-  }
+  const user = await authRequest('login', {
+    username,
+    password: input.password,
+  });
 
   storage.setSessionUserId(user.id);
+  storage.setCurrentUser(user);
   return user;
 };
 
 export const logoutLocalUser = () => {
   storage.clearSessionUserId();
+  storage.clearCurrentUser();
 };

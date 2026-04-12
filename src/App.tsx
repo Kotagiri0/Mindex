@@ -175,6 +175,7 @@ export default function App() {
               setTasks={updateTasks}
               onNavigate={setScreen}
               onNewThread={startNewThread}
+              onLogout={handleLogout}
               onOpenThread={(id) => {
                 setCurTh(id);
                 setScreen('ai');

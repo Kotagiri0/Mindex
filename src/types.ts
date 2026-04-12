@@ -57,7 +57,6 @@ export interface LocalUser {
   id: string;
   username: string;
   displayName: string;
-  passwordHash: string;
   createdAt: number;
 }
 

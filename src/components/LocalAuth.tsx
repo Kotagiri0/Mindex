@@ -1,3 +1,4 @@
+import type { FormEvent } from 'react';
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { Loader2, Lock, User, LogIn } from 'lucide-react';
@@ -18,7 +19,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
     setLoading(true);

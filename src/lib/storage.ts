@@ -2,6 +2,7 @@ import { LocalProfile, LocalUser, Settings, Task, Thread } from '../types';
 
 const USERS_KEY = 'mx_users';
 const SESSION_KEY = 'mx_session_user_id';
+const CURRENT_USER_KEY = 'mx_current_user';
 const LEGACY_TASKS_KEY = 'mx_tasks';
 const LEGACY_THREADS_KEY = 'mx_threads';
 const LEGACY_SETTINGS_KEY = 'mx_settings';
@@ -52,6 +53,19 @@ export const storage = {
   getSessionUserId: (): string | null => localStorage.getItem(SESSION_KEY),
   setSessionUserId: (userId: string) => localStorage.setItem(SESSION_KEY, userId),
   clearSessionUserId: () => localStorage.removeItem(SESSION_KEY),
+
+  getCurrentUser: (): LocalUser | null => {
+    const direct = readJson<LocalUser | null>(CURRENT_USER_KEY, null);
+    if (direct) return direct;
+
+    // Compatibility with older local-only auth model.
+    const sessionUserId = localStorage.getItem(SESSION_KEY);
+    if (!sessionUserId) return null;
+    const users = readJson<LocalUser[]>(USERS_KEY, []);
+    return users.find((item) => item.id === sessionUserId) || null;
+  },
+  setCurrentUser: (user: LocalUser) => writeJson(CURRENT_USER_KEY, user),
+  clearCurrentUser: () => localStorage.removeItem(CURRENT_USER_KEY),
 
   getProfile: (userId: string): LocalProfile => {
     const profile = readJson<LocalProfile | null>(profileKey(userId), null);

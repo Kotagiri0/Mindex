@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, LogOut } from 'lucide-react';
 import { Task, Screen } from '../types';
 import TaskItem from './TaskItem';
 import AddTaskModal from './AddTaskModal';
@@ -13,12 +13,13 @@ interface DashboardProps {
   onNavigate: (screen: Screen) => void;
   onNewThread: () => void;
   onOpenThread: (id: string) => void;
+  onLogout: () => void;
 }
 
 const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 const DAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
 
-export default function Dashboard({ tasks, setTasks, onNavigate, onNewThread, onOpenThread }: DashboardProps) {
+export default function Dashboard({ tasks, setTasks, onNavigate, onNewThread, onOpenThread, onLogout }: DashboardProps) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -121,6 +122,16 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onNewThread, on
       <div className="safe-top flex-shrink-0" />
       
       <div className="px-4 pt-2 flex-shrink-0">
+        <div className="flex items-center justify-end mb-2">
+          <button
+            onClick={onLogout}
+            className="h-9 px-3 rounded-full bg-white text-[#3C3C43] text-[12px] font-semibold flex items-center gap-2 border border-[#E5E5EA] active:scale-95 transition-transform"
+          >
+            <LogOut size={14} />
+            Выйти
+          </button>
+        </div>
+
         <div className="flex items-center gap-1 mb-2">
           <button onClick={() => setWeekOffset(v => v - 1)} className="w-[30px] h-[30px] rounded-full flex items-center justify-center text-[#3C3C43]/60 hover:bg-black/5 transition-colors">
             <ChevronLeft size={18} />
