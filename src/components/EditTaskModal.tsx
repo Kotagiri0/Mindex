@@ -72,7 +72,7 @@ export default function EditTaskModal({ task, onClose, onUpdate, onDelete, onOpe
             <div className="mb-3">
               <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Название</label>
               <input
-                className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-white transition-all"
+                className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
@@ -83,7 +83,7 @@ export default function EditTaskModal({ task, onClose, onUpdate, onDelete, onOpe
                 <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Время</label>
                 <input
                   type="time"
-                  className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-white transition-all"
+                  className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary"
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
                 />
@@ -92,7 +92,7 @@ export default function EditTaskModal({ task, onClose, onUpdate, onDelete, onOpe
                 <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Дата</label>
                 <input
                   type="date"
-                  className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-white transition-all"
+                  className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                 />
@@ -102,7 +102,7 @@ export default function EditTaskModal({ task, onClose, onUpdate, onDelete, onOpe
             <div className="flex gap-2.5 mt-2">
               <button
                 onClick={() => onDelete(task.id)}
-                className="flex-1 h-[48px] bg-[#fff0ef] text-danger rounded-[12px] font-semibold text-[15px] active:opacity-85 transition-opacity"
+                className="flex-1 h-[48px] bg-gradient-to-r from-danger/20 to-danger/10 text-danger rounded-[12px] font-semibold text-[15px] active:opacity-85 transition-opacity border border-danger/30 hover:from-danger/30 hover:to-danger/20"
               >
                 Удалить
               </button>

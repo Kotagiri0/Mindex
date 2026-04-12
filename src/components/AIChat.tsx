@@ -443,7 +443,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                         {m.planning_data.questions.map((q) => {
                           const isAnswered = m.planning_data?.answers?.[q.id];
                           if (isAnswered) return (
-                            <div key={q.id} className="bg-white/50 p-2 rounded-lg text-[13px] text-text-primary">
+                            <div key={q.id} className="bg-surface/80 p-2 rounded-lg text-[13px] text-text-primary border border-border">
                               <div className="text-text-tertiary text-[11px] mb-1">{q.question}</div>
                               <div className="font-semibold">{m.planning_data?.answers?.[q.id]}</div>
                             </div>
@@ -457,7 +457,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                                   <button
                                     key={opt}
                                     onClick={() => handleAnswer(i, q.id, opt)}
-                                    className="text-left p-2 bg-white rounded-xl text-[13px] text-text-primary active:scale-95 transition-transform border border-border/50"
+                                    className="text-left p-2 bg-surface rounded-xl text-[13px] text-text-primary active:scale-95 transition-transform border border-border hover:bg-surface2 transition-colors"
                                   >
                                     {opt}
                                   </button>
@@ -465,7 +465,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                                 <div className="relative">
                                   <input 
                                     placeholder="Свой вариант..."
-                                    className="w-full p-2 bg-white rounded-xl text-[13px] text-text-primary border border-border/50 outline-none focus:border-accent"
+                                    className="w-full p-2 bg-surface rounded-xl text-[13px] text-text-primary border border-border outline-none focus:border-accent focus:bg-surface2 transition-colors"
                                     onKeyDown={(e) => {
                                       if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
                                         handleAnswer(i, q.id, (e.target as HTMLInputElement).value.trim());
@@ -481,7 +481,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                     )}
 
                     {m.planning_data.status === 'plan_generated' && m.planning_data.plan && (
-                      <div className="bg-white rounded-2xl p-4 shadow-sm border border-border/50 flex flex-col gap-3">
+                      <div className="bg-surface rounded-2xl p-4 shadow-sm border border-border flex flex-col gap-3 transition-colors">
                         <div className="text-[16px] font-bold text-accent flex items-center gap-2">
                           <Star size={18} fill="currentColor" />
                           {m.planning_data.plan.title}
@@ -537,7 +537,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
 
       <div className="p-[10px_14px] pb-[calc(10px+env(safe-area-inset-bottom,0px))] flex items-center gap-2.5 bg-surface border-t border-border flex-shrink-0">
         <input
-          className="flex-1 h-11 bg-surface2 border-[1.5px] border-transparent rounded-[22px] px-4 font-sans text-[15px] text-text-primary outline-none focus:border-accent focus:bg-white transition-all placeholder:text-text-tertiary"
+          className="flex-1 h-11 bg-surface2 border-[1.5px] border-transparent rounded-[22px] px-4 font-sans text-[15px] text-text-primary outline-none focus:border-accent focus:bg-surface transition-all placeholder:text-text-tertiary"
           placeholder="Что думаешь? Пиши сюда"
           value={input}
           onChange={(e) => setInput(e.target.value)}

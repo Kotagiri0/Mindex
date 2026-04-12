@@ -51,7 +51,7 @@ export default function AddTaskModal({ isOpen, onClose, onAdd, initialDate }: Ad
               <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Название</label>
               <input
                 autoFocus
-                className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-white transition-all"
+                className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary"
                 placeholder="Что нужно сделать?"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -63,7 +63,7 @@ export default function AddTaskModal({ isOpen, onClose, onAdd, initialDate }: Ad
                 <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Время</label>
                 <input
                   type="time"
-                  className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-white transition-all"
+                  className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary"
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
                 />
@@ -72,7 +72,7 @@ export default function AddTaskModal({ isOpen, onClose, onAdd, initialDate }: Ad
                 <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Дата</label>
                 <input
                   type="date"
-                  className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-white transition-all"
+                  className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                 />

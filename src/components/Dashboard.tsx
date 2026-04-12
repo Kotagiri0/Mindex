@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, Plus, LogOut } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Task, Screen } from '../types';
 import TaskItem from './TaskItem';
 import AddTaskModal from './AddTaskModal';
@@ -118,30 +119,42 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onNewThread, on
   }, [selectedDate, today]);
 
   return (
-    <div className="flex flex-col h-full bg-[#F2F2F7]">
+    <div className="flex flex-col h-full bg-bg transition-theme">
       <div className="safe-top flex-shrink-0" />
       
       <div className="px-4 pt-2 flex-shrink-0">
         <div className="flex items-center justify-end mb-2">
-          <button
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={onLogout}
-            className="h-9 px-3 rounded-full bg-white text-[#3C3C43] text-[12px] font-semibold flex items-center gap-2 border border-[#E5E5EA] active:scale-95 transition-transform"
+            className="h-9 px-3 rounded-full bg-surface text-text-primary text-[12px] font-semibold flex items-center gap-2 border border-border active:opacity-70 transition-opacity"
           >
             <LogOut size={14} />
             Выйти
-          </button>
+          </motion.button>
         </div>
 
         <div className="flex items-center gap-1 mb-2">
-          <button onClick={() => setWeekOffset(v => v - 1)} className="w-[30px] h-[30px] rounded-full flex items-center justify-center text-[#3C3C43]/60 hover:bg-black/5 transition-colors">
+          <motion.button 
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setWeekOffset(v => v - 1)} 
+            className="w-[30px] h-[30px] rounded-full flex items-center justify-center text-text-secondary hover:bg-surface transition-colors"
+          >
             <ChevronLeft size={18} />
-          </button>
-          <div className="flex-1 text-center text-[13px] font-bold text-[#3C3C43]/60 uppercase tracking-wider">
+          </motion.button>
+          <div className="flex-1 text-center text-[13px] font-bold text-text-secondary uppercase tracking-wider">
             {MONTHS[weekDays[3].getMonth()]} {weekDays[3].getFullYear()}
           </div>
-          <button onClick={() => setWeekOffset(v => v + 1)} className="w-[30px] h-[30px] rounded-full flex items-center justify-center text-[#3C3C43]/60 hover:bg-black/5 transition-colors">
+          <motion.button 
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setWeekOffset(v => v + 1)} 
+            className="w-[30px] h-[30px] rounded-full flex items-center justify-center text-text-secondary hover:bg-surface transition-colors"
+          >
             <ChevronRight size={18} />
-          </button>
+          </motion.button>
         </div>
 
         <div className="grid grid-cols-7 gap-[6px] mb-1">
@@ -150,60 +163,89 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onNewThread, on
             const isSelected = ds === selectedDate;
             
             return (
-              <button
+              <motion.button
                 key={ds}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={() => setSelectedDate(ds)}
-                className={`h-[72px] rounded-[14px] flex flex-col items-center justify-center gap-1.5 transition-all ${
-                  isSelected ? 'bg-[#749BFF] text-white shadow-[0_4px_12px_rgba(116,155,255,0.3)]' : 'bg-transparent'
+                className={`h-[72px] rounded-[14px] flex flex-col items-center justify-center gap-1.5 transition-colors ${
+                  isSelected ? 'bg-accent text-white' : 'bg-surface text-text-primary'
                 }`}
               >
-                <span className={`text-[11px] font-bold ${isSelected ? 'text-white/80' : 'text-[#8E8E93]'}`}>
+                {isSelected && (
+                  <motion.div
+                    layoutId="day-indicator"
+                    className="absolute inset-0 bg-gradient-to-br from-accent/50 to-transparent rounded-[14px] -z-10"
+                    transition={{ type: 'spring', bounce: 0.2 }}
+                  />
+                )}
+                <span className={`text-[11px] font-bold ${isSelected ? 'text-white/90' : 'text-text-tertiary'}`}>
                   {DAYS[i]}
                 </span>
-                <span className={`text-[18px] font-bold ${isSelected ? 'text-white' : 'text-[#1C1C1E]'}`}>
+                <span className={`text-[18px] font-bold`}>
                   {d.getDate()}
                 </span>
-              </button>
+              </motion.button>
             );
           })}
         </div>
 
-        <button
-          onClick={() => { setSelectedDate(today); setWeekOffset(0); }}
-          className={`w-full text-center text-[12px] font-semibold text-[#4880FF] h-[16px] mb-1 transition-opacity duration-200 ${
-            selectedDate !== today ? 'opacity-100' : 'opacity-0 pointer-events-none'
-          }`}
-        >
-          ← Вернуться к сегодня
-        </button>
+        <AnimatePresence>
+          {selectedDate !== today && (
+            <motion.button
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              onClick={() => { setSelectedDate(today); setWeekOffset(0); }}
+              className="w-full text-center text-[12px] font-semibold text-accent h-[16px] mb-1"
+            >
+              ← Вернуться на сегодня
+            </motion.button>
+          )}
+        </AnimatePresence>
       </div>
 
-      <div className="flex-1 bg-white rounded-t-[32px] shadow-[0_-8px_24px_rgba(0,0,0,0.03)] flex flex-col min-h-0">
+      <div className="flex-1 bg-surface rounded-t-[32px] shadow-lg flex flex-col min-h-0 transition-colors">
         <div className="flex justify-end items-center px-6 pt-6 pb-2">
-          <button 
+          <motion.button 
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
             onClick={() => setIsAddModalOpen(true)} 
-            className="w-10 h-10 rounded-full bg-[#F2F2F7] flex items-center justify-center text-[#4880FF] active:scale-90 transition-transform"
+            className="w-10 h-10 rounded-full bg-surface2 flex items-center justify-center text-accent active:opacity-70 transition-opacity"
           >
             <Plus size={24} strokeWidth={2.5} />
-          </button>
+          </motion.button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 pb-32 scrollbar-hide">
           {filteredTasks.length === 0 ? (
-            <div className="text-center text-[#8E8E93] py-12 px-4 text-[15px]">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-center text-text-tertiary py-12 px-4 text-[15px]"
+            >
               Нет задач на этот день
-            </div>
+            </motion.div>
           ) : (
             <div className="flex flex-col gap-1">
-              {filteredTasks.map(t => (
-                <TaskItem 
-                  key={t.id} 
-                  task={t} 
-                  onToggle={() => toggleTask(t.id)} 
-                  onToggleSubtask={toggleSubtask}
-                  onClick={() => setEditingTask(t)} 
-                />
-              ))}
+              <AnimatePresence mode="popLayout">
+                {filteredTasks.map((t, idx) => (
+                  <motion.div
+                    key={t.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ delay: idx * 0.05 }}
+                  >
+                    <TaskItem 
+                      task={t} 
+                      onToggle={() => toggleTask(t.id)} 
+                      onToggleSubtask={toggleSubtask}
+                      onClick={() => setEditingTask(t)} 
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             </div>
           )}
         </div>
