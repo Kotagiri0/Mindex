@@ -1,6 +1,8 @@
 # 📖 Полная документация Mindex
 
-Это полное руководство по архитектуре, структуре и работе проекта **Mindex** — персонального AI-ассистента для планирования в Telegram.
+Это полное руководство по архитектуре, структуре и работе проекта **Mindex** — персонального AI-ассистента для планирования в локальном браузере.
+
+> Примечание: текущая кодовая база переведена на local-only режим с авторизацией и localStorage. Разделы ниже с Telegram/Supabase оставлены как архивный контекст и больше не описывают активный runtime.
 
 ---
 
@@ -843,15 +845,19 @@ npm install
 
 **2. Переменные окружения (.env)**
 
+Скопируй `.env.example` в `.env` и заполни значение Groq:
+
 ```
-SUPABASE_URL=https://xxxxx.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 GROQ_API_KEY=gsk_xxxxx...
-TELEGRAM_BOT_TOKEN=123456789:ABCDefghijklmnop...
-TELEGRAM_BOT_WEBHOOK_SECRET=super_secret_string
 ```
 
-Не коммитить `.env` в Git! Добавить в `.gitignore`.
+Для локальной версии этого достаточно.
+
+```bash
+GROQ_API_KEY=
+```
+
+Не коммитить `.env` в Git. Файл `.gitignore` уже это закрывает.
 
 **3. Запуск локального dev сервера**
 
@@ -859,9 +865,15 @@ TELEGRAM_BOT_WEBHOOK_SECRET=super_secret_string
 npm run dev
 ```
 
-Это запустит:
-- Express сервер на http://localhost:3000
-- Vite dev сервер для frontend на http://localhost:5173
+Это запустит единый локальный сервер на `http://localhost:3000`.
+Он поднимает Express и подключает Vite middleware внутри `server.ts`, поэтому отдельный запуск Vite на `5173` не нужен.
+
+Если нужны базовые проверки перед запуском, полезно выполнить:
+
+```bash
+npm run lint
+npm run build
+```
 
 **4. Открытие в Telegram**
 
