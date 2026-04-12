@@ -140,7 +140,7 @@ export const tools: any[] = [
 ];
 
 export async function generateResponse(messages: Message[], options: { tools?: any[], tool_choice?: string } = {}) {
-  // Use absolute URL to avoid potential issues in some environments (like Telegram WebView)
+  // Use an absolute URL so the browser always reaches the local API endpoint.
   const apiUrl = `${window.location.origin}/api/chat`;
 
   console.log(`Calling AI API at: ${apiUrl}`);
@@ -208,7 +208,7 @@ export async function generateResponse(messages: Message[], options: { tools?: a
       throw new Error("Превышено время ожидания ответа от ИИ (20 сек). Возможно, сервер перегружен.");
     }
     if (e.message.includes('Failed to fetch')) {
-      throw new Error("Ошибка сети: Не удалось отправить запрос. Проверьте интернет или настройки Telegram WebView.");
+      throw new Error("Ошибка сети: Не удалось отправить запрос. Проверьте соединение и доступность локального сервера.");
     }
     throw e;
   }

@@ -1,72 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import { X, User, Camera, ChevronRight, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import type { ChangeEvent, ReactNode } from 'react';
+import { useState } from 'react';
+import { X, User, Camera, AlertCircle, LogOut, Trash2 } from 'lucide-react';
 import { Settings } from '../types';
-import { db } from '../lib/db';
+import { getCurrentUser } from '../lib/auth';
+import { storage } from '../lib/storage';
 
 interface SettingsProps {
   settings: Settings;
   setSettings: (settings: Settings) => void;
   onBack: () => void;
+  onLogout: () => void;
 }
 
-export default function SettingsScreen({ settings, setSettings, onBack }: SettingsProps) {
+export default function SettingsScreen({ settings, setSettings, onBack, onLogout }: SettingsProps) {
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
-  const [botStatus, setBotStatus] = useState<{ configured: boolean; info?: any; loading: boolean }>({ configured: false, loading: true });
-  const [dbStatus, setDbStatus] = useState<{ configured: boolean; url?: string; loading: boolean }>({ configured: false, loading: true });
-
-  useEffect(() => {
-    checkBotStatus();
-    checkDbStatus();
-  }, []);
-
-  const checkBotStatus = async () => {
-    setBotStatus(prev => ({ ...prev, loading: true }));
-    try {
-      const res = await fetch('/api/bot-status');
-      const data = await res.json();
-      setBotStatus({ configured: data.configured, info: data.info, loading: false });
-    } catch (e) {
-      setBotStatus({ configured: false, loading: false });
-    }
-  };
-
-  const checkDbStatus = async () => {
-    setDbStatus(prev => ({ ...prev, loading: true }));
-    try {
-      const res = await fetch('/api/db-status');
-      const data = await res.json();
-      setDbStatus({ configured: data.configured, url: data.url, loading: false });
-    } catch (e) {
-      setDbStatus({ configured: false, loading: false });
-    }
-  };
-
-  const setupBot = async () => {
-    setBotStatus(prev => ({ ...prev, loading: true }));
-    try {
-      const res = await fetch('/api/setup-bot');
-      const data = await res.json();
-      if (data.success) {
-        setBotStatus({ configured: true, info: data.info, loading: false });
-        alert('✅ Бот успешно настроен!');
-      } else {
-        alert(`❌ Ошибка: ${data.error}`);
-        setBotStatus(prev => ({ ...prev, loading: false }));
-      }
-    } catch (e) {
-      alert('❌ Не удалось связаться с сервером');
-      setBotStatus(prev => ({ ...prev, loading: false }));
-    }
-  };
-
-  // Простая проверка на админа
-  const isAdmin = settings.email === 'vadimkosov7@gmail.com';
 
   const handleToggle = (key: keyof Settings) => {
     setSettings({ ...settings, [key]: !settings[key] });
   };
 
-  const handleAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatar = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -78,22 +31,26 @@ export default function SettingsScreen({ settings, setSettings, onBack }: Settin
   };
 
   const editName = () => {
-    const n = prompt('Как тебя зовут?', settings.name || '');
-    if (n !== null) {
-      setSettings({ ...settings, name: n });
+    const nextName = prompt('Как тебя зовут?', settings.name || '');
+    if (nextName !== null) {
+      setSettings({ ...settings, name: nextName });
     }
   };
 
   const clearMemory = async () => {
-    const threads = await db.getThreads();
-    await Promise.all(threads.map(t => db.deleteThread(t.id)));
+    const user = getCurrentUser();
+    if (user) {
+      storage.clearUserData(user.id);
+    }
     window.location.reload();
   };
+
+  const currentUser = getCurrentUser();
 
   return (
     <div className="flex flex-col h-full bg-bg">
       <div className="safe-top flex-shrink-0" />
-      
+
       <div className="p-4 flex items-center gap-3.5 flex-shrink-0">
         <button onClick={onBack} className="w-9 h-9 rounded-full bg-surface2 flex items-center justify-center text-text-secondary active:bg-border transition-colors">
           <X size={18} />
@@ -103,7 +60,7 @@ export default function SettingsScreen({ settings, setSettings, onBack }: Settin
 
       <div className="flex-1 overflow-y-auto scrollbar-hide">
         <div className="mx-[14px] mb-3.5 bg-surface rounded-[14px] p-4 flex items-center gap-3.5">
-          <div 
+          <div
             onClick={() => document.getElementById('av-inp')?.click()}
             className="w-[54px] h-[54px] rounded-full bg-surface2 flex-shrink-0 overflow-hidden cursor-pointer relative flex items-center justify-center group"
           >
@@ -119,10 +76,13 @@ export default function SettingsScreen({ settings, setSettings, onBack }: Settin
             </div>
           </div>
           <input type="file" id="av-inp" className="hidden" accept="image/*" onChange={handleAvatar} />
-          
-          <div className="flex-1">
-            <div className="text-[17px] font-bold text-text-primary">
+
+          <div className="flex-1 min-w-0">
+            <div className="text-[17px] font-bold text-text-primary truncate">
               {settings.name || 'Имя'}
+            </div>
+            <div className="text-[13px] text-text-tertiary truncate">
+              {currentUser?.username || 'Локальный аккаунт'}
             </div>
           </div>
           <button onClick={editName} className="w-8 h-8 rounded-full bg-surface2 flex items-center justify-center text-[13px]">
@@ -131,20 +91,20 @@ export default function SettingsScreen({ settings, setSettings, onBack }: Settin
         </div>
 
         <div className="mx-[14px] mb-3 bg-surface rounded-[14px] overflow-hidden">
-          <SettingRow 
-            title="Агентный режим" 
+          <SettingRow
+            title="Агентный режим"
             desc="Насколько ИИ действует сам: от советов до автоматической организации"
             isOn={settings.agent}
             onToggle={() => handleToggle('agent')}
           />
-          <SettingRow 
-            title="Подтверждать действия ИИ" 
-            desc="Если включено — события попадут в календарь только после твоего «Ок»"
+          <SettingRow
+            title="Подтверждать действия ИИ"
+            desc="Если включено, изменения попадут в список только после твоего подтверждения"
             isOn={settings.confirm}
             onToggle={() => handleToggle('confirm')}
           />
-          <SettingRow 
-            title="Уведомления" 
+          <SettingRow
+            title="Уведомления"
             desc="«Мысль» напомнит о задачах согласно планам и целям"
             isOn={settings.notifs}
             onToggle={() => handleToggle('notifs')}
@@ -152,137 +112,21 @@ export default function SettingsScreen({ settings, setSettings, onBack }: Settin
         </div>
 
         <div className="mx-[14px] mb-3 bg-surface rounded-[14px] overflow-hidden">
-          <LinkRow title="Расскажи о себе" />
-          <LinkRow title="Очистить память модели" onClick={() => setIsConfirmingClear(true)} />
-          <LinkRow title="Как ИИ стоит себя вести?" />
-          <LinkRow title="Обратная связь с нами" />
+          <ActionRow title="Очистить локальные данные" icon={<Trash2 size={18} />} onClick={() => setIsConfirmingClear(true)} />
+          <ActionRow title="Выйти из аккаунта" icon={<LogOut size={18} />} onClick={onLogout} />
         </div>
 
-        {/* Статус синхронизации для всех пользователей */}
         <div className="mx-[14px] mb-6 p-4 bg-surface rounded-[14px] border border-border">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-[15px] font-bold text-text-primary">Облачная синхронизация</div>
-            {db.getUserId() && db.isInTelegram() && dbStatus.configured ? (
-              <div className="flex items-center gap-1.5 text-green-500 text-[13px] font-bold">
-                <CheckCircle2 size={16} />
-                <span>Активна (Облако)</span>
-              </div>
-            ) : (
-              <div className="flex flex-col items-end gap-1">
-                <div className="flex items-center gap-1.5 text-text-tertiary text-[13px] font-bold">
-                  <AlertCircle size={16} />
-                  <span>Локальный режим</span>
-                </div>
-                <button 
-                  onClick={() => window.location.reload()} 
-                  className="text-accent text-[11px] font-bold underline"
-                >
-                  Обновить
-                </button>
-              </div>
-            )}
+          <div className="flex items-center gap-2 mb-2 text-[15px] font-bold text-text-primary">
+            <AlertCircle size={18} className="text-accent" />
+            Локальный режим
           </div>
           <div className="text-[12px] text-text-tertiary leading-relaxed space-y-2">
-            {db.getUserId() ? (
-              dbStatus.configured ? 
-              <p>Ваши данные привязаны к Telegram ID: <code className="bg-surface2 px-1 rounded">{db.getUserId()}</code> и сохраняются в облаке Supabase.</p> :
-              <div className="p-3 bg-red-50 rounded-xl border border-red-100">
-                <p className="text-red-600 font-medium mb-1">Облако не настроено!</p>
-                <p>Telegram ID найден, но база данных не подключена. Если вы на Vercel — добавьте <code>VITE_SUPABASE_URL</code> и <code>VITE_SUPABASE_ANON_KEY</code> в настройки Vercel.</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p>Приложение открыто вне Telegram или Telegram не передал данные пользователя.</p>
-                <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
-                  <p className="text-blue-600 font-medium mb-1">Как синхронизировать?</p>
-                  <ol className="list-decimal list-inside text-blue-800 space-y-1">
-                    <li>Открой приложение <strong>только через бота</strong> в Telegram.</li>
-                    <li>Если ты на Vercel — убедись, что добавил Secrets в панель Vercel.</li>
-                  </ol>
-                </div>
-              </div>
-            )}
+            <p>Все задачи, диалоги и настройки хранятся только в этом браузере.</p>
+            <p>Если очистить данные браузера, приложение начнёт с нуля.</p>
           </div>
         </div>
 
-        {isAdmin && (
-          <div className="mx-[14px] mb-6 p-4 bg-surface rounded-[14px] border border-border">
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-[15px] font-bold text-text-primary">База данных (Supabase)</div>
-              {dbStatus.loading ? (
-                <RefreshCw size={16} className="animate-spin text-accent" />
-              ) : dbStatus.configured ? (
-                <CheckCircle2 size={18} className="text-green-500" />
-              ) : (
-                <AlertCircle size={18} className="text-red-500" />
-              )}
-            </div>
-
-            <div className="text-[12px] text-text-tertiary mb-3">
-              {dbStatus.loading ? 'Проверка...' : 
-               dbStatus.configured ? 
-               `Подключено к: ${dbStatus.url}` : 
-               'База данных не настроена. Бот не сможет сохранять задачи.'}
-            </div>
-
-            {!dbStatus.configured && (
-              <div className="p-3 bg-red-50 rounded-xl border border-red-100 mb-2">
-                <div className="text-[11px] text-red-600 leading-relaxed">
-                  <strong>Что делать?</strong> Добавьте <code>VITE_SUPABASE_URL</code> и <code>VITE_SUPABASE_ANON_KEY</code> в <strong>Settings → Secrets</strong> в панели AI Studio.
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {isAdmin && (
-          <div className="mx-[14px] mb-6 p-4 bg-surface rounded-[14px] border border-border">
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-[15px] font-bold text-text-primary">Telegram Bot Setup</div>
-              {botStatus.loading ? (
-                <RefreshCw size={16} className="animate-spin text-accent" />
-              ) : botStatus.configured && botStatus.info?.url ? (
-                <CheckCircle2 size={18} className="text-green-500" />
-              ) : (
-                <AlertCircle size={18} className="text-red-500" />
-              )}
-            </div>
-
-            <div className="text-[12px] text-text-tertiary mb-4">
-              {botStatus.loading ? 'Проверка статуса...' : 
-               botStatus.configured && botStatus.info?.url ? 
-               `Бот подключен к: ${botStatus.info.url}` : 
-               'Бот не настроен или вебхук не установлен.'}
-            </div>
-            
-            <button 
-              disabled={botStatus.loading}
-              onClick={setupBot}
-              className="w-full h-11 bg-accent text-white rounded-xl text-[14px] font-bold active:scale-95 transition-transform disabled:opacity-50 mb-4"
-            >
-              {botStatus.configured ? 'Переподключить бота' : 'Настроить бота'}
-            </button>
-
-            <div className="text-[12px] text-text-tertiary mb-2">
-              Webhook URL (для @BotFather):
-            </div>
-            <div className="flex items-center gap-2 bg-surface2 p-2.5 rounded-xl border border-border/50">
-              <code className="flex-1 text-[11px] text-accent font-mono break-all">
-                {window.location.origin}/api/webhook
-              </code>
-              <button 
-                onClick={() => {
-                  navigator.clipboard.writeText(`${window.location.origin}/api/webhook`);
-                  alert('URL скопирован!');
-                }}
-                className="px-3 py-1.5 bg-accent text-white rounded-lg text-[11px] font-bold active:scale-95 transition-transform"
-              >
-                Копировать
-              </button>
-            </div>
-          </div>
-        )}
-        
         <div className="h-10" />
       </div>
 
@@ -291,16 +135,16 @@ export default function SettingsScreen({ settings, setSettings, onBack }: Settin
           <div className="bg-white rounded-[24px] w-full max-w-[320px] p-6 flex flex-col gap-4">
             <div className="text-[19px] font-bold text-text-primary text-center">Очистить память?</div>
             <div className="text-[15px] text-text-tertiary text-center leading-relaxed">
-              Это удалит все ваши переписки без возможности восстановления.
+              Это удалит все локальные задачи, переписки и настройки без возможности восстановления.
             </div>
             <div className="flex flex-col gap-2 mt-2">
-              <button 
+              <button
                 onClick={clearMemory}
                 className="h-12 bg-red-500 text-white rounded-full font-bold text-[15px] active:scale-95 transition-transform"
               >
                 Удалить всё
               </button>
-              <button 
+              <button
                 onClick={() => setIsConfirmingClear(false)}
                 className="h-12 bg-surface2 text-text-primary rounded-full font-bold text-[15px] active:scale-95 transition-transform"
               >
@@ -316,29 +160,25 @@ export default function SettingsScreen({ settings, setSettings, onBack }: Settin
 
 function SettingRow({ title, desc, isOn, onToggle }: { title: string; desc: string; isOn: boolean; onToggle: () => void }) {
   return (
-    <div className="p-[14px_16px] flex items-start gap-3 border-b border-border last:border-none">
+    <button onClick={onToggle} className="w-full p-[14px_16px] flex items-start gap-3 border-b border-border last:border-none text-left">
       <div className="flex-1">
-        <div className="text-[15px] font-semibold text-text-primary mb-0.5">{title}</div>
-        <div className="text-[13px] text-text-tertiary leading-tight">{desc}</div>
+        <div className="text-[15px] font-bold text-text-primary mb-1">{title}</div>
+        <div className="text-[12px] text-text-tertiary leading-relaxed">{desc}</div>
       </div>
-      <button 
-        onClick={onToggle}
-        className={`w-12 h-7 rounded-full relative transition-colors duration-250 mt-0.5 flex-shrink-0 ${isOn ? 'bg-accent' : 'bg-border'}`}
-      >
-        <div className={`absolute top-[3px] left-[3px] w-[22px] h-[22px] rounded-full bg-white shadow-md transition-transform duration-250 ${isOn ? 'translate-x-[20px]' : 'translate-x-0'}`} />
-      </button>
-    </div>
+      <div className={`w-11 h-7 rounded-full p-1 transition-colors ${isOn ? 'bg-accent' : 'bg-border'}`}>
+        <div className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${isOn ? 'translate-x-4' : 'translate-x-0'}`} />
+      </div>
+    </button>
   );
 }
 
-function LinkRow({ title, onClick }: { title: string; onClick?: () => void }) {
+function ActionRow({ title, icon, onClick }: { title: string; icon: ReactNode; onClick: () => void }) {
   return (
-    <div 
-      onClick={onClick}
-      className="p-[15px_16px] text-[15px] font-medium text-text-primary border-b border-border last:border-none cursor-pointer flex items-center justify-between active:bg-surface2 transition-colors"
-    >
-      {title}
-      <ChevronRight size={18} className="text-text-tertiary" />
-    </div>
+    <button onClick={onClick} className="w-full p-[14px_16px] flex items-center gap-3 border-b border-border last:border-none text-left active:bg-black/[0.02] transition-colors">
+      <div className="w-9 h-9 rounded-full bg-surface2 flex items-center justify-center text-text-secondary">
+        {icon}
+      </div>
+      <div className="flex-1 text-[15px] font-bold text-text-primary">{title}</div>
+    </button>
   );
 }

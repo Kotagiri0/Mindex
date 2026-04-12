@@ -1,6 +1,6 @@
 {
   "name": "mindex",
-  "description": "AI-powered task management app for Telegram Web Apps.",
+  "description": "AI-powered task management app with local auth and storage.",
   "private": true,
   "version": "0.0.0",
   "type": "module",

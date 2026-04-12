@@ -53,4 +53,18 @@ export interface Settings {
   email?: string;
 }
 
+export interface LocalUser {
+  id: string;
+  username: string;
+  displayName: string;
+  passwordHash: string;
+  createdAt: number;
+}
+
+export interface LocalProfile {
+  settings: Settings;
+  onboarding_complete: boolean;
+  updated_at: string;
+}
+
 export type Screen = 'ob' | 'dash' | 'ai' | 'threads' | 'settings';
