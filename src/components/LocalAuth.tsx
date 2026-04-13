@@ -82,8 +82,38 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleClientId, setGoogleClientId] = useState<string>(import.meta.env.VITE_GOOGLE_CLIENT_ID || '');
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
-  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+
+  useEffect(() => {
+    if (googleClientId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadConfig = async () => {
+      try {
+        const response = await fetch('/api/config');
+        if (!response.ok) {
+          return;
+        }
+
+        const data = await response.json().catch(() => null) as { googleClientId?: string } | null;
+        if (!cancelled && data?.googleClientId) {
+          setGoogleClientId(data.googleClientId);
+        }
+      } catch {
+        // Silent fallback: if config isn't available, we'll show the helper message.
+      }
+    };
+
+    loadConfig();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [googleClientId]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

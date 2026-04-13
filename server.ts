@@ -30,6 +30,16 @@ app.use("/api/*", (req, res, next) => {
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
 
+app.get('/api/config', (_req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  return res.status(200).json({
+    googleClientId: GOOGLE_CLIENT_ID,
+  });
+});
+
 const hashPassword = (username: string, password: string) => {
   return crypto
     .createHash("sha256")
