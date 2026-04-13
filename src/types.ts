@@ -58,6 +58,9 @@ export interface LocalUser {
   username: string;
   displayName: string;
   createdAt: number;
+  provider?: 'local' | 'google';
+  email?: string;
+  avatarUrl?: string;
 }
 
 export interface LocalProfile {

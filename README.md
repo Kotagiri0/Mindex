@@ -26,6 +26,15 @@ DATABASE_URL=postgresql://mindex:mindex@postgres:5432/mindex
 npm run dev
 ```
 
+Если нужен вход через Google, добавь в `.env` OAuth client id:
+
+```bash
+VITE_GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_ID=
+```
+
+В Google Cloud Console нужно включить Google Identity Services и добавить `http://localhost:3000` в authorized JavaScript origins.
+
 4. Открой приложение в браузере:
 
 ```bash

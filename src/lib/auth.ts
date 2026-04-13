@@ -12,6 +12,9 @@ const mapApiUser = (user: any): LocalUser => ({
   username: String(user.username),
   displayName: String(user.displayName),
   createdAt: Number(user.createdAt),
+  provider: user.provider === 'google' ? 'google' : 'local',
+  email: user.email ? String(user.email) : undefined,
+  avatarUrl: user.avatarUrl ? String(user.avatarUrl) : undefined,
 });
 
 const authRequest = async (endpoint: 'register' | 'login', payload: { username: string; password: string; displayName?: string }) => {
@@ -66,6 +69,26 @@ export const loginLocalUser = async (input: { username: string; password: string
     password: input.password,
   });
 
+  storage.setSessionUserId(user.id);
+  storage.setCurrentUser(user);
+  return user;
+};
+
+export const loginGoogleUser = async (credential: string) => {
+  const response = await fetch(`${window.location.origin}/api/auth/google`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ credential }),
+  });
+
+  const data = await response.json().catch(() => ({ error: 'Некорректный ответ сервера.' }));
+  if (!response.ok) {
+    throw new Error(data.error || 'Ошибка авторизации через Google.');
+  }
+
+  const user = mapApiUser(data.user);
   storage.setSessionUserId(user.id);
   storage.setCurrentUser(user);
   return user;

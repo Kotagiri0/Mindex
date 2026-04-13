@@ -67,8 +67,8 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
             onClick={() => document.getElementById('av-inp')?.click()}
             className="w-[54px] h-[54px] rounded-full bg-surface2 flex-shrink-0 overflow-hidden cursor-pointer relative flex items-center justify-center group transition-colors"
           >
-            {settings.avatar ? (
-              <img src={settings.avatar} className="absolute inset-0 w-full h-full object-cover rounded-full" />
+            {settings.avatar || currentUser?.avatarUrl ? (
+              <img src={settings.avatar || currentUser?.avatarUrl} className="absolute inset-0 w-full h-full object-cover rounded-full" />
             ) : (
               <div className="w-full h-full bg-surface2 flex items-center justify-center">
                 <User size={22} className="text-text-tertiary" />
@@ -85,7 +85,7 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
               {settings.name || 'Имя'}
             </div>
             <div className="text-[13px] text-text-tertiary truncate">
-              {currentUser?.username || 'Локальный аккаунт'}
+              {currentUser?.email || currentUser?.username || 'Локальный аккаунт'}
             </div>
           </div>
           <button onClick={editName} className="w-8 h-8 rounded-full bg-surface2 flex items-center justify-center text-[13px] hover:bg-border transition-colors">
