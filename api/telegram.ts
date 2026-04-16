@@ -390,8 +390,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_ANON_KEY;
   const groqKey = process.env.GROQ_API_KEY;
 
   if (!BOT_TOKEN || !supabaseUrl || !supabaseKey || !groqKey) {

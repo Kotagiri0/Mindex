@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { getDbPool } from './_db';
 
-export default function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -10,9 +10,36 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  const isConfigured = !!process.env.VITE_SUPABASE_URL && !!process.env.VITE_SUPABASE_ANON_KEY;
-  res.status(200).json({ 
-    configured: isConfigured,
-    url: process.env.VITE_SUPABASE_URL ? `${process.env.VITE_SUPABASE_URL.substring(0, 15)}...` : null
-  });
+  const hasDatabaseUrl = !!process.env.DATABASE_URL;
+
+  if (!hasDatabaseUrl) {
+    return res.status(200).json({
+      configured: false,
+      connected: false,
+      error: 'DATABASE_URL не задан.',
+    });
+  }
+
+  const db = getDbPool();
+  if (!db) {
+    return res.status(200).json({
+      configured: false,
+      connected: false,
+      error: 'Не удалось инициализировать пул pg.',
+    });
+  }
+
+  try {
+    await db.query('SELECT 1');
+    return res.status(200).json({
+      configured: true,
+      connected: true,
+    });
+  } catch (error: any) {
+    return res.status(200).json({
+      configured: true,
+      connected: false,
+      error: error?.message || 'Ошибка подключения к PostgreSQL.',
+    });
+  }
 }

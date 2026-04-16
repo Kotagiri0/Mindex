@@ -18,7 +18,7 @@ const mapApiUser = (user: any): LocalUser => ({
 });
 
 const authRequest = async (endpoint: 'register' | 'login', payload: { username: string; password: string; displayName?: string }) => {
-  const response = await fetch(`${window.location.origin}/api/auth/${endpoint}`, {
+  const response = await fetch(`/api/auth/${endpoint}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -75,7 +75,7 @@ export const loginLocalUser = async (input: { username: string; password: string
 };
 
 export const loginGoogleUser = async (credential: string) => {
-  const response = await fetch(`${window.location.origin}/api/auth/google`, {
+  const response = await fetch('/api/auth/google', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

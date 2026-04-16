@@ -3,7 +3,7 @@ import { getCurrentUser } from './auth';
 import { storage } from './storage';
 
 const getUserId = () => getCurrentUser()?.id;
-const apiBase = () => `${window.location.origin}/api/data`;
+const apiBase = () => '/api/data';
 
 const request = async <T>(url: string, options?: RequestInit): Promise<T> => {
   const response = await fetch(url, options);
@@ -124,7 +124,7 @@ export const db = {
 
     try {
       await request<{ success: boolean }>(
-        `${apiBase()}/thread/${encodeURIComponent(id)}?userId=${encodeURIComponent(userId)}`,
+        `${apiBase()}/thread?id=${encodeURIComponent(id)}&userId=${encodeURIComponent(userId)}`,
         { method: 'DELETE' }
       );
     } catch {
@@ -181,7 +181,7 @@ export const db = {
 
     try {
       await request<{ success: boolean }>(
-        `${apiBase()}/task/${encodeURIComponent(id)}?userId=${encodeURIComponent(userId)}`,
+        `${apiBase()}/task?id=${encodeURIComponent(id)}&userId=${encodeURIComponent(userId)}`,
         { method: 'DELETE' }
       );
     } catch {

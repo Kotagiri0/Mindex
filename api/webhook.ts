@@ -25,8 +25,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-  const supabaseUrl = process.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
   if (!BOT_TOKEN || !supabaseUrl || !supabaseAnonKey) return res.status(200).end();
 

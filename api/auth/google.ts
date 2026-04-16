@@ -1,64 +1,24 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'crypto';
-import { Pool } from 'pg';
+import { ensureAppSchema, formatAuthUser, handleOptions, requireDb, setCors } from '../_db';
 import { verifyGoogleIdToken } from '../../src/lib/google-auth.ts';
 
-const DATABASE_URL = process.env.DATABASE_URL;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
-const db = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL }) : null;
-
-const formatAuthUser = (user: any) => ({
-  id: String(user.id),
-  username: String(user.username),
-  displayName: String(user.display_name ?? user.displayName ?? ''),
-  createdAt: new Date(user.created_at ?? user.createdAt ?? Date.now()).getTime(),
-  provider: user.provider === 'google' ? 'google' : 'local',
-  email: user.email ? String(user.email) : undefined,
-  avatarUrl: user.avatar_url ? String(user.avatar_url) : undefined,
-});
-
-const ensureAuthSchema = async () => {
-  if (!db) {
-    return;
-  }
-
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS auth_users (
-      id TEXT PRIMARY KEY,
-      username TEXT UNIQUE NOT NULL,
-      display_name TEXT NOT NULL,
-      password_hash TEXT NOT NULL,
-      provider TEXT NOT NULL DEFAULT 'local',
-      google_sub TEXT,
-      email TEXT,
-      avatar_url TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-
-  await db.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'local';`);
-  await db.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS google_sub TEXT;`);
-  await db.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS email TEXT;`);
-  await db.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS avatar_url TEXT;`);
-  await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS auth_users_google_sub_key ON auth_users (google_sub) WHERE google_sub IS NOT NULL;`);
-  await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS auth_users_email_key ON auth_users (email) WHERE email IS NOT NULL;`);
-};
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  setCors(res, 'POST, OPTIONS');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+  if (handleOptions(req, res)) {
+    return;
   }
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const db = requireDb(res);
   if (!db) {
-    return res.status(500).json({ error: 'База данных не настроена (DATABASE_URL).' });
+    return;
   }
 
   if (!GOOGLE_CLIENT_ID) {
@@ -71,7 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    await ensureAuthSchema();
+    await ensureAppSchema();
 
     const payload = await verifyGoogleIdToken(credential, GOOGLE_CLIENT_ID);
     const email = String(payload.email || '').trim().toLowerCase();
