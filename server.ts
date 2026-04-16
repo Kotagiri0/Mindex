@@ -6,6 +6,13 @@ import dotenv from "dotenv";
 import cors from "cors";
 import crypto from "crypto";
 import { Pool } from "pg";
+import {
+  Counter,
+  Gauge,
+  Histogram,
+  Registry,
+  collectDefaultMetrics,
+} from "prom-client";
 import { verifyGoogleIdToken } from './src/lib/google-auth.ts';
 
 dotenv.config();
@@ -14,12 +21,92 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 const DATABASE_URL = process.env.DATABASE_URL;
 const db = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL }) : null;
 
+// Render and similar platforms terminate TLS on the proxy layer.
+// trust proxy keeps request metadata correct for HTTPS deployments.
+app.set("trust proxy", true);
+
+const metricsRegistry = new Registry();
+metricsRegistry.setDefaultLabels({ app: "mindex" });
+collectDefaultMetrics({ register: metricsRegistry });
+
+const httpRequestsTotal = new Counter({
+  name: "http_requests_total",
+  help: "Total number of HTTP requests",
+  labelNames: ["method", "route", "status_code"] as const,
+  registers: [metricsRegistry],
+});
+
+const httpRequestDurationSeconds = new Histogram({
+  name: "http_request_duration_seconds",
+  help: "HTTP request duration in seconds",
+  labelNames: ["method", "route", "status_code"] as const,
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10],
+  registers: [metricsRegistry],
+});
+
+const httpRequestsInFlight = new Gauge({
+  name: "http_requests_in_flight",
+  help: "Current number of in-flight HTTP requests",
+  labelNames: ["method", "route"] as const,
+  registers: [metricsRegistry],
+});
+
+const getRouteLabel = (req: express.Request) => {
+  if (req.route?.path) {
+    const routePath = typeof req.route.path === "string" ? req.route.path : req.path;
+    return `${req.baseUrl || ""}${routePath}` || req.path;
+  }
+  return req.path || "unknown_route";
+};
+
 app.use(cors());
 app.use(express.json());
+
+// Instrument all requests except the Prometheus scrape endpoint itself.
+app.use((req, res, next) => {
+  if (req.path === "/metrics") {
+    return next();
+  }
+
+  const method = req.method;
+  const routeForGauge = req.path || "unknown_route";
+  httpRequestsInFlight.inc({ method, route: routeForGauge });
+
+  const startedAt = process.hrtime.bigint();
+  let finished = false;
+
+  const finalize = () => {
+    if (finished) {
+      return;
+    }
+    finished = true;
+
+    const statusCode = String(res.statusCode);
+    const route = getRouteLabel(req);
+    const durationSeconds = Number(process.hrtime.bigint() - startedAt) / 1_000_000_000;
+
+    httpRequestsTotal.inc({ method, route, status_code: statusCode });
+    httpRequestDurationSeconds.observe(
+      { method, route, status_code: statusCode },
+      durationSeconds
+    );
+    httpRequestsInFlight.dec({ method, route: routeForGauge });
+  };
+
+  res.on("finish", finalize);
+  res.on("close", finalize);
+  next();
+});
+
+app.get("/metrics", async (_req, res) => {
+  res.setHeader("Content-Type", metricsRegistry.contentType);
+  res.setHeader("Cache-Control", "no-store");
+  res.status(200).send(await metricsRegistry.metrics());
+});
 
 // Logging middleware for API requests
 app.use("/api/*", (req, res, next) => {

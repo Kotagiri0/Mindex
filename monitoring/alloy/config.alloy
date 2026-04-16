@@ -1,0 +1,30 @@
+// Minimal Alloy pipeline for local Docker deployment:
+// scrape Mindex metrics and push to Grafana Cloud.
+// GRAFANA_CLOUD_USER_ID must be Grafana Metrics Instance ID.
+// GRAFANA_CLOUD_API_KEY must be a Cloud Access Policy token.
+
+prometheus.scrape "mindex_app" {
+  targets = [{
+    __address__ = "mindex:3000",
+  }]
+
+  metrics_path    = "/metrics"
+  scrape_interval = "15s"
+
+  forward_to = [prometheus.remote_write.default.receiver]
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url = "https://prometheus-prod-39-prod-eu-north-0.grafana.net/api/prom/push"
+
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_USER_ID")
+      password = sys.env("GRAFANA_CLOUD_API_KEY")
+    }
+  }
+
+  external_labels = {
+    cluster = "local-docker",
+  }
+}

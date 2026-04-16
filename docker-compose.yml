@@ -17,6 +17,20 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  alloy:
+    image: grafana/alloy:latest
+    container_name: mindex-alloy
+    command: ["run", "/etc/alloy/config.alloy"]
+    volumes:
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+    environment:
+      - GRAFANA_CLOUD_USER_ID=${GRAFANA_CLOUD_USER_ID}
+      - GRAFANA_CLOUD_API_KEY=${GRAFANA_CLOUD_API_KEY}
+    depends_on:
+      mindex:
+        condition: service_started
+    restart: unless-stopped
+
   postgres:
     image: postgres:16-alpine
     container_name: mindex-db

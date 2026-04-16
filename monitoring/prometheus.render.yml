@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 60s
+
+remote_write:
+  - url: https://prometheus-prod-39-prod-eu-north-0.grafana.net/api/prom/push
+    basic_auth:
+      username: "__GRAFANA_CLOUD_USER_ID__"
+      password: "__GRAFANA_CLOUD_API_KEY__"
+
+scrape_configs:
+  - job_name: mindex-render
+    scheme: https
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - __RENDER_SERVICE_DOMAIN__:443
