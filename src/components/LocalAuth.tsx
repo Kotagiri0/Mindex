@@ -55,10 +55,10 @@ const MysliLogo = () => (
   <svg width="72" height="72" viewBox="0 0 168 168" fill="none" xmlns="http://www.w3.org/2000/svg">
     <circle cx="84" cy="84" r="78" stroke="#0b0d10" strokeWidth="11.766"/>
     <g transform="translate(84,84) rotate(45)">
-      <line x1="0" y1="-44" x2="0" y2="44" stroke="#0b0d10" strokeWidth="8" strokeLinecap="round"/>
-      <line x1="-44" y1="0" x2="44" y2="0" stroke="#0b0d10" strokeWidth="8" strokeLinecap="round"/>
-      <line x1="-31" y1="-31" x2="31" y2="31" stroke="#0b0d10" strokeWidth="8" strokeLinecap="round"/>
-      <line x1="31" y1="-31" x2="-31" y2="31" stroke="#0b0d10" strokeWidth="8" strokeLinecap="round"/>
+      <line x1="0" y1="-44" x2="0" y2="44" stroke="#0b0d10" strokeWidth="8" strokeLinecap="square"/>
+      <line x1="-44" y1="0" x2="44" y2="0" stroke="#0b0d10" strokeWidth="8" strokeLinecap="square"/>
+      <line x1="-31" y1="-31" x2="31" y2="31" stroke="#0b0d10" strokeWidth="8" strokeLinecap="square"/>
+      <line x1="31" y1="-31" x2="-31" y2="31" stroke="#0b0d10" strokeWidth="8" strokeLinecap="square"/>
     </g>
   </svg>
 );
@@ -160,7 +160,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
       style={{ backgroundColor: '#f0f0f0' }}
     >
       {/* Лого */}
-      <div className="flex flex-col items-center gap-3 mt-16">
+      <div className="flex flex-col items-center gap-3 mt-8">
         <MysliLogo />
         <span
           className="text-[#0b0d10] tracking-widest uppercase"
@@ -182,11 +182,17 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
         transition={{ duration: 0.45, ease: 'easeOut' }}
         className="w-full max-w-[440px]"
       >
-          <div className="w-full flex flex-col gap-3">
+          <div
+            className="w-full rounded-[32px] px-4 pt-4 pb-5 flex flex-col gap-3"
+            style={{
+              background: 'rgba(255,255,255,0.5)',
+              boxShadow: '0 2px 16px rgba(0,0,0,0.07)',
+            }}
+          >
             {/* Переключатель */}
             <div
-              className="flex w-full rounded-full p-1"
-              style={{ background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.08)' }}
+              className="flex w-full rounded-full p-1 mx-auto"
+              style={{ background: 'rgba(0,0,0,0.06)', maxWidth: 'calc(100% - 16px)' }}
             >
               {(['register', 'login'] as const).map((m) => (
                 <button
@@ -198,8 +204,9 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                     fontFamily: "'Random Grotesque', sans-serif",
                     fontSize: '1rem',
                     fontWeight: 400,
-                    color: mode === m ? 'rgba(11,13,16,0.8)' : 'rgba(11,13,16,0.5)',
-                    background: mode === m ? 'rgba(255,255,255,0.8)' : 'transparent',
+                    color: mode === m ? 'rgba(11,13,16,0.9)' : 'rgba(11,13,16,0.5)',
+                    background: mode === m ? '#ffffff' : 'transparent',
+                    boxShadow: mode === m ? '0 1px 6px rgba(0,0,0,0.14)' : 'none',
                   }}
                 >
                   {m === 'register' ? 'регистрация' : 'вход'}
@@ -220,7 +227,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                 onChange={(e: ChangeEvent<HTMLInputElement>) =>
                   mode === 'register' ? setDisplayName(e.target.value) : setUsername(e.target.value)
                 }
-                placeholder="Как вас называют?"
+                placeholder="Как тебя зовут?"
                 className="w-full bg-transparent outline-none"
                 style={{
                   fontFamily: "'Random Grotesque', sans-serif",
