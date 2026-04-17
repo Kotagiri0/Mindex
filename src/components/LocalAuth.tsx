@@ -182,26 +182,11 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
         transition={{ duration: 0.45, ease: 'easeOut' }}
         className="w-full max-w-[440px]"
       >
-        {/* Контейнер формы */}
-        <div
-          className="w-full rounded-[40px] px-6 pt-4 pb-6"
-          style={{
-            background: 'rgba(255,255,255,0.25)',
-            border: '4px solid rgba(0,0,0,0.03)',
-          }}
-        >
-          {/* Внутренний контейнер */}
-          <div
-            className="w-full rounded-[36px] px-5 pt-4 pb-5 flex flex-col gap-3"
-            style={{
-              background: 'rgba(255,255,255,0.5)',
-              border: '4px solid rgba(0,0,0,0.05)',
-            }}
-          >
+          <div className="w-full flex flex-col gap-3">
             {/* Переключатель */}
             <div
               className="flex w-full rounded-full p-1"
-              style={{ background: 'rgba(0,0,0,0.03)' }}
+              style={{ background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.08)' }}
             >
               {(['register', 'login'] as const).map((m) => (
                 <button
@@ -227,7 +212,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
               className="w-full h-14 rounded-[24px] flex items-center px-5"
               style={{
                 background: '#ffffff',
-                border: '4px solid rgba(0,0,0,0.1)',
+                border: '1.5px solid rgba(0,0,0,0.1)',
               }}
             >
               <input
@@ -257,7 +242,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                   className="w-full rounded-[24px] flex items-center px-5 overflow-hidden"
                   style={{
                     background: '#ffffff',
-                    border: '4px solid rgba(0,0,0,0.1)',
+                    border: '1.5px solid rgba(0,0,0,0.1)',
                   }}
                 >
                   <input
@@ -283,7 +268,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
               className="w-full h-14 rounded-[24px] flex items-center px-5"
               style={{
                 background: '#ffffff',
-                border: '4px solid rgba(0,0,0,0.1)',
+                border: '1.5px solid rgba(0,0,0,0.1)',
               }}
             >
               <input
@@ -365,7 +350,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                 className="w-full h-14 rounded-full flex items-center justify-center gap-3 opacity-50"
                 style={{
                   background: '#ffffff',
-                  border: '4px solid rgba(0,0,0,0.1)',
+                  border: '1.5px solid rgba(0,0,0,0.1)',
                   fontFamily: "'Muller', sans-serif",
                   fontSize: '1rem',
                   fontWeight: 500,
@@ -377,7 +362,6 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
               </button>
             )}
 
-          </div>
         </div>
       </motion.div>
 
