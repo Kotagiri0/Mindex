@@ -61,25 +61,25 @@
     --glow-amber: rgba(34,34,36,0.0);
   }
 
-  /* Dark theme */
+  /* Dark theme - disabled, forcing light everywhere */
   [data-theme="dark"] {
-    --bg: #0a0a0b;
-    --surface: #1a1a1f;
-    --surface2: #2a2a32;
-    --text-primary: #f5f5f7;
-    --text-secondary: #a1a1a6;
-    --text-tertiary: #6e6e73;
-    --accent: #6b9eff;
-    --accent-light: #1f3a7d;
-    --danger: #ff453a;
-    --success: #32dd50;
-    --border: #3a3a42;
-    --primary: #5b7fd8;
-    --primary-light: #7a9ae8;
-    --accent-amber: #ffb84d;
-    --accent-amber-light: #4d3d2b;
-    --glow-primary: rgba(107, 158, 255, 0.3);
-    --glow-amber: rgba(255, 184, 77, 0.25);
+    --bg: #f0f0f0;
+    --surface: #ffffff;
+    --surface2: #f5f5f5;
+    --text-primary: #222224;
+    --text-secondary: #53535a;
+    --text-tertiary: #9a9aa3;
+    --accent: #222224;
+    --accent-light: #ececee;
+    --danger: #ff3b30;
+    --success: #34c759;
+    --border: #e3e3e8;
+    --primary: #222224;
+    --primary-light: #3a3a42;
+    --accent-amber: #c58a2b;
+    --accent-amber-light: #f6ebd9;
+    --glow-primary: rgba(34, 34, 36, 0.2);
+    --glow-amber: rgba(197, 138, 43, 0.25);
   }
 
   body {

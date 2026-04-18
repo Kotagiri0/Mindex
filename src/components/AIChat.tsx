@@ -447,7 +447,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             <div className="text-[28px] font-extrabold text-center leading-[1.25]" style={{ color: '#222224' }}>
               Привет!<br />Есть мысли?
             </div>
-            <div className="text-[15px] text-text-tertiary text-center">
+            <div className="text-[15px] text-center" style={{ color: '#888888' }}>
               Поделись тем, что на уме
             </div>
           </div>
@@ -455,8 +455,12 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls).map((m, i) => (
             <div key={i} className={`flex flex-col max-w-[85%] gap-[3px] ${m.role === 'user' ? 'self-end items-end' : 'self-start items-start'}`}>
               <div className={`p-[10px_14px] rounded-[18px] text-[15px] leading-[1.5] ${
-                m.role === 'user' ? 'bg-accent text-white rounded-br-[4px]' : 'bg-surface2 text-text-primary rounded-bl-[4px]'
-              }`}>
+                m.role === 'user' ? 'bg-accent text-white rounded-br-[4px]' : 'rounded-bl-[4px]'
+              }`}
+              style={{
+                background: m.role === 'user' ? undefined : '#f5f5f5',
+                color: m.role === 'user' ? undefined : '#222224'
+              }}>
                 {m.content}
                 
                 {m.planning_data && (
@@ -466,8 +470,8 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                         {m.planning_data.questions.map((q) => {
                           const isAnswered = m.planning_data?.answers?.[q.id];
                           if (isAnswered) return (
-                            <div key={q.id} className="bg-surface/80 p-2 rounded-lg text-[13px] text-text-primary border border-border">
-                              <div className="text-text-tertiary text-[11px] mb-1">{q.question}</div>
+                            <div key={q.id} className="p-2 rounded-lg text-[13px] border" style={{ background: '#f5f5f5', color: '#222224', borderColor: '#e0e0e0' }}>
+                              <div className="text-[11px] mb-1" style={{ color: '#666666' }}>{q.question}</div>
                               <div className="font-semibold">{m.planning_data?.answers?.[q.id]}</div>
                             </div>
                           );
@@ -480,7 +484,10 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                                   <button
                                     key={opt}
                                     onClick={() => handleAnswer(i, q.id, opt)}
-                                    className="text-left p-2 bg-surface rounded-xl text-[13px] text-text-primary active:scale-95 transition-transform border border-border hover:bg-surface2 transition-colors"
+                                    className="text-left p-2 rounded-xl text-[13px] active:scale-95 transition-transform border transition-colors"
+                                    style={{ background: '#ffffff', color: '#222224', borderColor: '#e0e0e0' }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = '#ffffff')}
                                   >
                                     {opt}
                                   </button>
@@ -488,7 +495,8 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                                 <div className="relative">
                                   <input 
                                     placeholder="Свой вариант..."
-                                    className="w-full p-2 bg-surface rounded-xl text-[13px] text-text-primary border border-border outline-none focus:border-accent focus:bg-surface2 transition-colors"
+                                    className="w-full p-2 rounded-xl text-[13px] border outline-none transition-colors"
+                                    style={{ background: '#ffffff', color: '#222224', borderColor: '#e0e0e0' }}
                                     onKeyDown={(e) => {
                                       if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
                                         handleAnswer(i, q.id, (e.target as HTMLInputElement).value.trim());
@@ -504,21 +512,22 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                     )}
 
                     {m.planning_data.status === 'plan_generated' && m.planning_data.plan && (
-                      <div className="bg-surface rounded-2xl p-4 shadow-sm border border-border flex flex-col gap-3 transition-colors">
-                        <div className="text-[16px] font-bold text-accent flex items-center gap-2">
-                          <Star size={18} fill="currentColor" />
+                        <div className="rounded-2xl p-4 shadow-sm border flex flex-col gap-3 transition-colors" style={{ background: '#f5f5f5', borderColor: '#e0e0e0' }}>
+                        <div className="text-[16px] font-bold flex items-center gap-2" style={{ color: '#222224' }}>
+                          <Star size={18} fill="#222224" />
                           {m.planning_data.plan.title}
                         </div>
                         <div className="flex flex-col gap-2">
                           {m.planning_data.plan.steps.map((step, sIdx) => (
                             <div key={sIdx} className="flex items-start gap-2 group">
-                              <div className="w-5 h-5 rounded-full bg-accent/10 text-accent flex items-center justify-center text-[10px] font-bold mt-0.5 flex-shrink-0">
+                              <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold mt-0.5 flex-shrink-0" style={{ background: '#e6e6ff', color: '#222224' }}>
                                 {sIdx + 1}
                               </div>
                               <input 
                                 value={step}
                                 onChange={(e) => updatePlanStep(i, sIdx, e.target.value)}
-                                className="flex-1 bg-transparent text-[13px] text-text-primary outline-none focus:text-accent"
+                                className="flex-1 bg-transparent text-[13px] outline-none"
+                                style={{ color: '#222224' }}
                               />
                             </div>
                           ))}
@@ -526,13 +535,15 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                         <div className="flex gap-2 mt-2">
                           <button 
                             onClick={() => handleAcceptPlan(i)}
-                            className="flex-1 h-10 bg-accent text-white rounded-xl text-[13px] font-bold active:scale-95 transition-transform"
+                            className="flex-1 h-10 text-white rounded-xl text-[13px] font-bold active:scale-95 transition-transform"
+                            style={{ background: '#222224' }}
                           >
                             Принять
                           </button>
                           <button 
                             onClick={() => handleRejectPlan(i)}
-                            className="flex-1 h-10 bg-surface2 text-text-primary rounded-xl text-[13px] font-bold active:scale-95 transition-transform"
+                            className="flex-1 h-10 rounded-xl text-[13px] font-bold active:scale-95 transition-transform border"
+                            style={{ background: '#ffffff', color: '#222224', borderColor: '#e0e0e0' }}
                           >
                             Отмена
                           </button>
@@ -549,10 +560,10 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         
         {isTyping && (
           <div className="flex flex-col max-w-[80%] gap-[3px] self-start items-start">
-            <div className="flex gap-1 p-[11px_15px] bg-surface2 rounded-[18px] rounded-bl-[4px] w-fit">
-              <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce" />
-              <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce [animation-delay:0.2s]" />
-              <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce [animation-delay:0.4s]" />
+            <div className="flex gap-1 p-[11px_15px] rounded-[18px] rounded-bl-[4px] w-fit" style={{ background: '#f5f5f5' }}>
+              <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: '#999999' }} />
+              <div className="w-1.5 h-1.5 rounded-full animate-bounce [animation-delay:0.2s]" style={{ background: '#999999' }} />
+              <div className="w-1.5 h-1.5 rounded-full animate-bounce [animation-delay:0.4s]" style={{ background: '#999999' }} />
             </div>
           </div>
         )}
