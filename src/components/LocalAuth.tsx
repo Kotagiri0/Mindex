@@ -72,6 +72,7 @@ const GoogleMark = () => (
 );
 
 export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
+  const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
   const [mode, setMode] = useState<Mode>('register');
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -355,6 +356,29 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
             )}
 
         </div>
+
+        {/* Dev bypass — только на localhost */}
+        {isLocalhost && (
+          <button
+            type="button"
+            onClick={() => onAuthenticated({
+              id: 'dev-user',
+              username: 'dev',
+              displayName: 'Dev',
+              createdAt: Date.now(),
+              provider: 'local',
+            })}
+            className="w-full mt-2 h-10 rounded-full flex items-center justify-center"
+            style={{
+              background: 'rgba(0,0,0,0.06)',
+              fontFamily: "'Random Grotesque', sans-serif",
+              fontSize: '0.85rem',
+              color: 'rgba(11,13,16,0.5)',
+            }}
+          >
+            Dev: войти без пароля
+          </button>
+        )}
       </motion.div>
     </div>
   );

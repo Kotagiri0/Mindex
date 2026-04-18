@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Settings, Send, Check, Trash2, ChevronDown, ChevronRight, Star, Plus, Edit2 } from 'lucide-react';
+import { ChevronLeft, Settings, Send, Check, ChevronDown, ChevronRight, Star, Plus, ArrowUp, MessageCircle, StickyNote } from 'lucide-react';
 import { Thread, Screen, Message, Task, SubTask } from '../types';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
@@ -405,23 +405,46 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   };
 
   return (
-    <div className="flex flex-col h-full bg-surface">
-      <div className="p-[12px_16px] flex items-center justify-between border-b border-border flex-shrink-0 pt-[max(12px,env(safe-area-inset-top,12px))]">
-        <button onClick={onClose} className="w-9 h-9 rounded-full bg-surface2 flex items-center justify-center text-text-secondary active:bg-border transition-colors">
-          <X size={18} />
-        </button>
-        <span className="text-[20px] font-extrabold text-accent">
-          {thread.title === 'Новая мысль' ? 'Мысль' : thread.title}
-        </span>
-        <button onClick={() => onNavigate('settings')} className="w-9 h-9 rounded-full bg-surface2 flex items-center justify-center text-text-secondary active:bg-border transition-colors">
-          <Settings size={18} />
-        </button>
+    <div className="flex flex-col h-full" style={{ background: '#f0f0f0' }}>
+      {/* Header */}
+      <div
+        className="flex items-center justify-between px-5 flex-shrink-0"
+        style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 16px))', paddingBottom: '12px' }}
+      >
+        <motion.button
+          whileTap={{ scale: 0.88 }}
+          onClick={onClose}
+          className="w-11 h-11 flex items-center justify-center"
+        >
+          <ChevronLeft size={24} strokeWidth={1.75} color="#222224" />
+        </motion.button>
+
+        {/* Chat / Note toggle */}
+        <div className="flex items-center gap-0.5 rounded-full p-1" style={{ background: '#ffffff' }}>
+          <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: '#ffffff' }}>
+            <MessageCircle size={20} strokeWidth={1.75} color="#222224" />
+          </div>
+          <button
+            className="w-10 h-10 rounded-full flex items-center justify-center"
+            onClick={() => alert('Заметки будут в ближайших обновлениях')}
+          >
+            <StickyNote size={20} strokeWidth={1.75} color="rgba(34,34,36,0.3)" />
+          </button>
+        </div>
+
+        <motion.button
+          whileTap={{ scale: 0.88 }}
+          onClick={() => onNavigate('settings')}
+          className="w-11 h-11 flex items-center justify-center"
+        >
+          <Settings size={22} strokeWidth={1.75} color="rgba(34,34,36,0.5)" />
+        </motion.button>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-[20px_16px_8px] flex flex-col gap-3 scrollbar-hide min-h-0">
         {thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls).length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-2">
-            <div className="text-[28px] font-extrabold text-text-primary text-center leading-[1.25]">
+            <div className="text-[28px] font-extrabold text-center leading-[1.25]" style={{ color: '#222224' }}>
               Привет!<br />Есть мысли?
             </div>
             <div className="text-[15px] text-text-tertiary text-center">
@@ -535,21 +558,42 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         )}
       </div>
 
-      <div className="p-[10px_14px] pb-[calc(10px+env(safe-area-inset-bottom,0px))] flex items-center gap-2.5 bg-surface border-t border-border flex-shrink-0">
-        <input
-          className="flex-1 h-11 bg-surface2 border-[1.5px] border-transparent rounded-[22px] px-4 font-sans text-[15px] text-text-primary outline-none focus:border-accent focus:bg-surface transition-all placeholder:text-text-tertiary"
-          placeholder="Что думаешь? Пиши сюда"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-        />
-        <button
-          disabled={!input.trim() || isTyping}
-          onClick={handleSend}
-          className="w-11 h-11 rounded-full bg-accent flex items-center justify-center disabled:bg-border transition-colors flex-shrink-0"
-        >
-          <Send size={18} color="white" strokeWidth={2.5} />
-        </button>
+      {/* Input card */}
+      <div
+        className="px-4 flex-shrink-0"
+        style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))' }}
+      >
+        <div className="rounded-[20px] p-4" style={{ background: '#ffffff' }}>
+          <input
+            className="w-full bg-transparent outline-none"
+            style={{
+              fontFamily: "'Random Grotesque', sans-serif",
+              fontSize: '16px',
+              color: '#222224',
+            }}
+            placeholder="Есть мысли?"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
+          />
+          <div className="flex items-center justify-between mt-3">
+            <button
+              className="w-9 h-9 flex items-center justify-center"
+              onClick={() => alert('Вложения будут в ближайших обновлениях')}
+            >
+              <Plus size={22} strokeWidth={1.75} color="rgba(34,34,36,0.35)" />
+            </button>
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              disabled={!input.trim() || isTyping}
+              onClick={handleSend}
+              className="w-11 h-11 rounded-full flex items-center justify-center transition-colors"
+              style={{ background: input.trim() && !isTyping ? '#222224' : 'rgba(34,34,36,0.15)' }}
+            >
+              <ArrowUp size={20} strokeWidth={2} color="#ffffff" />
+            </motion.button>
+          </div>
+        </div>
       </div>
     </div>
   );
