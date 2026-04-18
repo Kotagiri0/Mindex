@@ -1,15 +1,55 @@
 import type { ChangeEvent, FormEvent } from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2 } from 'lucide-react';
 import { LocalUser } from '../types';
-import { loginLocalUser, registerLocalUser } from '../lib/auth';
+import { loginGoogleUser, loginLocalUser, registerLocalUser } from '../lib/auth';
 
 interface LocalAuthProps {
   onAuthenticated: (user: LocalUser) => void;
 }
 
 type Mode = 'login' | 'register';
+
+declare global {
+  interface Window {
+    google?: {
+      accounts?: {
+        id?: {
+          initialize: (config: { client_id: string; callback: (response: { credential?: string }) => void }) => void;
+          renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
+        };
+      };
+    };
+  }
+}
+
+let googleScriptPromise: Promise<void> | null = null;
+
+const loadGoogleIdentityScript = () => {
+  if (window.google?.accounts?.id) return Promise.resolve();
+  if (googleScriptPromise) return googleScriptPromise;
+
+  googleScriptPromise = new Promise<void>((resolve, reject) => {
+    const existingScript = document.querySelector<HTMLScriptElement>('script[data-google-gsi="true"]');
+    if (existingScript) {
+      if (window.google?.accounts?.id) { resolve(); return; }
+      existingScript.addEventListener('load', () => resolve(), { once: true });
+      existingScript.addEventListener('error', () => reject(new Error('Не удалось загрузить Google Sign-In.')), { once: true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.dataset.googleGsi = 'true';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Не удалось загрузить Google Sign-In.'));
+    document.head.appendChild(script);
+  }).catch((error) => { googleScriptPromise = null; throw error; });
+
+  return googleScriptPromise;
+};
 
 const MysliLogo = () => (
   <svg width="200" height="144" viewBox="0 0 419 302" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -22,6 +62,15 @@ const MysliLogo = () => (
   </svg>
 );
 
+const GoogleMark = () => (
+  <svg width="20" height="20" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.2 33.9 29.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.3 0 6.3 1.2 8.6 3.2l5.7-5.7C34.4 5.9 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.2-.4-3.5z"/>
+    <path fill="#FF3D00" d="M6.3 14.7l6.6 4.9C14.8 15.4 19 12 24 12c3.3 0 6.3 1.2 8.6 3.2l5.7-5.7C34.4 5.9 29.5 4 24 4 16 4 9.1 8.5 6.3 14.7z"/>
+    <path fill="#4CAF50" d="M24 44c5.4 0 10.4-2 14.2-5.2l-6.6-5.5C29.4 34.9 26.8 36 24 36c-5.1 0-9.1-3.2-10.7-7.6l-6.6 5.1C9.4 39.5 16.1 44 24 44z"/>
+    <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-1 2.9-3.1 5.2-5.7 6.8l.1-.1 6.6 5.5C36.8 38.8 44 33.2 44 24c0-1.3-.1-2.2-.4-3.5z"/>
+  </svg>
+);
+
 export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
   const [mode, setMode] = useState<Mode>('register');
   const [username, setUsername] = useState('');
@@ -29,10 +78,67 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleClientId, setGoogleClientId] = useState<string>(import.meta.env.VITE_GOOGLE_CLIENT_ID || '');
+  const googleButtonRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (googleClientId) return;
+    let cancelled = false;
+    const loadConfig = async () => {
+      try {
+        const response = await fetch('/api/config');
+        if (!response.ok) return;
+        const data = await response.json().catch(() => null) as { googleClientId?: string } | null;
+        if (!cancelled && data?.googleClientId) setGoogleClientId(data.googleClientId);
+      } catch { /* silent */ }
+    };
+    loadConfig();
+    return () => { cancelled = true; };
+  }, [googleClientId]);
+
+  useEffect(() => {
+    if (!googleClientId || !googleButtonRef.current) return;
+    let cancelled = false;
+    const renderGoogleButton = async () => {
+      try {
+        await loadGoogleIdentityScript();
+        if (cancelled || !googleButtonRef.current || !window.google?.accounts?.id) return;
+        window.google.accounts.id.initialize({
+          client_id: googleClientId,
+          callback: async ({ credential }) => {
+            if (!credential) { setError('Google не вернул токен авторизации.'); return; }
+            setError('');
+            setGoogleLoading(true);
+            try {
+              const user = await loginGoogleUser(credential);
+              onAuthenticated(user);
+            } catch (authError) {
+              setError(authError instanceof Error ? authError.message : 'Не удалось войти через Google.');
+            } finally {
+              setGoogleLoading(false);
+            }
+          },
+        });
+        googleButtonRef.current.innerHTML = '';
+        const width = Math.min(Math.max(googleButtonRef.current.getBoundingClientRect().width || 320, 280), 360);
+        window.google.accounts.id.renderButton(googleButtonRef.current, {
+          theme: 'outline', size: 'large', text: 'signin_with', shape: 'pill', width, logo_alignment: 'center',
+        });
+      } catch (authError) {
+        if (!cancelled) setError(authError instanceof Error ? authError.message : 'Не удалось загрузить Google вход.');
+      }
+    };
+    renderGoogleButton();
+    return () => {
+      cancelled = true;
+      if (googleButtonRef.current) googleButtonRef.current.innerHTML = '';
+    };
+  }, [googleClientId, onAuthenticated]);
 
   const submit = async (e?: FormEvent<HTMLFormElement>) => {
     e?.preventDefault();
-    if (loading) return;
+    if (loading || googleLoading) return;
     setError('');
     setLoading(true);
     try {
@@ -66,10 +172,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
           style={{ background: 'rgba(255,255,255,0.5)', boxShadow: '0 2px 16px rgba(0,0,0,0.07)' }}
         >
           {/* Переключатель */}
-          <div
-            className="flex w-full rounded-full p-1"
-            style={{ background: 'rgba(0,0,0,0.06)' }}
-          >
+          <div className="flex w-full rounded-full p-1" style={{ background: 'rgba(0,0,0,0.06)' }}>
             {(['register', 'login'] as const).map((m) => (
               <button
                 key={m}
@@ -90,10 +193,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
           </div>
 
           {/* Имя / логин */}
-          <div
-            className="w-full h-14 rounded-[24px] flex items-center px-5"
-            style={{ background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.1)' }}
-          >
+          <div className="w-full h-14 rounded-[24px] flex items-center px-5" style={{ background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.1)' }}>
             <input
               value={mode === 'register' ? displayName : username}
               onChange={(e: ChangeEvent<HTMLInputElement>) =>
@@ -129,10 +229,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
           </AnimatePresence>
 
           {/* Пароль */}
-          <div
-            className="w-full h-14 rounded-[24px] flex items-center px-5"
-            style={{ background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.1)' }}
-          >
+          <div className="w-full h-14 rounded-[24px] flex items-center px-5" style={{ background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.1)' }}>
             <input
               value={password}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
@@ -168,7 +265,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
           {/* Кнопка */}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || googleLoading}
             className="w-full h-14 rounded-full flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
             style={{
               background: '#222224',
@@ -181,6 +278,36 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
             {loading && <Loader2 size={18} className="animate-spin" />}
             {mode === 'register' ? 'Создать аккаунт' : 'Войти'}
           </button>
+
+          {/* Google вход */}
+          {googleClientId ? (
+            <div className="w-full flex flex-col items-center gap-2">
+              <div ref={googleButtonRef} className="w-full flex items-center justify-center min-h-[56px]" />
+              {googleLoading && (
+                <div className="flex items-center gap-2 text-sm" style={{ color: 'rgba(11,13,16,0.5)', fontFamily: "'Random Grotesque', sans-serif" }}>
+                  <Loader2 size={16} className="animate-spin" />
+                  Проверяем аккаунт...
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="w-full h-14 rounded-full flex items-center justify-center gap-3 opacity-50"
+              style={{
+                background: '#ffffff',
+                border: '1.5px solid rgba(0,0,0,0.1)',
+                fontFamily: "'Muller', sans-serif",
+                fontSize: '1rem',
+                fontWeight: 500,
+                color: '#222224',
+              }}
+            >
+              <GoogleMark />
+              Войти с помощью Google
+            </button>
+          )}
         </form>
       </motion.div>
     </div>
