@@ -97,23 +97,6 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
     return () => { cancelled = true; };
   }, [googleClientId]);
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (loading || googleLoading) return;
-    setError('');
-    setLoading(true);
-    try {
-      const user = mode === 'register'
-        ? await registerLocalUser({ username, password, displayName })
-        : await loginLocalUser({ username, password });
-      onAuthenticated(user);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось выполнить вход.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (!googleClientId || !googleButtonRef.current) return;
     let cancelled = false;
@@ -153,208 +136,179 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
     };
   }, [googleClientId, onAuthenticated]);
 
+  const submit = async (e?: FormEvent<HTMLFormElement>) => {
+    e?.preventDefault();
+    if (loading || googleLoading) return;
+    setError('');
+    setLoading(true);
+    try {
+      const user = mode === 'register'
+        ? await registerLocalUser({ username, password, displayName })
+        : await loginLocalUser({ username, password });
+      onAuthenticated(user);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось выполнить вход.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-6 py-10"
       style={{ backgroundColor: '#f0f0f0' }}
     >
-      {/* Лого + Форма */}
       <motion.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: 'easeOut' }}
         className="w-full max-w-[440px] flex flex-col items-center gap-6"
       >
-        {/* Лого */}
         <MysliLogo />
-          <div
-            className="w-full rounded-[32px] px-4 pt-4 pb-5 flex flex-col gap-3"
+
+        <form
+          onSubmit={submit}
+          className="w-full rounded-[32px] px-4 pt-4 pb-5 flex flex-col gap-3"
+          style={{ background: 'rgba(255,255,255,0.5)', boxShadow: '0 2px 16px rgba(0,0,0,0.07)' }}
+        >
+          {/* Переключатель */}
+          <div className="flex w-full rounded-full p-1" style={{ background: 'rgba(0,0,0,0.06)' }}>
+            {(['register', 'login'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => { setMode(m); setError(''); }}
+                className="relative flex-1 h-11 rounded-full transition-all duration-200"
+                style={{
+                  fontFamily: "'Random Grotesque', sans-serif",
+                  fontSize: '1rem',
+                  color: mode === m ? 'rgba(11,13,16,0.9)' : 'rgba(11,13,16,0.5)',
+                  background: mode === m ? '#ffffff' : 'transparent',
+                  boxShadow: mode === m ? '0 1px 6px rgba(0,0,0,0.14)' : 'none',
+                }}
+              >
+                {m === 'register' ? 'регистрация' : 'вход'}
+              </button>
+            ))}
+          </div>
+
+          {/* Имя / логин */}
+          <div className="w-full h-14 rounded-[24px] flex items-center px-5" style={{ background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.1)' }}>
+            <input
+              value={mode === 'register' ? displayName : username}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                mode === 'register' ? setDisplayName(e.target.value) : setUsername(e.target.value)
+              }
+              placeholder={mode === 'register' ? 'Как тебя зовут?' : 'Имя пользователя'}
+              className="w-full bg-transparent outline-none"
+              style={{ fontFamily: "'Random Grotesque', sans-serif", fontSize: '1rem', color: 'rgba(11,13,16,0.8)' }}
+              autoComplete={mode === 'register' ? 'name' : 'username'}
+            />
+          </div>
+
+          {/* Username при регистрации */}
+          <AnimatePresence>
+            {mode === 'register' && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 56 }}
+                exit={{ opacity: 0, height: 0 }}
+                className="w-full rounded-[24px] flex items-center px-5 overflow-hidden"
+                style={{ background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.1)' }}
+              >
+                <input
+                  value={username}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setUsername(e.target.value)}
+                  placeholder="Имя для ИИ"
+                  className="w-full bg-transparent outline-none"
+                  style={{ fontFamily: "'Random Grotesque', sans-serif", fontSize: '1rem', color: 'rgba(11,13,16,0.8)' }}
+                  autoComplete="username"
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Пароль */}
+          <div className="w-full h-14 rounded-[24px] flex items-center px-5" style={{ background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.1)' }}>
+            <input
+              value={password}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+              placeholder="Пароль, минимум 4 символа"
+              type="password"
+              className="w-full bg-transparent outline-none"
+              style={{ fontFamily: "'Random Grotesque', sans-serif", fontSize: '1rem', color: 'rgba(11,13,16,0.8)' }}
+              autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+              required
+            />
+          </div>
+
+          {/* Ошибка */}
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="rounded-2xl px-4 py-2 text-sm"
+                style={{
+                  background: 'rgba(220,38,38,0.08)',
+                  border: '1px solid rgba(220,38,38,0.3)',
+                  color: '#dc2626',
+                  fontFamily: "'Random Grotesque', sans-serif",
+                }}
+              >
+                {error}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Кнопка */}
+          <button
+            type="submit"
+            disabled={loading || googleLoading}
+            className="w-full h-14 rounded-full flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
             style={{
-              background: 'rgba(255,255,255,0.5)',
-              boxShadow: '0 2px 16px rgba(0,0,0,0.07)',
+              background: '#222224',
+              fontFamily: "'Muller', sans-serif",
+              fontSize: '1rem',
+              fontWeight: 500,
+              color: '#f8f8f8',
             }}
           >
-            {/* Переключатель */}
-            <div
-              className="flex w-full rounded-full p-1 mx-auto"
-              style={{ background: 'rgba(0,0,0,0.06)', maxWidth: 'calc(100% - 16px)' }}
-            >
-              {(['register', 'login'] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => { setMode(m); setError(''); }}
-                  className="relative flex-1 h-11 rounded-full transition-all duration-200"
-                  style={{
-                    fontFamily: "'Random Grotesque', sans-serif",
-                    fontSize: '1rem',
-                    fontWeight: 400,
-                    color: mode === m ? 'rgba(11,13,16,0.9)' : 'rgba(11,13,16,0.5)',
-                    background: mode === m ? '#ffffff' : 'transparent',
-                    boxShadow: mode === m ? '0 1px 6px rgba(0,0,0,0.14)' : 'none',
-                  }}
-                >
-                  {m === 'register' ? 'регистрация' : 'вход'}
-                </button>
-              ))}
-            </div>
+            {loading && <Loader2 size={18} className="animate-spin" />}
+            {mode === 'register' ? 'Создать аккаунт' : 'Войти'}
+          </button>
 
-            {/* Поле имени */}
-            <div
-              className="w-full h-14 rounded-[24px] flex items-center px-5"
-              style={{
-                background: '#ffffff',
-                border: '1.5px solid rgba(0,0,0,0.1)',
-              }}
-            >
-              <input
-                value={mode === 'register' ? displayName : username}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  mode === 'register' ? setDisplayName(e.target.value) : setUsername(e.target.value)
-                }
-                placeholder="Как тебя зовут?"
-                className="w-full bg-transparent outline-none"
-                style={{
-                  fontFamily: "'Random Grotesque', sans-serif",
-                  fontSize: '1rem',
-                  fontWeight: 400,
-                  color: 'rgba(11,13,16,0.8)',
-                }}
-                autoComplete={mode === 'register' ? 'name' : 'username'}
-              />
-            </div>
-
-            {/* Поле username при регистрации */}
-            <AnimatePresence>
-              {mode === 'register' && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 56 }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="w-full rounded-[24px] flex items-center px-5 overflow-hidden"
-                  style={{
-                    background: '#ffffff',
-                    border: '1.5px solid rgba(0,0,0,0.1)',
-                  }}
-                >
-                  <input
-                    value={username}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setUsername(e.target.value)}
-                    placeholder="Имя для ИИ"
-                    className="w-full bg-transparent outline-none"
-                    style={{
-                      fontFamily: "'Random Grotesque', sans-serif",
-                      fontSize: '1rem',
-                      fontWeight: 400,
-                      color: 'rgba(11,13,16,0.8)',
-                    }}
-                    autoComplete="username"
-                    required
-                  />
-                </motion.div>
+          {/* Google вход */}
+          {googleClientId ? (
+            <div className="w-full flex flex-col items-center gap-2">
+              <div ref={googleButtonRef} className="w-full flex items-center justify-center min-h-[56px]" />
+              {googleLoading && (
+                <div className="flex items-center gap-2 text-sm" style={{ color: 'rgba(11,13,16,0.5)', fontFamily: "'Random Grotesque', sans-serif" }}>
+                  <Loader2 size={16} className="animate-spin" />
+                  Проверяем аккаунт...
+                </div>
               )}
-            </AnimatePresence>
-
-            {/* Поле пароля */}
-            <div
-              className="w-full h-14 rounded-[24px] flex items-center px-5"
-              style={{
-                background: '#ffffff',
-                border: '1.5px solid rgba(0,0,0,0.1)',
-              }}
-            >
-              <input
-                value={password}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-                placeholder="Пароль, минимум 4 символа"
-                type="password"
-                className="w-full bg-transparent outline-none"
-                style={{
-                  fontFamily: "'Random Grotesque', sans-serif",
-                  fontSize: '1rem',
-                  fontWeight: 400,
-                  color: 'rgba(11,13,16,0.8)',
-                }}
-                autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-                required
-              />
             </div>
-
-            {/* Ошибка */}
-            <AnimatePresence>
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, y: -8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="rounded-2xl px-4 py-2 text-sm"
-                  style={{
-                    background: 'rgba(220,38,38,0.08)',
-                    border: '1px solid rgba(220,38,38,0.3)',
-                    color: '#dc2626',
-                    fontFamily: "'Random Grotesque', sans-serif",
-                  }}
-                >
-                  {error}
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Кнопка создать аккаунт / войти */}
+          ) : (
             <button
               type="button"
-              disabled={loading || googleLoading}
-              className="w-full h-14 rounded-full flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
+              disabled
+              className="w-full h-14 rounded-full flex items-center justify-center gap-3 opacity-50"
               style={{
-                background: '#222224',
+                background: '#ffffff',
+                border: '1.5px solid rgba(0,0,0,0.1)',
                 fontFamily: "'Muller', sans-serif",
                 fontSize: '1rem',
                 fontWeight: 500,
-                color: '#f8f8f8',
-              }}
-              onClick={() => {
-                const syntheticEvent = { preventDefault: () => {} } as FormEvent<HTMLFormElement>;
-                submit(syntheticEvent);
+                color: '#222224',
               }}
             >
-              {loading ? <Loader2 size={18} className="animate-spin" /> : null}
-              {mode === 'register' ? 'Создать аккаунт' : 'Войти'}
+              <GoogleMark />
+              Войти с помощью Google
             </button>
-
-            {/* Google вход */}
-            {googleClientId ? (
-              <div className="w-full flex flex-col items-center gap-2">
-                <div ref={googleButtonRef} className="w-full flex items-center justify-center min-h-[56px]" />
-                {googleLoading && (
-                  <div
-                    className="flex items-center gap-2 text-sm"
-                    style={{ color: 'rgba(11,13,16,0.5)', fontFamily: "'Random Grotesque', sans-serif" }}
-                  >
-                    <Loader2 size={16} className="animate-spin" />
-                    Проверяем аккаунт...
-                  </div>
-                )}
-              </div>
-            ) : (
-              <button
-                type="button"
-                disabled
-                className="w-full h-14 rounded-full flex items-center justify-center gap-3 opacity-50"
-                style={{
-                  background: '#ffffff',
-                  border: '1.5px solid rgba(0,0,0,0.1)',
-                  fontFamily: "'Muller', sans-serif",
-                  fontSize: '1rem',
-                  fontWeight: 500,
-                  color: '#222224',
-                }}
-              >
-                <GoogleMark />
-                Войти с помощью Google
-              </button>
-            )}
-
-        </div>
+          )}
+        </form>
       </motion.div>
     </div>
   );

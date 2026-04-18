@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Plus, LogOut } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { ChevronLeft, Plus, Settings, Menu } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Task, Screen } from '../types';
 import TaskItem from './TaskItem';
@@ -10,21 +10,25 @@ import { uuid } from '../lib/utils';
 
 interface DashboardProps {
   tasks: Task[];
-  setTasks: (tasks: Task[]) => void;
+  setTasks: (tasks: Task[] | ((prev: Task[]) => Task[])) => void;
   onNavigate: (screen: Screen) => void;
   onNewThread: () => void;
   onOpenThread: (id: string) => void;
   onLogout: () => void;
 }
 
-const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
-const DAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
+const MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+const DAYS = ['ПН','ВТ','СР','ЧТ','ПТ','СБ','ВС'];
 
-export default function Dashboard({ tasks, setTasks, onNavigate, onNewThread, onOpenThread, onLogout }: DashboardProps) {
+const F = "'Random Grotesque', sans-serif";
+
+export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, onLogout }: DashboardProps) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [quickTask, setQuickTask] = useState('');
+  const quickInputRef = useRef<HTMLInputElement>(null);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -33,7 +37,6 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onNewThread, on
     const dow = now.getDay();
     const monday = new Date(now);
     monday.setDate(now.getDate() - ((dow + 6) % 7) + weekOffset * 7);
-    
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
@@ -67,7 +70,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onNewThread, on
   const toggleSubtask = async (taskId: string, subtaskId: string) => {
     const updated = tasks.map(t => {
       if (t.id === taskId && t.subtasks) {
-        const newSubtasks = t.subtasks.map(st => 
+        const newSubtasks = t.subtasks.map(st =>
           st.id === subtaskId ? { ...st, done: !st.done } : st
         );
         const newTask = { ...t, subtasks: newSubtasks };
@@ -80,14 +83,8 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onNewThread, on
   };
 
   const addTask = async (name: string, time: string, date: string) => {
-    const newTask: Task = {
-      id: uuid(),
-      name,
-      time,
-      date,
-      done: false
-    };
-    setTasks([...tasks, newTask]);
+    const newTask: Task = { id: uuid(), name, time, date, done: false };
+    setTasks(prev => (Array.isArray(prev) ? [...prev, newTask] : [newTask]));
     await db.saveTask(newTask);
     setIsAddModalOpen(false);
   };
@@ -105,6 +102,14 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onNewThread, on
     setEditingTask(null);
   };
 
+  const quickAddTask = async () => {
+    if (!quickTask.trim()) return;
+    const newTask: Task = { id: uuid(), name: quickTask.trim(), time: '', date: selectedDate, done: false };
+    setTasks(prev => (Array.isArray(prev) ? [...prev, newTask] : [newTask]));
+    await db.saveTask(newTask);
+    setQuickTask('');
+  };
+
   const deleteTask = async (id: string) => {
     const updated = tasks.filter(t => t.id !== id);
     setTasks(updated);
@@ -112,157 +117,159 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onNewThread, on
     setEditingTask(null);
   };
 
-  const sectionTitle = useMemo(() => {
-    if (selectedDate === today) return 'Задачи на сегодня';
-    const d = new Date(selectedDate);
-    return `Задачи на ${d.getDate()}.${(d.getMonth() + 1).toString().padStart(2, '0')}`;
-  }, [selectedDate, today]);
-
   return (
-    <div className="flex flex-col h-full bg-bg transition-theme">
-      <div className="safe-top flex-shrink-0" />
-      
-      <div className="px-4 pt-2 flex-shrink-0">
-        <div className="flex items-center justify-end mb-2">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={onLogout}
-            className="h-9 px-3 rounded-full bg-surface text-text-primary text-[12px] font-semibold flex items-center gap-2 border border-border active:opacity-70 transition-opacity"
-          >
-            <LogOut size={14} />
-            Выйти
-          </motion.button>
-        </div>
+    <div className="flex flex-col h-full" style={{ background: '#f0f0f0' }}>
+      <div style={{ height: 'env(safe-area-inset-top, 0px)' }} />
 
-        <div className="flex items-center gap-1 mb-2">
-          <motion.button 
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setWeekOffset(v => v - 1)} 
-            className="w-[30px] h-[30px] rounded-full flex items-center justify-center text-text-secondary hover:bg-surface transition-colors"
-          >
-            <ChevronLeft size={18} />
-          </motion.button>
-          <div className="flex-1 text-center text-[13px] font-bold text-text-secondary uppercase tracking-wider">
-            {MONTHS[weekDays[3].getMonth()]} {weekDays[3].getFullYear()}
-          </div>
-          <motion.button 
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setWeekOffset(v => v + 1)} 
-            className="w-[30px] h-[30px] rounded-full flex items-center justify-center text-text-secondary hover:bg-surface transition-colors"
-          >
-            <ChevronRight size={18} />
-          </motion.button>
-        </div>
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 pt-4 pb-2">
+        <motion.button
+          whileTap={{ scale: 0.88 }}
+          onClick={() => setWeekOffset(v => v - 1)}
+          className="w-11 h-11 flex items-center justify-center"
+        >
+          <ChevronLeft size={24} strokeWidth={1.75} color="#222224" />
+        </motion.button>
 
-        <div className="grid grid-cols-7 gap-[6px] mb-1">
-          {weekDays.map((d, i) => {
-            const ds = d.toISOString().split('T')[0];
-            const isSelected = ds === selectedDate;
-            
-            return (
-              <motion.button
-                key={ds}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setSelectedDate(ds)}
-                className={`h-[72px] rounded-[14px] flex flex-col items-center justify-center gap-1.5 transition-colors ${
-                  isSelected ? 'bg-accent text-white' : 'bg-surface text-text-primary'
-                }`}
-              >
-                {isSelected && (
-                  <motion.div
-                    layoutId="day-indicator"
-                    className="absolute inset-0 bg-gradient-to-br from-accent/50 to-transparent rounded-[14px] -z-10"
-                    transition={{ type: 'spring', bounce: 0.2 }}
-                  />
-                )}
-                <span className={`text-[11px] font-bold ${isSelected ? 'text-white/90' : 'text-text-tertiary'}`}>
-                  {DAYS[i]}
-                </span>
-                <span className={`text-[18px] font-bold`}>
-                  {d.getDate()}
-                </span>
-              </motion.button>
-            );
-          })}
-        </div>
+        <motion.button
+          whileTap={{ scale: 0.95 }}
+          onClick={() => { setSelectedDate(today); setWeekOffset(0); }}
+          className="flex flex-col items-center"
+        >
+          <span style={{ fontFamily: F, fontSize: '11px', color: 'rgba(34,34,36,0.4)', letterSpacing: '0.06em' }}>
+            {weekDays[3].getFullYear()}
+          </span>
+          <span style={{ fontFamily: F, fontSize: '22px', color: '#222224', lineHeight: 1.1 }}>
+            {MONTHS[weekDays[3].getMonth()]}
+          </span>
+        </motion.button>
 
-        <AnimatePresence>
-          {selectedDate !== today && (
-            <motion.button
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              onClick={() => { setSelectedDate(today); setWeekOffset(0); }}
-              className="w-full text-center text-[12px] font-semibold text-accent h-[16px] mb-1"
-            >
-              ← Вернуться на сегодня
-            </motion.button>
-          )}
-        </AnimatePresence>
+        <motion.button
+          whileTap={{ scale: 0.88 }}
+          onClick={() => onNavigate('settings')}
+          className="w-11 h-11 flex items-center justify-center"
+        >
+          <Settings size={22} strokeWidth={1.75} color="rgba(34,34,36,0.6)" />
+        </motion.button>
       </div>
 
-      <div className="flex-1 bg-surface rounded-t-[32px] shadow-lg flex flex-col min-h-0 transition-colors">
-        <div className="flex justify-end items-center px-6 pt-6 pb-2">
-          <motion.button 
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setIsAddModalOpen(true)} 
-            className="w-10 h-10 rounded-full bg-surface2 flex items-center justify-center text-accent active:opacity-70 transition-opacity"
+      {/* Day strip */}
+      <div className="grid grid-cols-7 px-4 pb-3 pt-1">
+        {weekDays.map((d, i) => {
+          const ds = d.toISOString().split('T')[0];
+          const isSelected = ds === selectedDate;
+          const isToday = ds === today;
+
+          return (
+            <motion.button
+              key={ds}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setSelectedDate(ds)}
+              className="flex flex-col items-center gap-1 py-1"
+            >
+              <span style={{ fontSize: '11px', color: 'rgba(34,34,36,0.4)', fontFamily: F, letterSpacing: '0.04em' }}>
+                {DAYS[i]}
+              </span>
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center transition-colors"
+                style={{ background: isSelected ? '#222224' : 'transparent' }}
+              >
+                <span style={{
+                  fontSize: '18px',
+                  fontFamily: F,
+                  color: isSelected ? '#ffffff' : '#222224',
+                  fontWeight: isToday && !isSelected ? 700 : 400,
+                }}>
+                  {d.getDate()}
+                </span>
+              </div>
+            </motion.button>
+          );
+        })}
+      </div>
+
+      {/* Task card */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden" style={{ background: '#ffffff', borderRadius: '24px 24px 0 0' }}>
+        {/* Toolbar */}
+        <div className="flex items-center justify-between px-5 pt-4 pb-3">
+          <motion.button
+            whileTap={{ scale: 0.88 }}
+            onClick={() => alert('Сортировка и фильтры будут в ближайших обновлениях')}
+            className="w-10 h-10 flex items-center justify-center"
           >
-            <Plus size={24} strokeWidth={2.5} />
+            <Menu size={20} strokeWidth={1.75} color="rgba(34,34,36,0.45)" />
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.88 }}
+            onClick={() => setIsAddModalOpen(true)}
+            className="w-10 h-10 flex items-center justify-center"
+          >
+            <Plus size={22} strokeWidth={1.75} color="#222224" />
           </motion.button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 pb-32 scrollbar-hide">
+        <div style={{ height: '1px', background: 'rgba(34,34,36,0.08)', margin: '0 20px' }} />
+
+        {/* Quick task add */}
+        <div className="flex items-center gap-2 mx-5 mt-3 mb-1 h-10 px-3 rounded-[10px]" style={{ background: '#f5f5f5' }}>
+          <Plus size={14} strokeWidth={1.75} color="rgba(34,34,36,0.3)" />
+          <input
+            ref={quickInputRef}
+            className="flex-1 bg-transparent outline-none"
+            style={{ fontFamily: F, fontSize: '14px', color: '#222224' }}
+            placeholder="Добавить задачу..."
+            value={quickTask}
+            onChange={e => setQuickTask(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && quickAddTask()}
+          />
+        </div>
+
+        {/* Task list */}
+        <div className="flex-1 overflow-y-auto px-5 pb-20">
           {filteredTasks.length === 0 ? (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="text-center text-text-tertiary py-12 px-4 text-[15px]"
+              className="text-center py-12"
+              style={{ color: 'rgba(34,34,36,0.3)', fontFamily: F, fontSize: '15px' }}
             >
               Нет задач на этот день
             </motion.div>
           ) : (
-            <div className="flex flex-col gap-1">
-              <AnimatePresence mode="popLayout">
-                {filteredTasks.map((t, idx) => (
-                  <motion.div
-                    key={t.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    transition={{ delay: idx * 0.05 }}
-                  >
-                    <TaskItem 
-                      task={t} 
-                      onToggle={() => toggleTask(t.id)} 
-                      onToggleSubtask={toggleSubtask}
-                      onClick={() => setEditingTask(t)} 
-                    />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
+            <AnimatePresence mode="popLayout">
+              {filteredTasks.map((t, idx) => (
+                <motion.div
+                  key={t.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ delay: idx * 0.04 }}
+                >
+                  <TaskItem
+                    task={t}
+                    onToggle={() => toggleTask(t.id)}
+                    onToggleSubtask={toggleSubtask}
+                    onClick={() => setEditingTask(t)}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
           )}
         </div>
       </div>
 
-      <AddTaskModal 
-        isOpen={isAddModalOpen} 
-        onClose={() => setIsAddModalOpen(false)} 
-        onAdd={addTask} 
-        initialDate={selectedDate} 
+      <AddTaskModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onAdd={addTask}
+        initialDate={selectedDate}
       />
-      
-      <EditTaskModal 
-        task={editingTask} 
-        onClose={() => setEditingTask(null)} 
-        onUpdate={updateTask} 
-        onDelete={deleteTask} 
+
+      <EditTaskModal
+        task={editingTask}
+        onClose={() => setEditingTask(null)}
+        onUpdate={updateTask}
+        onDelete={deleteTask}
         onOpenThread={onOpenThread}
       />
     </div>

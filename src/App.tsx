@@ -16,10 +16,12 @@ import AIChat from './components/AIChat';
 import Threads from './components/Threads';
 import SettingsScreen from './components/Settings';
 import BottomNav from './components/BottomNav';
+import DesktopApp from './components/DesktopApp';
 
 const defaultSettings = { agent: true, confirm: true, notifs: true };
 
 export default function App() {
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 768);
   const [currentUser, setCurrentUser] = useState<LocalUser | null>(getCurrentUser());
   const [screen, setScreen] = useState<Screen>('ob');
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -33,6 +35,12 @@ export default function App() {
     const user = getCurrentUser();
     setCurrentUser(user);
     setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const handler = () => setIsDesktop(window.innerWidth >= 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
   }, []);
 
   useEffect(() => {
@@ -144,6 +152,25 @@ export default function App() {
       <div className="w-full h-screen flex items-center justify-center bg-bg">
         <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
       </div>
+    );
+  }
+
+  if (isDesktop) {
+    return (
+      <DesktopApp
+        tasks={tasks}
+        setTasks={updateTasks}
+        threads={threads}
+        setThreads={updateThreads}
+        settings={settings}
+        setSettings={updateSettings}
+        screen={screen}
+        setScreen={setScreen}
+        curTh={curTh}
+        setCurTh={setCurTh}
+        startNewThread={startNewThread}
+        handleLogout={handleLogout}
+      />
     );
   }
 

@@ -1,11 +1,10 @@
 import type { ChangeEvent, ReactNode } from 'react';
 import { useState } from 'react';
-import { X, User, Camera, AlertCircle, LogOut, Trash2, Moon, Sun } from 'lucide-react';
+import { X, User, Camera, AlertCircle, LogOut, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Settings } from '../types';
 import { getCurrentUser } from '../lib/auth';
 import { storage } from '../lib/storage';
-import { useTheme } from '../lib/theme';
 
 interface SettingsProps {
   settings: Settings;
@@ -16,7 +15,6 @@ interface SettingsProps {
 
 export default function SettingsScreen({ settings, setSettings, onBack, onLogout }: SettingsProps) {
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
-  const { theme, toggleTheme } = useTheme();
 
   const handleToggle = (key: keyof Settings) => {
     setSettings({ ...settings, [key]: !settings[key] });
@@ -112,31 +110,6 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
             isOn={settings.notifs}
             onToggle={() => handleToggle('notifs')}
           />
-        </div>
-
-        <div className="mx-[14px] mb-3 bg-surface rounded-[14px] overflow-hidden border border-border">
-          <button 
-            onClick={toggleTheme}
-            className="w-full p-[14px_16px] flex items-center gap-3 border-b border-border last:border-none text-left active:opacity-70 transition-opacity"
-          >
-            <motion.div 
-              initial={false}
-              animate={{ rotate: theme === 'dark' ? 180 : 0 }}
-              transition={{ duration: 0.3 }}
-              className="w-9 h-9 rounded-full bg-surface2 flex items-center justify-center text-text-secondary"
-            >
-              {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
-            </motion.div>
-            <div className="flex-1">
-              <div className="text-[15px] font-bold text-text-primary">Тема оформления</div>
-              <div className="text-[12px] text-text-tertiary">
-                {theme === 'light' ? 'Светлая' : 'Тёмная'}
-              </div>
-            </div>
-            <span className="text-[13px] font-semibold text-text-secondary">
-              {theme === 'light' ? '☀️' : '🌙'}
-            </span>
-          </button>
         </div>
 
         <div className="mx-[14px] mb-3 bg-surface rounded-[14px] overflow-hidden border border-border">

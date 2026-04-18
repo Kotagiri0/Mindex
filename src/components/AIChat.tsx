@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Settings, Send, Check, Trash2, ChevronDown, ChevronRight, Star, Plus, Edit2 } from 'lucide-react';
+import { ChevronLeft, Settings, Send, Check, ChevronDown, ChevronRight, Star, Plus, ArrowUp, MessageCircle, StickyNote } from 'lucide-react';
 import { Thread, Screen, Message, Task, SubTask } from '../types';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
@@ -405,26 +405,49 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   };
 
   return (
-    <div className="flex flex-col h-full bg-surface">
-      <div className="p-[12px_16px] flex items-center justify-between border-b border-border flex-shrink-0 pt-[max(12px,env(safe-area-inset-top,12px))]">
-        <button onClick={onClose} className="w-9 h-9 rounded-full bg-surface2 flex items-center justify-center text-text-secondary active:bg-border transition-colors">
-          <X size={18} />
-        </button>
-        <span className="text-[20px] font-extrabold text-accent">
-          {thread.title === 'Новая мысль' ? 'Мысль' : thread.title}
-        </span>
-        <button onClick={() => onNavigate('settings')} className="w-9 h-9 rounded-full bg-surface2 flex items-center justify-center text-text-secondary active:bg-border transition-colors">
-          <Settings size={18} />
-        </button>
+    <div className="flex flex-col h-full" style={{ background: '#f0f0f0' }}>
+      {/* Header */}
+      <div
+        className="flex items-center justify-between px-5 flex-shrink-0"
+        style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 16px))', paddingBottom: '12px' }}
+      >
+        <motion.button
+          whileTap={{ scale: 0.88 }}
+          onClick={onClose}
+          className="w-11 h-11 flex items-center justify-center"
+        >
+          <ChevronLeft size={24} strokeWidth={1.75} color="#222224" />
+        </motion.button>
+
+        {/* Chat / Note toggle */}
+        <div className="flex items-center gap-0.5 rounded-full p-1" style={{ background: '#ffffff' }}>
+          <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: '#ffffff' }}>
+            <MessageCircle size={20} strokeWidth={1.75} color="#222224" />
+          </div>
+          <button
+            className="w-10 h-10 rounded-full flex items-center justify-center"
+            onClick={() => alert('Заметки будут в ближайших обновлениях')}
+          >
+            <StickyNote size={20} strokeWidth={1.75} color="rgba(34,34,36,0.3)" />
+          </button>
+        </div>
+
+        <motion.button
+          whileTap={{ scale: 0.88 }}
+          onClick={() => onNavigate('settings')}
+          className="w-11 h-11 flex items-center justify-center"
+        >
+          <Settings size={22} strokeWidth={1.75} color="rgba(34,34,36,0.5)" />
+        </motion.button>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-[20px_16px_8px] flex flex-col gap-3 scrollbar-hide min-h-0">
         {thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls).length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-2">
-            <div className="text-[28px] font-extrabold text-text-primary text-center leading-[1.25]">
+            <div className="text-[28px] font-extrabold text-center leading-[1.25]" style={{ color: '#222224' }}>
               Привет!<br />Есть мысли?
             </div>
-            <div className="text-[15px] text-text-tertiary text-center">
+            <div className="text-[15px] text-center" style={{ color: '#888888' }}>
               Поделись тем, что на уме
             </div>
           </div>
@@ -432,8 +455,12 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls).map((m, i) => (
             <div key={i} className={`flex flex-col max-w-[85%] gap-[3px] ${m.role === 'user' ? 'self-end items-end' : 'self-start items-start'}`}>
               <div className={`p-[10px_14px] rounded-[18px] text-[15px] leading-[1.5] ${
-                m.role === 'user' ? 'bg-accent text-white rounded-br-[4px]' : 'bg-surface2 text-text-primary rounded-bl-[4px]'
-              }`}>
+                m.role === 'user' ? 'bg-accent text-white rounded-br-[4px]' : 'rounded-bl-[4px]'
+              }`}
+              style={{
+                background: m.role === 'user' ? undefined : '#f5f5f5',
+                color: m.role === 'user' ? undefined : '#222224'
+              }}>
                 {m.content}
                 
                 {m.planning_data && (
@@ -443,8 +470,8 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                         {m.planning_data.questions.map((q) => {
                           const isAnswered = m.planning_data?.answers?.[q.id];
                           if (isAnswered) return (
-                            <div key={q.id} className="bg-surface/80 p-2 rounded-lg text-[13px] text-text-primary border border-border">
-                              <div className="text-text-tertiary text-[11px] mb-1">{q.question}</div>
+                            <div key={q.id} className="p-2 rounded-lg text-[13px] border" style={{ background: '#f5f5f5', color: '#222224', borderColor: '#e0e0e0' }}>
+                              <div className="text-[11px] mb-1" style={{ color: '#666666' }}>{q.question}</div>
                               <div className="font-semibold">{m.planning_data?.answers?.[q.id]}</div>
                             </div>
                           );
@@ -457,7 +484,10 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                                   <button
                                     key={opt}
                                     onClick={() => handleAnswer(i, q.id, opt)}
-                                    className="text-left p-2 bg-surface rounded-xl text-[13px] text-text-primary active:scale-95 transition-transform border border-border hover:bg-surface2 transition-colors"
+                                    className="text-left p-2 rounded-xl text-[13px] active:scale-95 transition-transform border transition-colors"
+                                    style={{ background: '#ffffff', color: '#222224', borderColor: '#e0e0e0' }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = '#ffffff')}
                                   >
                                     {opt}
                                   </button>
@@ -465,7 +495,8 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                                 <div className="relative">
                                   <input 
                                     placeholder="Свой вариант..."
-                                    className="w-full p-2 bg-surface rounded-xl text-[13px] text-text-primary border border-border outline-none focus:border-accent focus:bg-surface2 transition-colors"
+                                    className="w-full p-2 rounded-xl text-[13px] border outline-none transition-colors"
+                                    style={{ background: '#ffffff', color: '#222224', borderColor: '#e0e0e0' }}
                                     onKeyDown={(e) => {
                                       if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
                                         handleAnswer(i, q.id, (e.target as HTMLInputElement).value.trim());
@@ -481,21 +512,22 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                     )}
 
                     {m.planning_data.status === 'plan_generated' && m.planning_data.plan && (
-                      <div className="bg-surface rounded-2xl p-4 shadow-sm border border-border flex flex-col gap-3 transition-colors">
-                        <div className="text-[16px] font-bold text-accent flex items-center gap-2">
-                          <Star size={18} fill="currentColor" />
+                        <div className="rounded-2xl p-4 shadow-sm border flex flex-col gap-3 transition-colors" style={{ background: '#f5f5f5', borderColor: '#e0e0e0' }}>
+                        <div className="text-[16px] font-bold flex items-center gap-2" style={{ color: '#222224' }}>
+                          <Star size={18} fill="#222224" />
                           {m.planning_data.plan.title}
                         </div>
                         <div className="flex flex-col gap-2">
                           {m.planning_data.plan.steps.map((step, sIdx) => (
                             <div key={sIdx} className="flex items-start gap-2 group">
-                              <div className="w-5 h-5 rounded-full bg-accent/10 text-accent flex items-center justify-center text-[10px] font-bold mt-0.5 flex-shrink-0">
+                              <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold mt-0.5 flex-shrink-0" style={{ background: '#e6e6ff', color: '#222224' }}>
                                 {sIdx + 1}
                               </div>
                               <input 
                                 value={step}
                                 onChange={(e) => updatePlanStep(i, sIdx, e.target.value)}
-                                className="flex-1 bg-transparent text-[13px] text-text-primary outline-none focus:text-accent"
+                                className="flex-1 bg-transparent text-[13px] outline-none"
+                                style={{ color: '#222224' }}
                               />
                             </div>
                           ))}
@@ -503,13 +535,15 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                         <div className="flex gap-2 mt-2">
                           <button 
                             onClick={() => handleAcceptPlan(i)}
-                            className="flex-1 h-10 bg-accent text-white rounded-xl text-[13px] font-bold active:scale-95 transition-transform"
+                            className="flex-1 h-10 text-white rounded-xl text-[13px] font-bold active:scale-95 transition-transform"
+                            style={{ background: '#222224' }}
                           >
                             Принять
                           </button>
                           <button 
                             onClick={() => handleRejectPlan(i)}
-                            className="flex-1 h-10 bg-surface2 text-text-primary rounded-xl text-[13px] font-bold active:scale-95 transition-transform"
+                            className="flex-1 h-10 rounded-xl text-[13px] font-bold active:scale-95 transition-transform border"
+                            style={{ background: '#ffffff', color: '#222224', borderColor: '#e0e0e0' }}
                           >
                             Отмена
                           </button>
@@ -526,30 +560,51 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         
         {isTyping && (
           <div className="flex flex-col max-w-[80%] gap-[3px] self-start items-start">
-            <div className="flex gap-1 p-[11px_15px] bg-surface2 rounded-[18px] rounded-bl-[4px] w-fit">
-              <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce" />
-              <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce [animation-delay:0.2s]" />
-              <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce [animation-delay:0.4s]" />
+            <div className="flex gap-1 p-[11px_15px] rounded-[18px] rounded-bl-[4px] w-fit" style={{ background: '#f5f5f5' }}>
+              <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: '#999999' }} />
+              <div className="w-1.5 h-1.5 rounded-full animate-bounce [animation-delay:0.2s]" style={{ background: '#999999' }} />
+              <div className="w-1.5 h-1.5 rounded-full animate-bounce [animation-delay:0.4s]" style={{ background: '#999999' }} />
             </div>
           </div>
         )}
       </div>
 
-      <div className="p-[10px_14px] pb-[calc(10px+env(safe-area-inset-bottom,0px))] flex items-center gap-2.5 bg-surface border-t border-border flex-shrink-0">
-        <input
-          className="flex-1 h-11 bg-surface2 border-[1.5px] border-transparent rounded-[22px] px-4 font-sans text-[15px] text-text-primary outline-none focus:border-accent focus:bg-surface transition-all placeholder:text-text-tertiary"
-          placeholder="Что думаешь? Пиши сюда"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-        />
-        <button
-          disabled={!input.trim() || isTyping}
-          onClick={handleSend}
-          className="w-11 h-11 rounded-full bg-accent flex items-center justify-center disabled:bg-border transition-colors flex-shrink-0"
-        >
-          <Send size={18} color="white" strokeWidth={2.5} />
-        </button>
+      {/* Input card */}
+      <div
+        className="px-4 flex-shrink-0"
+        style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))' }}
+      >
+        <div className="rounded-[20px] p-4" style={{ background: '#ffffff' }}>
+          <input
+            className="w-full bg-transparent outline-none"
+            style={{
+              fontFamily: "'Random Grotesque', sans-serif",
+              fontSize: '16px',
+              color: '#222224',
+            }}
+            placeholder="Есть мысли?"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
+          />
+          <div className="flex items-center justify-between mt-3">
+            <button
+              className="w-9 h-9 flex items-center justify-center"
+              onClick={() => alert('Вложения будут в ближайших обновлениях')}
+            >
+              <Plus size={22} strokeWidth={1.75} color="rgba(34,34,36,0.35)" />
+            </button>
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              disabled={!input.trim() || isTyping}
+              onClick={handleSend}
+              className="w-11 h-11 rounded-full flex items-center justify-center transition-colors"
+              style={{ background: input.trim() && !isTyping ? '#222224' : 'rgba(34,34,36,0.15)' }}
+            >
+              <ArrowUp size={20} strokeWidth={2} color="#ffffff" />
+            </motion.button>
+          </div>
+        </div>
       </div>
     </div>
   );
