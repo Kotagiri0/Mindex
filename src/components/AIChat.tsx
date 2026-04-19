@@ -159,7 +159,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           toolResults.push({
             role: "tool",
             tool_call_id: id,
-            content: JSON.stringify(result),
+            content: JSON.stringify(result ?? { status: "ok" }),
             time: ft()
           });
         }
