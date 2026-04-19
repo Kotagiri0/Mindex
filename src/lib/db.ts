@@ -140,8 +140,9 @@ export const db = {
       const data = await request<{ profile: LocalProfile | null; tasks: Task[]; threads: Thread[] }>(
         `${apiBase()}/bootstrap?userId=${encodeURIComponent(userId)}`
       );
-      storage.setTasks(userId, data.tasks || []);
-      return data.tasks || [];
+      const tasks = (data.tasks || []).filter(Boolean);
+      storage.setTasks(userId, tasks);
+      return tasks;
     } catch {
       return storage.getTasks(userId);
     }
