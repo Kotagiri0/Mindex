@@ -659,7 +659,11 @@ app.post("/api/chat", async (req, res) => {
 });
 
 const startServer = async () => {
-  await ensureAuthSchema();
+  try {
+    await ensureAuthSchema();
+  } catch (err: any) {
+    console.warn("[DB] Не удалось подключиться к БД, работаем без неё:", err?.message || err);
+  }
 
   if (process.env.NODE_ENV !== "production") {
     try {
