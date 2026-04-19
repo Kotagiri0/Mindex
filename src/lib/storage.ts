@@ -84,7 +84,7 @@ export const storage = {
 
   getTasks: (userId: string): Task[] => {
     migrateLegacyTasks(userId);
-    return readJson<Task[]>(tasksKey(userId), []);
+    return readJson<Task[]>(tasksKey(userId), []).filter(Boolean);
   },
   setTasks: (userId: string, tasks: Task[]) => writeJson(tasksKey(userId), tasks),
 

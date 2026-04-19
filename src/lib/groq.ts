@@ -139,6 +139,21 @@ export const tools: any[] = [
   }
 ];
 
+function sanitizeHistory(messages: Message[]): Message[] {
+  // Remove tool_calls assistant messages that don't have a matching tool result right after
+  const result: Message[] = [];
+  for (let i = 0; i < messages.length; i++) {
+    const m = messages[i];
+    if (m.tool_calls) {
+      const next = messages[i + 1];
+      if (!next || next.role !== 'tool') continue; // skip orphan tool_calls
+    }
+    if (m.role === 'tool' && !m.content) continue; // skip tool messages with empty content
+    result.push(m);
+  }
+  return result;
+}
+
 export async function generateResponse(messages: Message[], options: { tools?: any[], tool_choice?: string } = {}) {
   // Use an absolute URL so the browser always reaches the local API endpoint.
   const apiUrl = `${window.location.origin}/api/chat`;
@@ -157,10 +172,10 @@ export async function generateResponse(messages: Message[], options: { tools?: a
       },
       signal: controller.signal,
       body: JSON.stringify({
-        messages: messages.map(m => {
+        messages: sanitizeHistory(messages).map(m => {
           const msg: any = {
             role: m.role,
-            content: m.content
+            content: m.content ?? ''
           };
           if (m.tool_calls) msg.tool_calls = m.tool_calls;
           if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;

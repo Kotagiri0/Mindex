@@ -443,7 +443,7 @@ function DesktopChat({
             result = { status: 'success' };
           }
 
-          toolResults.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result), time: ft() });
+          toolResults.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result ?? { status: 'ok' }), time: ft() });
         }
 
         turnMsgs.push(...toolResults);
