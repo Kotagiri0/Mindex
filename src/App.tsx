@@ -16,6 +16,7 @@ import AIChat from './components/AIChat';
 import Threads from './components/Threads';
 import SettingsScreen from './components/Settings';
 import BottomNav from './components/BottomNav';
+import DesktopApp from './components/DesktopApp';
 
 const defaultSettings = { agent: true, confirm: true, notifs: true };
 
@@ -144,6 +145,28 @@ export default function App() {
       <div className="w-full h-screen flex items-center justify-center bg-bg">
         <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
       </div>
+    );
+  }
+
+  // Use DesktopApp for non-mobile web, mobile version for Telegram Mini App
+  const isTelegramWebView = typeof window !== 'undefined' && !!(window as any).Telegram;
+
+  if (!isTelegramWebView) {
+    return (
+      <DesktopApp
+        tasks={tasks}
+        setTasks={updateTasks}
+        threads={threads}
+        setThreads={updateThreads}
+        settings={settings}
+        setSettings={updateSettings}
+        screen={screen}
+        setScreen={setScreen}
+        curTh={curTh}
+        setCurTh={setCurTh}
+        startNewThread={startNewThread}
+        handleLogout={handleLogout}
+      />
     );
   }
 
