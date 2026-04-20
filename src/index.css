@@ -42,23 +42,23 @@
 
   /* Light theme (default) */
   :root, [data-theme="light"] {
-    --bg: #f5f5f7;
+    --bg: #f0f0f0;
     --surface: #ffffff;
-    --surface2: #f0f0f2;
-    --text-primary: #1a1a1a;
-    --text-secondary: #6e6e73;
-    --text-tertiary: #aeaeb2;
-    --accent: #4880FF;
-    --accent-light: #eaf0ff;
+    --surface2: #f5f5f5;
+    --text-primary: #222224;
+    --text-secondary: rgba(34,34,36,0.45);
+    --text-tertiary: rgba(34,34,36,0.28);
+    --accent: #222224;
+    --accent-light: rgba(34,34,36,0.08);
     --danger: #ff3b30;
     --success: #34c759;
-    --border: #e5e5ea;
-    --primary: #2e3b7f;
-    --primary-light: #3d4fa8;
+    --border: rgba(34,34,36,0.1);
+    --primary: #222224;
+    --primary-light: rgba(34,34,36,0.7);
     --accent-amber: #f5a623;
     --accent-amber-light: #fdebd0;
-    --glow-primary: rgba(72, 128, 255, 0.4);
-    --glow-amber: rgba(245, 166, 35, 0.3);
+    --glow-primary: rgba(34,34,36,0.0);
+    --glow-amber: rgba(34,34,36,0.0);
   }
 
   /* Dark theme */

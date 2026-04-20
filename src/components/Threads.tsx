@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Trash2, ChevronRight } from 'lucide-react';
+import { Search, ChevronRight, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Thread, Screen } from '../types';
 import { db } from '../lib/db';
@@ -12,11 +12,14 @@ interface ThreadsProps {
   onNewThread: () => void;
 }
 
-export default function Threads({ threads, setThreads, onNavigate, onOpenThread, onNewThread }: ThreadsProps) {
-  const [search, setSearch] = useState('');
+const F = "'Random Grotesque', sans-serif";
 
-  const filtered = threads.filter(t => 
-    t.title.toLowerCase().includes(search.toLowerCase()) || 
+export default function Threads({ threads, setThreads, onNavigate, onOpenThread }: ThreadsProps) {
+  const [search, setSearch] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+
+  const filtered = threads.filter(t =>
+    t.title.toLowerCase().includes(search.toLowerCase()) ||
     t.preview.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -27,71 +30,103 @@ export default function Threads({ threads, setThreads, onNavigate, onOpenThread,
   };
 
   return (
-    <div className="flex flex-col h-full bg-bg transition-theme">
-      <div className="safe-top flex-shrink-0" />
-      
-      <div className="p-[20px_20px_12px] flex-shrink-0">
-        <motion.div 
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="h-[52px] bg-surface2 rounded-full flex items-center px-6 gap-3 border border-border transition-colors"
+    <div className="flex flex-col h-full" style={{ background: '#f0f0f0' }}>
+      <div style={{ height: 'env(safe-area-inset-top, 0px)' }} />
+
+      <div className="flex items-center justify-between px-5 pt-4 pb-3">
+        <motion.button
+          whileTap={{ scale: 0.88 }}
+          onClick={() => { setShowSearch(v => !v); if (showSearch) setSearch(''); }}
+          className="w-11 h-11 flex items-center justify-center"
         >
-          <Search size={18} className="text-text-tertiary" strokeWidth={2} />
-          <input
-            className="flex-1 bg-transparent border-none outline-none font-sans text-[17px] text-text-primary placeholder:text-text-tertiary transition-colors"
-            placeholder="Поиск по твоим мыслям..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+          <Search
+            size={22}
+            strokeWidth={1.75}
+            color={showSearch ? '#222224' : 'rgba(34,34,36,0.45)'}
           />
-        </motion.div>
+        </motion.button>
+
+        <span style={{ fontFamily: F, fontSize: '13px', letterSpacing: '0.18em', color: 'rgba(34,34,36,0.5)', textTransform: 'uppercase' }}>
+          МЫСЛИ
+        </span>
+
+        <motion.button
+          whileTap={{ scale: 0.88 }}
+          onClick={() => onNavigate('settings')}
+          className="w-11 h-11 flex items-center justify-center"
+        >
+          <Settings size={22} strokeWidth={1.75} color="rgba(34,34,36,0.5)" />
+        </motion.button>
       </div>
 
-      <div className="flex-1 overflow-y-auto scrollbar-hide min-h-0">
-        <div className="px-5 pb-32 flex flex-col">
-          {filtered.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-center text-text-tertiary py-12 px-4 text-[16px]"
+      <AnimatePresence>
+        {showSearch && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 52, opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden px-5 mb-1"
+          >
+            <div
+              className="h-11 rounded-full flex items-center px-4 gap-2"
+              style={{ background: '#ffffff', border: '1px solid rgba(34,34,36,0.1)' }}
             >
-              Нет мыслей. Начни новую!
-            </motion.div>
-          ) : (
-            <AnimatePresence mode="popLayout">
-              {filtered.map((th, idx) => (
-                <motion.div
-                  key={th.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  transition={{ delay: idx * 0.05 }}
-                  onClick={() => onOpenThread(th.id)}
-                  className="group py-5 flex items-center cursor-pointer active:opacity-60 transition-opacity border-b border-border last:border-none hover:bg-surface2/50 rounded-lg px-2 -mx-2"
-                >
-                  <div className="flex-1 min-w-0 pr-4">
-                    <div className="text-[19px] font-bold text-text-primary mb-1 truncate">
-                      {th.title}
-                    </div>
-                    <div className="text-[15px] text-text-secondary leading-[1.4] line-clamp-2">
-                      {th.preview || 'Нет сообщений'}
-                    </div>
+              <Search size={15} color="rgba(34,34,36,0.3)" />
+              <input
+                autoFocus
+                className="flex-1 bg-transparent outline-none"
+                style={{ fontFamily: F, fontSize: '15px', color: '#222224' }}
+                placeholder="Поиск по мыслям..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div style={{ height: '1px', background: 'rgba(34,34,36,0.08)', margin: '0 20px' }} />
+
+      <div className="flex-1 overflow-y-auto px-5 pb-20">
+        {filtered.length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center py-12"
+            style={{ color: 'rgba(34,34,36,0.3)', fontFamily: F, fontSize: '15px' }}
+          >
+            Нет мыслей. Начни новую!
+          </motion.div>
+        ) : (
+          <AnimatePresence mode="popLayout">
+            {filtered.map((th, idx) => (
+              <motion.div
+                key={th.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ delay: idx * 0.04 }}
+                onClick={() => onOpenThread(th.id)}
+                className="flex items-center py-4 cursor-pointer active:opacity-60 transition-opacity"
+                style={{ borderBottom: '1px solid rgba(34,34,36,0.08)' }}
+              >
+                <div className="flex-1 min-w-0 pr-3">
+                  <div style={{ fontFamily: F, fontSize: '17px', fontWeight: 600, color: '#222224', marginBottom: '3px' }}>
+                    {th.title}
                   </div>
-                  <div className="flex items-center gap-3">
-                    <motion.button
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={(e) => deleteThread(e, th.id)}
-                      className="p-2 -m-2 text-text-tertiary hover:text-danger transition-colors"
-                    >
-                      <Trash2 size={18} />
-                    </motion.button>
-                    <ChevronRight size={22} className="text-text-tertiary flex-shrink-0" />
+                  <div
+                    className="line-clamp-2"
+                    style={{ fontSize: '13px', color: 'rgba(34,34,36,0.45)', lineHeight: 1.45, fontFamily: F }}
+                  >
+                    {th.preview || 'Нет сообщений'}
                   </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          )}
-        </div>
+                </div>
+                <ChevronRight size={18} strokeWidth={1.75} color="rgba(34,34,36,0.3)" />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        )}
       </div>
     </div>
   );
