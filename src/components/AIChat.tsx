@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Settings, Send, Check, Trash2, ChevronDown, ChevronRight, Star, Plus, Edit2 } from 'lucide-react';
+import { ChevronLeft, Settings, Star, Plus, ArrowUp, MessageCircle, StickyNote } from 'lucide-react';
 import { Thread, Screen, Message, Task, SubTask } from '../types';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 
 interface AIChatProps {
   threadId: string | null;
@@ -38,12 +38,12 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
 
   const handleSend = async () => {
     if (!input.trim() || !threadId) return;
-    
+
     const text = input.trim();
     setInput('');
-    
+
     const userMsg: Message = { role: 'user', content: text, time: ft() };
-    
+
     let updatedThread: Thread | undefined;
 
     setThreads(prev => prev.map(t => {
@@ -57,29 +57,25 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       }
       return t;
     }));
-    
+
     if (updatedThread) {
       db.saveThread(updatedThread);
     }
-    
+
     setIsTyping(true);
 
     try {
-      // Get latest messages for the thread
       const currentThread = threads.find(t => t.id === threadId);
       if (!currentThread) return;
-      
-      // Build conversation history
-      let conversationHistory: Message[] = [...currentThread.messages, userMsg];
 
+      let conversationHistory: Message[] = [...currentThread.messages, userMsg];
       const turnMessages: Message[] = [];
 
       let response = await generateResponse(conversationHistory);
-      
-      // Handle function calls
+
       while (response.tool_calls) {
         const toolResults: Message[] = [];
-        
+
         const assistantToolCallMsg: Message = {
           role: 'assistant',
           content: response.content || '',
@@ -93,11 +89,11 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           const args = JSON.parse(call.function.arguments);
           const id = call.id;
           let result;
-          
+
           if (name === 'get_tasks') {
             const date = args.date;
             const filtered = date ? tasks.filter(t => t.date === date) : tasks;
-            result = filtered.length > 0 ? filtered : "Задач не найдено.";
+            result = filtered.length > 0 ? filtered : 'Задач не найдено.';
           } else if (name === 'add_task') {
             const { name: taskName, time, date } = args;
             const newTask: Task = {
@@ -110,7 +106,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             };
             setTasks(prev => [...prev, newTask]);
             db.saveTask(newTask);
-            result = { status: "success", task: newTask };
+            result = { status: 'success', task: newTask };
           } else if (name === 'start_planning') {
             const { questions } = args;
             const planningMsg: Message = {
@@ -131,14 +127,14 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
               return t;
             }));
             setIsTyping(false);
-            return; // Stop the standard flow, wait for user input
+            return;
           } else if (name === 'update_task') {
             const { id: taskId, done, name: taskName, time, date } = args;
             setTasks(prev => prev.map(t => {
               if (t.id === taskId) {
-                const updated = { 
-                  ...t, 
-                  done: done !== undefined ? done : t.done, 
+                const updated = {
+                  ...t,
+                  done: done !== undefined ? done : t.done,
                   name: taskName || t.name,
                   time: time !== undefined ? time : t.time,
                   date: date !== undefined ? date : t.date
@@ -148,45 +144,42 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
               }
               return t;
             }));
-            result = { status: "success" };
+            result = { status: 'success' };
           } else if (name === 'delete_task') {
             const { id: taskId } = args;
             setTasks(prev => prev.filter(t => t.id !== taskId));
             db.deleteTask(taskId);
-            result = { status: "success" };
+            result = { status: 'success' };
           }
-          
+
           toolResults.push({
-            role: "tool",
+            role: 'tool',
             tool_call_id: id,
             content: JSON.stringify(result),
             time: ft()
           });
         }
-        
+
         turnMessages.push(...toolResults);
 
-        // Add the assistant message with tool calls and the tool results to history
         conversationHistory = [
           ...conversationHistory,
           assistantToolCallMsg,
           ...toolResults
         ];
 
-        // Get next response from model
         response = await generateResponse(conversationHistory);
       }
 
       const assistantMsg: Message = { role: 'assistant', content: response.content || 'Готово!', time: ft() };
-      
+
       setThreads(prev => prev.map(t => {
         if (t.id === threadId) {
-          // Ensure user message is in history (fix for race conditions in some environments)
           const hasUserMsg = t.messages.some(
             m => m.role === 'user' && m.content === userMsg.content && m.time === userMsg.time
           );
           const baseMessages = hasUserMsg ? t.messages : [...t.messages, userMsg];
-          
+
           const updated = {
             ...t,
             messages: [...baseMessages, ...turnMessages, assistantMsg],
@@ -199,13 +192,13 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       }));
     } catch (err: any) {
       console.error('AI Error:', err);
-      const errorMsg: Message = { 
-        role: 'assistant', 
-        content: `Ошибка: ${err.message || 'Не удалось связаться с ИИ. Проверь интернет или настройки.'}`, 
-        time: ft() 
+      const errorMsg: Message = {
+        role: 'assistant',
+        content: `Ошибка: ${err.message || 'Не удалось связаться с ИИ. Проверь интернет или настройки.'}`,
+        time: ft()
       };
       if (err.name === 'TypeError' && err.message === 'Failed to fetch') {
-        errorMsg.content = "Ошибка сети: Не удалось отправить запрос (возможно, заблокировано WebView или нет интернета).";
+        errorMsg.content = 'Ошибка сети: Не удалось отправить запрос (возможно, заблокировано WebView или нет интернета).';
       }
       setThreads(prev => prev.map(t => {
         if (t.id === threadId) {
@@ -213,7 +206,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             m => m.role === 'user' && m.content === userMsg.content && m.time === userMsg.time
           );
           const baseMessages = hasUserMsg ? t.messages : [...t.messages, userMsg];
-          
+
           const updated = { ...t, messages: [...baseMessages, errorMsg] };
           db.saveThread(updated);
           return updated;
@@ -227,7 +220,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
 
   const handleAnswer = async (msgIndex: number, questionId: string, answer: string) => {
     if (!threadId) return;
-    
+
     setThreads(prev => prev.map(t => {
       if (t.id === threadId) {
         const newMessages = [...t.messages];
@@ -237,15 +230,13 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             ...msg.planning_data,
             answers: { ...msg.planning_data.answers, [questionId]: answer }
           };
-          
-          // If all questions are answered, move to plan generation
-          const allAnswered = msg.planning_data.questions.every(q => 
+
+          const allAnswered = msg.planning_data.questions.every(q =>
             msg.planning_data?.answers?.[q.id] || q.id === questionId
           );
-          
+
           if (allAnswered) {
             msg.planning_data.status = 'plan_generated';
-            // Trigger AI to generate plan based on answers
             setTimeout(() => generatePlanFromAnswers(t, msg.planning_data!), 100);
           }
         }
@@ -267,12 +258,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           return `Вопрос: ${q?.question}\nОтвет: ${ans}`;
         }).join('\n\n');
 
-      const prompt = `Пользователь ответил на уточняющие вопросы:\n\n${answersText}\n\nНа основе этих ответов составь пошаговый план действий (to-do list).
-Отвечай СТРОГО в формате JSON:
-{
-  "title": "Название плана",
-  "steps": ["шаг 1", "шаг 2", ...]
-}`;
+      const prompt = `Пользователь ответил на уточняющие вопросы:\n\n${answersText}\n\nНа основе этих ответов составь пошаговый план действий (to-do list).\nОтвечай СТРОГО в формате JSON:\n{\n  "title": "Название плана",\n  "steps": ["шаг 1", "шаг 2", ...]\n}`;
 
       const response = await generateResponse([
         ...t.messages,
@@ -283,7 +269,6 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         throw new Error('AI вернул пустой ответ при генерации плана.');
       }
 
-      // Extract JSON from response content (in case it's wrapped in markdown)
       let jsonContent = response.content.trim();
       if (jsonContent.includes('```json')) {
         jsonContent = jsonContent.split('```json')[1].split('```')[0].trim();
@@ -292,7 +277,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       }
 
       const plan = JSON.parse(jsonContent);
-      
+
       setThreads(prev => prev.map(th => {
         if (th.id === threadId) {
           const newMessages = [...th.messages];
@@ -324,7 +309,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     if (!msg.planning_data?.plan) return;
 
     const { title, steps } = msg.planning_data.plan;
-    const subtasks: SubTask[] = steps.map(s => ({
+    const subtasks: SubTask[] = steps.map((s: string) => ({
       id: uuid(),
       name: s,
       done: false
@@ -352,11 +337,14 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           m.planning_data.status = 'accepted';
         }
         newMessages[msgIndex] = m;
-        const updated = { ...t, messages: [...newMessages, { 
-          role: 'assistant' as const, 
-          content: 'Отлично! План добавлен в календарь. Ты найдешь его в списке задач со звездочкой.', 
-          time: ft() 
-        }] };
+        const updated = {
+          ...t,
+          messages: [...newMessages, {
+            role: 'assistant' as const,
+            content: 'Отлично! План добавлен в календарь. Ты найдешь его в списке задач со звездочкой.',
+            time: ft()
+          }]
+        };
         db.saveThread(updated);
         return updated;
       }
@@ -373,11 +361,14 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           m.planning_data.status = 'rejected';
         }
         newMessages[msgIndex] = m;
-        const updated = { ...t, messages: [...newMessages, { 
-          role: 'assistant' as const, 
-          content: 'Хорошо, давай попробуем по-другому или просто продолжим общение.', 
-          time: ft() 
-        }] };
+        const updated = {
+          ...t,
+          messages: [...newMessages, {
+            role: 'assistant' as const,
+            content: 'Хорошо, давай попробуем по-другому или просто продолжим общение.',
+            time: ft()
+          }]
+        };
         db.saveThread(updated);
         return updated;
       }
@@ -405,23 +396,44 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   };
 
   return (
-    <div className="flex flex-col h-full bg-surface">
-      <div className="p-[12px_16px] flex items-center justify-between border-b border-border flex-shrink-0 pt-[max(12px,env(safe-area-inset-top,12px))]">
-        <button onClick={onClose} className="w-9 h-9 rounded-full bg-surface2 flex items-center justify-center text-text-secondary active:bg-border transition-colors">
-          <X size={18} />
-        </button>
-        <span className="text-[20px] font-extrabold text-accent">
-          {thread.title === 'Новая мысль' ? 'Мысль' : thread.title}
-        </span>
-        <button onClick={() => onNavigate('settings')} className="w-9 h-9 rounded-full bg-surface2 flex items-center justify-center text-text-secondary active:bg-border transition-colors">
-          <Settings size={18} />
-        </button>
+    <div className="flex flex-col h-full" style={{ background: '#f0f0f0' }}>
+      <div
+        className="flex items-center justify-between px-5 flex-shrink-0"
+        style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 16px))', paddingBottom: '12px' }}
+      >
+        <motion.button
+          whileTap={{ scale: 0.88 }}
+          onClick={onClose}
+          className="w-11 h-11 flex items-center justify-center"
+        >
+          <ChevronLeft size={24} strokeWidth={1.75} color="#222224" />
+        </motion.button>
+
+        <div className="flex items-center gap-0.5 rounded-full p-1" style={{ background: '#ffffff' }}>
+          <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: '#ffffff' }}>
+            <MessageCircle size={20} strokeWidth={1.75} color="#222224" />
+          </div>
+          <button
+            className="w-10 h-10 rounded-full flex items-center justify-center"
+            onClick={() => alert('Заметки будут в ближайших обновлениях')}
+          >
+            <StickyNote size={20} strokeWidth={1.75} color="rgba(34,34,36,0.3)" />
+          </button>
+        </div>
+
+        <motion.button
+          whileTap={{ scale: 0.88 }}
+          onClick={() => onNavigate('settings')}
+          className="w-11 h-11 flex items-center justify-center"
+        >
+          <Settings size={22} strokeWidth={1.75} color="rgba(34,34,36,0.5)" />
+        </motion.button>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-[20px_16px_8px] flex flex-col gap-3 scrollbar-hide min-h-0">
         {thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls).length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-2">
-            <div className="text-[28px] font-extrabold text-text-primary text-center leading-[1.25]">
+            <div className="text-[28px] font-extrabold text-center leading-[1.25]" style={{ color: '#222224' }}>
               Привет!<br />Есть мысли?
             </div>
             <div className="text-[15px] text-text-tertiary text-center">
@@ -435,7 +447,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                 m.role === 'user' ? 'bg-accent text-white rounded-br-[4px]' : 'bg-surface2 text-text-primary rounded-bl-[4px]'
               }`}>
                 {m.content}
-                
+
                 {m.planning_data && (
                   <div className="mt-3 flex flex-col gap-3">
                     {m.planning_data.status === 'questionnaire' && (
@@ -448,7 +460,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                               <div className="font-semibold">{m.planning_data?.answers?.[q.id]}</div>
                             </div>
                           );
-                          
+
                           return (
                             <div key={q.id} className="flex flex-col gap-2">
                               <div className="text-[14px] font-bold text-text-primary">{q.question}</div>
@@ -463,7 +475,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                                   </button>
                                 ))}
                                 <div className="relative">
-                                  <input 
+                                  <input
                                     placeholder="Свой вариант..."
                                     className="w-full p-2 bg-surface rounded-xl text-[13px] text-text-primary border border-border outline-none focus:border-accent focus:bg-surface2 transition-colors"
                                     onKeyDown={(e) => {
@@ -492,7 +504,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                               <div className="w-5 h-5 rounded-full bg-accent/10 text-accent flex items-center justify-center text-[10px] font-bold mt-0.5 flex-shrink-0">
                                 {sIdx + 1}
                               </div>
-                              <input 
+                              <input
                                 value={step}
                                 onChange={(e) => updatePlanStep(i, sIdx, e.target.value)}
                                 className="flex-1 bg-transparent text-[13px] text-text-primary outline-none focus:text-accent"
@@ -501,13 +513,13 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                           ))}
                         </div>
                         <div className="flex gap-2 mt-2">
-                          <button 
+                          <button
                             onClick={() => handleAcceptPlan(i)}
                             className="flex-1 h-10 bg-accent text-white rounded-xl text-[13px] font-bold active:scale-95 transition-transform"
                           >
                             Принять
                           </button>
-                          <button 
+                          <button
                             onClick={() => handleRejectPlan(i)}
                             className="flex-1 h-10 bg-surface2 text-text-primary rounded-xl text-[13px] font-bold active:scale-95 transition-transform"
                           >
@@ -523,7 +535,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             </div>
           ))
         )}
-        
+
         {isTyping && (
           <div className="flex flex-col max-w-[80%] gap-[3px] self-start items-start">
             <div className="flex gap-1 p-[11px_15px] bg-surface2 rounded-[18px] rounded-bl-[4px] w-fit">
@@ -535,21 +547,41 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         )}
       </div>
 
-      <div className="p-[10px_14px] pb-[calc(10px+env(safe-area-inset-bottom,0px))] flex items-center gap-2.5 bg-surface border-t border-border flex-shrink-0">
-        <input
-          className="flex-1 h-11 bg-surface2 border-[1.5px] border-transparent rounded-[22px] px-4 font-sans text-[15px] text-text-primary outline-none focus:border-accent focus:bg-surface transition-all placeholder:text-text-tertiary"
-          placeholder="Что думаешь? Пиши сюда"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-        />
-        <button
-          disabled={!input.trim() || isTyping}
-          onClick={handleSend}
-          className="w-11 h-11 rounded-full bg-accent flex items-center justify-center disabled:bg-border transition-colors flex-shrink-0"
-        >
-          <Send size={18} color="white" strokeWidth={2.5} />
-        </button>
+      <div
+        className="px-4 flex-shrink-0"
+        style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))' }}
+      >
+        <div className="rounded-[20px] p-4" style={{ background: '#ffffff' }}>
+          <input
+            className="w-full bg-transparent outline-none"
+            style={{
+              fontFamily: "'Random Grotesque', sans-serif",
+              fontSize: '16px',
+              color: '#222224',
+            }}
+            placeholder="Есть мысли?"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
+          />
+          <div className="flex items-center justify-between mt-3">
+            <button
+              className="w-9 h-9 flex items-center justify-center"
+              onClick={() => alert('Вложения будут в ближайших обновлениях')}
+            >
+              <Plus size={22} strokeWidth={1.75} color="rgba(34,34,36,0.35)" />
+            </button>
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              disabled={!input.trim() || isTyping}
+              onClick={handleSend}
+              className="w-11 h-11 rounded-full flex items-center justify-center transition-colors"
+              style={{ background: input.trim() && !isTyping ? '#222224' : 'rgba(34,34,36,0.15)' }}
+            >
+              <ArrowUp size={20} strokeWidth={2} color="#ffffff" />
+            </motion.button>
+          </div>
+        </div>
       </div>
     </div>
   );
