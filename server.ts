@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import crypto from "crypto";
 import { Pool } from "pg";
+import multer from "multer";
 import {
   Counter,
   Gauge,
@@ -116,6 +117,12 @@ app.use("/api/*", (req, res, next) => {
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+
+// Multer configuration for voice uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB limit
+});
 
 app.get('/api/config', (_req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -621,6 +628,32 @@ app.delete("/api/data/thread/:id", async (req, res) => {
 
 app.get("/api/chat", (req, res) => {
   res.json({ status: "ok", message: "Local Chat API is running" });
+});
+
+app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Аудиофайл не загружен." });
+    }
+
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: "GROQ_API_KEY не найден в .env" });
+    }
+
+    const groq = new Groq({ apiKey });
+
+    const transcription = await groq.audio.transcriptions.create({
+      file: new File([req.file.buffer], "audio.webm", { type: "audio/webm" }),
+      model: "whisper-large-v3",
+      language: "ru",
+    });
+
+    return res.status(200).json({ text: transcription.text });
+  } catch (error: any) {
+    console.error("[VOICE] Transcription error:", error?.message || error);
+    res.status(500).json({ error: error?.message || "Не удалось транскрибировать аудио." });
+  }
 });
 
 app.post("/api/chat", async (req, res) => {

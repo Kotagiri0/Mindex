@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, Settings, Star, Plus, ArrowUp, MessageCircle, StickyNote } from 'lucide-react';
+import { ChevronLeft, Settings, Star, Plus, ArrowUp, MessageCircle, StickyNote, Mic, Loader } from 'lucide-react';
 import { Thread, Screen, Message, Task, SubTask } from '../types';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
 import { motion } from 'motion/react';
+import { useVoiceInput } from '../lib/useVoiceInput';
 
 interface AIChatProps {
   threadId: string | null;
@@ -20,6 +21,12 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const { state: voiceState, error: voiceError, startRecording, stopRecording } = useVoiceInput(
+    (text) => {
+      setInput(prev => prev + (prev ? ' ' : '') + text);
+    }
+  );
 
   const thread = threads.find(t => t.id === threadId);
 
@@ -571,15 +578,41 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             >
               <Plus size={22} strokeWidth={1.75} color="rgba(34,34,36,0.35)" />
             </button>
-            <motion.button
-              whileTap={{ scale: 0.9 }}
-              disabled={!input.trim() || isTyping}
-              onClick={handleSend}
-              className="w-11 h-11 rounded-full flex items-center justify-center transition-colors"
-              style={{ background: input.trim() && !isTyping ? '#222224' : 'rgba(34,34,36,0.15)' }}
-            >
-              <ArrowUp size={20} strokeWidth={2} color="#ffffff" />
-            </motion.button>
+            <div className="flex items-center gap-2">
+              <motion.button
+                onMouseDown={startRecording}
+                onMouseUp={stopRecording}
+                onTouchStart={startRecording}
+                onTouchEnd={stopRecording}
+                className={`w-11 h-11 rounded-full flex items-center justify-center transition-all flex-shrink-0 ${
+                  voiceState === 'recording'
+                    ? 'bg-red-500 animate-pulse'
+                    : voiceState === 'processing'
+                    ? 'bg-accent'
+                    : 'bg-accent/10 hover:bg-accent/20'
+                }`}
+                title={voiceState === 'recording' ? 'Отпустите для завершения' : 'Нажмите для записи'}
+              >
+                {voiceState === 'processing' ? (
+                  <Loader size={20} strokeWidth={2} color="#ffffff" className="animate-spin" />
+                ) : (
+                  <Mic
+                    size={20}
+                    strokeWidth={2}
+                    color={voiceState === 'recording' ? '#ffffff' : '#222224'}
+                  />
+                )}
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                disabled={!input.trim() || isTyping}
+                onClick={handleSend}
+                className="w-11 h-11 rounded-full flex items-center justify-center transition-colors"
+                style={{ background: input.trim() && !isTyping ? '#222224' : 'rgba(34,34,36,0.15)' }}
+              >
+                <ArrowUp size={20} strokeWidth={2} color="#ffffff" />
+              </motion.button>
+            </div>
           </div>
         </div>
       </div>
