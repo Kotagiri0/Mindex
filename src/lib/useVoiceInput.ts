@@ -148,7 +148,7 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
           };
 
           mediaRecorderRef.current = mediaRecorder;
-          mediaRecorder.start();
+          mediaRecorder.start(100); // собирать chunks каждые 100мс
         } catch (err) {
           console.warn('[VOICE] MediaRecorder failed, falling back to SpeechRecognition:', err);
           startFallbackRecognition();
