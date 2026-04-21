@@ -33,7 +33,6 @@ export default function Threads({ threads, setThreads, onNavigate, onOpenThread 
     <div className="flex flex-col h-full" style={{ background: '#f0f0f0' }}>
       <div style={{ height: 'env(safe-area-inset-top, 0px)' }} />
 
-      {/* Header */}
       <div className="flex items-center justify-between px-5 pt-4 pb-3">
         <motion.button
           whileTap={{ scale: 0.88 }}
@@ -60,7 +59,6 @@ export default function Threads({ threads, setThreads, onNavigate, onOpenThread 
         </motion.button>
       </div>
 
-      {/* Search bar (collapsible) */}
       <AnimatePresence>
         {showSearch && (
           <motion.div
@@ -90,7 +88,6 @@ export default function Threads({ threads, setThreads, onNavigate, onOpenThread 
 
       <div style={{ height: '1px', background: 'rgba(34,34,36,0.08)', margin: '0 20px' }} />
 
-      {/* Thread list */}
       <div className="flex-1 overflow-y-auto px-5 pb-20">
         {filtered.length === 0 ? (
           <motion.div

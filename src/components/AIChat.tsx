@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, Settings, Send, Check, ChevronDown, ChevronRight, Star, Plus, ArrowUp, MessageCircle, StickyNote } from 'lucide-react';
+import { ChevronLeft, Settings, Star, Plus, ArrowUp, MessageCircle, StickyNote } from 'lucide-react';
 import { Thread, Screen, Message, Task, SubTask } from '../types';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 
 interface AIChatProps {
   threadId: string | null;
@@ -38,12 +38,12 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
 
   const handleSend = async () => {
     if (!input.trim() || !threadId) return;
-    
+
     const text = input.trim();
     setInput('');
-    
+
     const userMsg: Message = { role: 'user', content: text, time: ft() };
-    
+
     let updatedThread: Thread | undefined;
 
     setThreads(prev => prev.map(t => {
@@ -57,29 +57,25 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       }
       return t;
     }));
-    
+
     if (updatedThread) {
       db.saveThread(updatedThread);
     }
-    
+
     setIsTyping(true);
 
     try {
-      // Get latest messages for the thread
       const currentThread = threads.find(t => t.id === threadId);
       if (!currentThread) return;
-      
-      // Build conversation history
-      let conversationHistory: Message[] = [...currentThread.messages, userMsg];
 
+      let conversationHistory: Message[] = [...currentThread.messages, userMsg];
       const turnMessages: Message[] = [];
 
       let response = await generateResponse(conversationHistory);
-      
-      // Handle function calls
+
       while (response.tool_calls) {
         const toolResults: Message[] = [];
-        
+
         const assistantToolCallMsg: Message = {
           role: 'assistant',
           content: response.content || '',
@@ -93,11 +89,11 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           const args = JSON.parse(call.function.arguments);
           const id = call.id;
           let result;
-          
+
           if (name === 'get_tasks') {
             const date = args.date;
             const filtered = date ? tasks.filter(t => t.date === date) : tasks;
-            result = filtered.length > 0 ? filtered : "Задач не найдено.";
+            result = filtered.length > 0 ? filtered : 'Задач не найдено.';
           } else if (name === 'add_task') {
             const { name: taskName, time, date } = args;
             const newTask: Task = {
@@ -110,7 +106,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             };
             setTasks(prev => [...prev, newTask]);
             db.saveTask(newTask);
-            result = { status: "success", task: newTask };
+            result = { status: 'success', task: newTask };
           } else if (name === 'start_planning') {
             const { questions } = args;
             const planningMsg: Message = {
@@ -131,14 +127,14 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
               return t;
             }));
             setIsTyping(false);
-            return; // Stop the standard flow, wait for user input
+            return;
           } else if (name === 'update_task') {
             const { id: taskId, done, name: taskName, time, date } = args;
             setTasks(prev => prev.map(t => {
               if (t.id === taskId) {
-                const updated = { 
-                  ...t, 
-                  done: done !== undefined ? done : t.done, 
+                const updated = {
+                  ...t,
+                  done: done !== undefined ? done : t.done,
                   name: taskName || t.name,
                   time: time !== undefined ? time : t.time,
                   date: date !== undefined ? date : t.date
@@ -148,45 +144,42 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
               }
               return t;
             }));
-            result = { status: "success" };
+            result = { status: 'success' };
           } else if (name === 'delete_task') {
             const { id: taskId } = args;
             setTasks(prev => prev.filter(t => t.id !== taskId));
             db.deleteTask(taskId);
-            result = { status: "success" };
+            result = { status: 'success' };
           }
-          
+
           toolResults.push({
-            role: "tool",
+            role: 'tool',
             tool_call_id: id,
             content: JSON.stringify(result),
             time: ft()
           });
         }
-        
+
         turnMessages.push(...toolResults);
 
-        // Add the assistant message with tool calls and the tool results to history
         conversationHistory = [
           ...conversationHistory,
           assistantToolCallMsg,
           ...toolResults
         ];
 
-        // Get next response from model
         response = await generateResponse(conversationHistory);
       }
 
       const assistantMsg: Message = { role: 'assistant', content: response.content || 'Готово!', time: ft() };
-      
+
       setThreads(prev => prev.map(t => {
         if (t.id === threadId) {
-          // Ensure user message is in history (fix for race conditions in some environments)
           const hasUserMsg = t.messages.some(
             m => m.role === 'user' && m.content === userMsg.content && m.time === userMsg.time
           );
           const baseMessages = hasUserMsg ? t.messages : [...t.messages, userMsg];
-          
+
           const updated = {
             ...t,
             messages: [...baseMessages, ...turnMessages, assistantMsg],
@@ -199,13 +192,13 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       }));
     } catch (err: any) {
       console.error('AI Error:', err);
-      const errorMsg: Message = { 
-        role: 'assistant', 
-        content: `Ошибка: ${err.message || 'Не удалось связаться с ИИ. Проверь интернет или настройки.'}`, 
-        time: ft() 
+      const errorMsg: Message = {
+        role: 'assistant',
+        content: `Ошибка: ${err.message || 'Не удалось связаться с ИИ. Проверь интернет или настройки.'}`,
+        time: ft()
       };
       if (err.name === 'TypeError' && err.message === 'Failed to fetch') {
-        errorMsg.content = "Ошибка сети: Не удалось отправить запрос (возможно, заблокировано WebView или нет интернета).";
+        errorMsg.content = 'Ошибка сети: Не удалось отправить запрос (возможно, заблокировано WebView или нет интернета).';
       }
       setThreads(prev => prev.map(t => {
         if (t.id === threadId) {
@@ -213,7 +206,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             m => m.role === 'user' && m.content === userMsg.content && m.time === userMsg.time
           );
           const baseMessages = hasUserMsg ? t.messages : [...t.messages, userMsg];
-          
+
           const updated = { ...t, messages: [...baseMessages, errorMsg] };
           db.saveThread(updated);
           return updated;
@@ -227,7 +220,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
 
   const handleAnswer = async (msgIndex: number, questionId: string, answer: string) => {
     if (!threadId) return;
-    
+
     setThreads(prev => prev.map(t => {
       if (t.id === threadId) {
         const newMessages = [...t.messages];
@@ -237,15 +230,13 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             ...msg.planning_data,
             answers: { ...msg.planning_data.answers, [questionId]: answer }
           };
-          
-          // If all questions are answered, move to plan generation
-          const allAnswered = msg.planning_data.questions.every(q => 
+
+          const allAnswered = msg.planning_data.questions.every(q =>
             msg.planning_data?.answers?.[q.id] || q.id === questionId
           );
-          
+
           if (allAnswered) {
             msg.planning_data.status = 'plan_generated';
-            // Trigger AI to generate plan based on answers
             setTimeout(() => generatePlanFromAnswers(t, msg.planning_data!), 100);
           }
         }
@@ -267,12 +258,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           return `Вопрос: ${q?.question}\nОтвет: ${ans}`;
         }).join('\n\n');
 
-      const prompt = `Пользователь ответил на уточняющие вопросы:\n\n${answersText}\n\nНа основе этих ответов составь пошаговый план действий (to-do list).
-Отвечай СТРОГО в формате JSON:
-{
-  "title": "Название плана",
-  "steps": ["шаг 1", "шаг 2", ...]
-}`;
+      const prompt = `Пользователь ответил на уточняющие вопросы:\n\n${answersText}\n\nНа основе этих ответов составь пошаговый план действий (to-do list).\nОтвечай СТРОГО в формате JSON:\n{\n  "title": "Название плана",\n  "steps": ["шаг 1", "шаг 2", ...]\n}`;
 
       const response = await generateResponse([
         ...t.messages,
@@ -283,7 +269,6 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         throw new Error('AI вернул пустой ответ при генерации плана.');
       }
 
-      // Extract JSON from response content (in case it's wrapped in markdown)
       let jsonContent = response.content.trim();
       if (jsonContent.includes('```json')) {
         jsonContent = jsonContent.split('```json')[1].split('```')[0].trim();
@@ -292,7 +277,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       }
 
       const plan = JSON.parse(jsonContent);
-      
+
       setThreads(prev => prev.map(th => {
         if (th.id === threadId) {
           const newMessages = [...th.messages];
@@ -324,7 +309,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     if (!msg.planning_data?.plan) return;
 
     const { title, steps } = msg.planning_data.plan;
-    const subtasks: SubTask[] = steps.map(s => ({
+    const subtasks: SubTask[] = steps.map((s: string) => ({
       id: uuid(),
       name: s,
       done: false
@@ -352,11 +337,14 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           m.planning_data.status = 'accepted';
         }
         newMessages[msgIndex] = m;
-        const updated = { ...t, messages: [...newMessages, { 
-          role: 'assistant' as const, 
-          content: 'Отлично! План добавлен в календарь. Ты найдешь его в списке задач со звездочкой.', 
-          time: ft() 
-        }] };
+        const updated = {
+          ...t,
+          messages: [...newMessages, {
+            role: 'assistant' as const,
+            content: 'Отлично! План добавлен в календарь. Ты найдешь его в списке задач со звездочкой.',
+            time: ft()
+          }]
+        };
         db.saveThread(updated);
         return updated;
       }
@@ -373,11 +361,14 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           m.planning_data.status = 'rejected';
         }
         newMessages[msgIndex] = m;
-        const updated = { ...t, messages: [...newMessages, { 
-          role: 'assistant' as const, 
-          content: 'Хорошо, давай попробуем по-другому или просто продолжим общение.', 
-          time: ft() 
-        }] };
+        const updated = {
+          ...t,
+          messages: [...newMessages, {
+            role: 'assistant' as const,
+            content: 'Хорошо, давай попробуем по-другому или просто продолжим общение.',
+            time: ft()
+          }]
+        };
         db.saveThread(updated);
         return updated;
       }
@@ -406,7 +397,6 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
 
   return (
     <div className="flex flex-col h-full" style={{ background: '#f0f0f0' }}>
-      {/* Header */}
       <div
         className="flex items-center justify-between px-5 flex-shrink-0"
         style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 16px))', paddingBottom: '12px' }}
@@ -419,7 +409,6 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           <ChevronLeft size={24} strokeWidth={1.75} color="#222224" />
         </motion.button>
 
-        {/* Chat / Note toggle */}
         <div className="flex items-center gap-0.5 rounded-full p-1" style={{ background: '#ffffff' }}>
           <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: '#ffffff' }}>
             <MessageCircle size={20} strokeWidth={1.75} color="#222224" />
@@ -447,7 +436,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             <div className="text-[28px] font-extrabold text-center leading-[1.25]" style={{ color: '#222224' }}>
               Привет!<br />Есть мысли?
             </div>
-            <div className="text-[15px] text-center" style={{ color: '#888888' }}>
+            <div className="text-[15px] text-text-tertiary text-center">
               Поделись тем, что на уме
             </div>
           </div>
@@ -455,14 +444,10 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls).map((m, i) => (
             <div key={i} className={`flex flex-col max-w-[85%] gap-[3px] ${m.role === 'user' ? 'self-end items-end' : 'self-start items-start'}`}>
               <div className={`p-[10px_14px] rounded-[18px] text-[15px] leading-[1.5] ${
-                m.role === 'user' ? 'bg-accent text-white rounded-br-[4px]' : 'rounded-bl-[4px]'
-              }`}
-              style={{
-                background: m.role === 'user' ? undefined : '#f5f5f5',
-                color: m.role === 'user' ? undefined : '#222224'
-              }}>
+                m.role === 'user' ? 'bg-accent text-white rounded-br-[4px]' : 'bg-surface2 text-text-primary rounded-bl-[4px]'
+              }`}>
                 {m.content}
-                
+
                 {m.planning_data && (
                   <div className="mt-3 flex flex-col gap-3">
                     {m.planning_data.status === 'questionnaire' && (
@@ -470,12 +455,12 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                         {m.planning_data.questions.map((q) => {
                           const isAnswered = m.planning_data?.answers?.[q.id];
                           if (isAnswered) return (
-                            <div key={q.id} className="p-2 rounded-lg text-[13px] border" style={{ background: '#f5f5f5', color: '#222224', borderColor: '#e0e0e0' }}>
-                              <div className="text-[11px] mb-1" style={{ color: '#666666' }}>{q.question}</div>
+                            <div key={q.id} className="bg-surface/80 p-2 rounded-lg text-[13px] text-text-primary border border-border">
+                              <div className="text-text-tertiary text-[11px] mb-1">{q.question}</div>
                               <div className="font-semibold">{m.planning_data?.answers?.[q.id]}</div>
                             </div>
                           );
-                          
+
                           return (
                             <div key={q.id} className="flex flex-col gap-2">
                               <div className="text-[14px] font-bold text-text-primary">{q.question}</div>
@@ -484,19 +469,15 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                                   <button
                                     key={opt}
                                     onClick={() => handleAnswer(i, q.id, opt)}
-                                    className="text-left p-2 rounded-xl text-[13px] active:scale-95 transition-transform border transition-colors"
-                                    style={{ background: '#ffffff', color: '#222224', borderColor: '#e0e0e0' }}
-                                    onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
-                                    onMouseLeave={e => (e.currentTarget.style.background = '#ffffff')}
+                                    className="text-left p-2 bg-surface rounded-xl text-[13px] text-text-primary active:scale-95 transition-transform border border-border hover:bg-surface2 transition-colors"
                                   >
                                     {opt}
                                   </button>
                                 ))}
                                 <div className="relative">
-                                  <input 
+                                  <input
                                     placeholder="Свой вариант..."
-                                    className="w-full p-2 rounded-xl text-[13px] border outline-none transition-colors"
-                                    style={{ background: '#ffffff', color: '#222224', borderColor: '#e0e0e0' }}
+                                    className="w-full p-2 bg-surface rounded-xl text-[13px] text-text-primary border border-border outline-none focus:border-accent focus:bg-surface2 transition-colors"
                                     onKeyDown={(e) => {
                                       if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
                                         handleAnswer(i, q.id, (e.target as HTMLInputElement).value.trim());
@@ -512,38 +493,35 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                     )}
 
                     {m.planning_data.status === 'plan_generated' && m.planning_data.plan && (
-                        <div className="rounded-2xl p-4 shadow-sm border flex flex-col gap-3 transition-colors" style={{ background: '#f5f5f5', borderColor: '#e0e0e0' }}>
-                        <div className="text-[16px] font-bold flex items-center gap-2" style={{ color: '#222224' }}>
-                          <Star size={18} fill="#222224" />
+                      <div className="bg-surface rounded-2xl p-4 shadow-sm border border-border flex flex-col gap-3 transition-colors">
+                        <div className="text-[16px] font-bold text-accent flex items-center gap-2">
+                          <Star size={18} fill="currentColor" />
                           {m.planning_data.plan.title}
                         </div>
                         <div className="flex flex-col gap-2">
                           {m.planning_data.plan.steps.map((step, sIdx) => (
                             <div key={sIdx} className="flex items-start gap-2 group">
-                              <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold mt-0.5 flex-shrink-0" style={{ background: '#e6e6ff', color: '#222224' }}>
+                              <div className="w-5 h-5 rounded-full bg-accent/10 text-accent flex items-center justify-center text-[10px] font-bold mt-0.5 flex-shrink-0">
                                 {sIdx + 1}
                               </div>
-                              <input 
+                              <input
                                 value={step}
                                 onChange={(e) => updatePlanStep(i, sIdx, e.target.value)}
-                                className="flex-1 bg-transparent text-[13px] outline-none"
-                                style={{ color: '#222224' }}
+                                className="flex-1 bg-transparent text-[13px] text-text-primary outline-none focus:text-accent"
                               />
                             </div>
                           ))}
                         </div>
                         <div className="flex gap-2 mt-2">
-                          <button 
+                          <button
                             onClick={() => handleAcceptPlan(i)}
-                            className="flex-1 h-10 text-white rounded-xl text-[13px] font-bold active:scale-95 transition-transform"
-                            style={{ background: '#222224' }}
+                            className="flex-1 h-10 bg-accent text-white rounded-xl text-[13px] font-bold active:scale-95 transition-transform"
                           >
                             Принять
                           </button>
-                          <button 
+                          <button
                             onClick={() => handleRejectPlan(i)}
-                            className="flex-1 h-10 rounded-xl text-[13px] font-bold active:scale-95 transition-transform border"
-                            style={{ background: '#ffffff', color: '#222224', borderColor: '#e0e0e0' }}
+                            className="flex-1 h-10 bg-surface2 text-text-primary rounded-xl text-[13px] font-bold active:scale-95 transition-transform"
                           >
                             Отмена
                           </button>
@@ -557,19 +535,18 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             </div>
           ))
         )}
-        
+
         {isTyping && (
           <div className="flex flex-col max-w-[80%] gap-[3px] self-start items-start">
-            <div className="flex gap-1 p-[11px_15px] rounded-[18px] rounded-bl-[4px] w-fit" style={{ background: '#f5f5f5' }}>
-              <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: '#999999' }} />
-              <div className="w-1.5 h-1.5 rounded-full animate-bounce [animation-delay:0.2s]" style={{ background: '#999999' }} />
-              <div className="w-1.5 h-1.5 rounded-full animate-bounce [animation-delay:0.4s]" style={{ background: '#999999' }} />
+            <div className="flex gap-1 p-[11px_15px] bg-surface2 rounded-[18px] rounded-bl-[4px] w-fit">
+              <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce" />
+              <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce [animation-delay:0.2s]" />
+              <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce [animation-delay:0.4s]" />
             </div>
           </div>
         )}
       </div>
 
-      {/* Input card */}
       <div
         className="px-4 flex-shrink-0"
         style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))' }}

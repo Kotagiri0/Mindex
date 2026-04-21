@@ -21,7 +21,6 @@ import DesktopApp from './components/DesktopApp';
 const defaultSettings = { agent: true, confirm: true, notifs: true };
 
 export default function App() {
-  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 768);
   const [currentUser, setCurrentUser] = useState<LocalUser | null>(getCurrentUser());
   const [screen, setScreen] = useState<Screen>('ob');
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -35,12 +34,6 @@ export default function App() {
     const user = getCurrentUser();
     setCurrentUser(user);
     setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    const handler = () => setIsDesktop(window.innerWidth >= 768);
-    window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
   }, []);
 
   useEffect(() => {
@@ -155,7 +148,10 @@ export default function App() {
     );
   }
 
-  if (isDesktop) {
+  // Use DesktopApp for non-mobile web, mobile version for Telegram Mini App
+  const isTelegramWebView = typeof window !== 'undefined' && !!(window as any).Telegram;
+
+  if (!isTelegramWebView) {
     return (
       <DesktopApp
         tasks={tasks}

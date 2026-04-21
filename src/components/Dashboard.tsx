@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ChevronLeft, Plus, Settings, Menu } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Task, Screen } from '../types';
@@ -18,7 +18,7 @@ interface DashboardProps {
 }
 
 const MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
-const DAYS = ['ПН','ВТ','СР','ЧТ','ПТ','СБ','ВС'];
+const DAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
 
 const F = "'Random Grotesque', sans-serif";
 
@@ -27,8 +27,6 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [quickTask, setQuickTask] = useState('');
-  const quickInputRef = useRef<HTMLInputElement>(null);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -102,14 +100,6 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
     setEditingTask(null);
   };
 
-  const quickAddTask = async () => {
-    if (!quickTask.trim()) return;
-    const newTask: Task = { id: uuid(), name: quickTask.trim(), time: '', date: selectedDate, done: false };
-    setTasks(prev => (Array.isArray(prev) ? [...prev, newTask] : [newTask]));
-    await db.saveTask(newTask);
-    setQuickTask('');
-  };
-
   const deleteTask = async (id: string) => {
     const updated = tasks.filter(t => t.id !== id);
     setTasks(updated);
@@ -121,7 +111,6 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
     <div className="flex flex-col h-full" style={{ background: '#f0f0f0' }}>
       <div style={{ height: 'env(safe-area-inset-top, 0px)' }} />
 
-      {/* Header */}
       <div className="flex items-center justify-between px-5 pt-4 pb-2">
         <motion.button
           whileTap={{ scale: 0.88 }}
@@ -153,7 +142,6 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
         </motion.button>
       </div>
 
-      {/* Day strip */}
       <div className="grid grid-cols-7 px-4 pb-3 pt-1">
         {weekDays.map((d, i) => {
           const ds = d.toISOString().split('T')[0];
@@ -188,9 +176,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
         })}
       </div>
 
-      {/* Task card */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden" style={{ background: '#ffffff', borderRadius: '24px 24px 0 0' }}>
-        {/* Toolbar */}
         <div className="flex items-center justify-between px-5 pt-4 pb-3">
           <motion.button
             whileTap={{ scale: 0.88 }}
@@ -210,21 +196,6 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
 
         <div style={{ height: '1px', background: 'rgba(34,34,36,0.08)', margin: '0 20px' }} />
 
-        {/* Quick task add */}
-        <div className="flex items-center gap-2 mx-5 mt-3 mb-1 h-10 px-3 rounded-[10px]" style={{ background: '#f5f5f5' }}>
-          <Plus size={14} strokeWidth={1.75} color="rgba(34,34,36,0.3)" />
-          <input
-            ref={quickInputRef}
-            className="flex-1 bg-transparent outline-none"
-            style={{ fontFamily: F, fontSize: '14px', color: '#222224' }}
-            placeholder="Добавить задачу..."
-            value={quickTask}
-            onChange={e => setQuickTask(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && quickAddTask()}
-          />
-        </div>
-
-        {/* Task list */}
         <div className="flex-1 overflow-y-auto px-5 pb-20">
           {filteredTasks.length === 0 ? (
             <motion.div

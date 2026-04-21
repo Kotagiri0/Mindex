@@ -23,7 +23,6 @@ export default function TaskItem({ task, onToggle, onClick, onToggleSubtask }: T
         className="flex items-center gap-4 py-4 cursor-pointer active:opacity-60 transition-opacity"
         onClick={onClick}
       >
-        {/* Checkbox */}
         <motion.button
           whileTap={{ scale: 0.85 }}
           onClick={e => { e.stopPropagation(); onToggle(); }}
@@ -44,7 +43,6 @@ export default function TaskItem({ task, onToggle, onClick, onToggleSubtask }: T
           )}
         </motion.button>
 
-        {/* Name */}
         <span
           className="flex-1 truncate"
           style={{
@@ -58,14 +56,12 @@ export default function TaskItem({ task, onToggle, onClick, onToggleSubtask }: T
           {task.name}
         </span>
 
-        {/* Time */}
         {task.time && (
           <span style={{ fontFamily: F, fontSize: '14px', color: 'rgba(34,34,36,0.4)', flexShrink: 0 }}>
             {task.time}
           </span>
         )}
 
-        {/* Expand button for subtasks */}
         {hasSubtasks && (
           <motion.button
             onClick={e => { e.stopPropagation(); setIsExpanded(v => !v); }}
@@ -78,7 +74,6 @@ export default function TaskItem({ task, onToggle, onClick, onToggleSubtask }: T
         )}
       </div>
 
-      {/* Subtasks */}
       <AnimatePresence>
         {isExpanded && hasSubtasks && (
           <motion.div
@@ -115,7 +110,8 @@ export default function TaskItem({ task, onToggle, onClick, onToggleSubtask }: T
                   fontSize: '14px',
                   color: st.done ? 'rgba(34,34,36,0.35)' : '#222224',
                   textDecoration: st.done ? 'line-through' : 'none',
-                }}>
+                }}
+                >
                   {st.name}
                 </span>
               </div>
