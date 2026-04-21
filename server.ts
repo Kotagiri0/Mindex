@@ -124,13 +124,22 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB limit
 });
 
+const MIME_BY_AUDIO_EXT: Record<string, string> = {
+  webm: "audio/webm",
+  ogg: "audio/ogg",
+  mp4: "audio/mp4",
+  // m4a is an MP4 container for audio; Groq accepts it as audio/mp4.
+  m4a: "audio/mp4",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+};
+
 const AUDIO_EXT_BY_MIME: Record<string, string> = {
   "audio/webm": "webm",
   "audio/ogg": "ogg",
   "audio/mp4": "mp4",
   "audio/mpeg": "mp3",
   "audio/wav": "wav",
-  "audio/x-wav": "wav",
 };
 
 const inferMimeTypeFromBuffer = (buffer: Buffer): string | null => {
@@ -160,20 +169,26 @@ const sanitizeAudioUpload = (file: Express.Multer.File) => {
     ? originalName.split(".").pop()?.toLowerCase() || ""
     : "";
 
-  const mimeTypeByExt: Record<string, string> = {
-    webm: "audio/webm",
-    ogg: "audio/ogg",
-    mp4: "audio/mp4",
-    m4a: "audio/mp4",
-    mp3: "audio/mpeg",
-    wav: "audio/wav",
-  };
+  const trustedMimeType =
+    file.mimetype &&
+    file.mimetype !== "application/octet-stream" &&
+    AUDIO_EXT_BY_MIME[file.mimetype]
+      ? file.mimetype
+      : "";
+  const extensionMimeType = extension ? MIME_BY_AUDIO_EXT[extension] : "";
+  const signatureMimeType = inferMimeTypeFromBuffer(file.buffer);
 
+  // Priority: trusted mimetype -> extension fallback -> signature sniffing.
+  // Safari/Telegram uploads can come through as application/octet-stream even when audio is valid.
   const normalizedMimeType =
-    (file.mimetype && file.mimetype !== "application/octet-stream" ? file.mimetype : "") ||
-    (extension ? mimeTypeByExt[extension] : "") ||
-    inferMimeTypeFromBuffer(file.buffer) ||
+    trustedMimeType ||
+    extensionMimeType ||
+    signatureMimeType ||
     "audio/webm";
+
+  if (!trustedMimeType && !extensionMimeType && !signatureMimeType) {
+    console.warn("[VOICE] Unknown upload format, falling back to audio/webm");
+  }
 
   const extensionByMimeType = AUDIO_EXT_BY_MIME[normalizedMimeType] || "webm";
   const safeFilename = extension ? `audio.${extension}` : `audio.${extensionByMimeType}`;
