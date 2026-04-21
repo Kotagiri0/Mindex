@@ -99,16 +99,20 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
 
       if (navigator.mediaDevices?.getUserMedia) {
         try {
+          console.log('[VOICE] Requesting microphone permission...');
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           streamRef.current = stream;
+          console.log('[VOICE] Stream acquired, tracks:', stream.getTracks().length);
 
           const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
             ? 'audio/webm;codecs=opus'
             : 'audio/webm';
 
+          console.log('[VOICE] Creating MediaRecorder with mimeType:', mimeType);
           const mediaRecorder = new MediaRecorder(stream, { mimeType });
 
           mediaRecorder.ondataavailable = (event) => {
+            console.log('[VOICE] ondataavailable:', event.data.size, 'bytes');
             if (event.data.size > 0) {
               chunksRef.current.push(event.data);
             }
@@ -116,11 +120,13 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
 
           mediaRecorderRef.current = mediaRecorder;
           mediaRecorder.start();
+          console.log('[VOICE] Recording started');
         } catch (err) {
           console.warn('[VOICE] MediaRecorder not available, falling back to SpeechRecognition');
           startFallbackRecognition();
         }
       } else {
+        console.warn('[VOICE] navigator.mediaDevices not available');
         startFallbackRecognition();
       }
     } catch (err: any) {
@@ -136,14 +142,26 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
         mediaRecorderRef.current.stop();
         setVoiceState('processing');
 
-        await new Promise<void>((resolve) => {
-          const checkRecorder = setInterval(() => {
-            if (mediaRecorderRef.current?.state === 'inactive') {
-              clearInterval(checkRecorder);
-              const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
-              sendAudioToServer(audioBlob).then(resolve);
+        return new Promise<void>((resolve) => {
+          const onStop = () => {
+            console.log('[VOICE] MediaRecorder stopped event, chunks:', chunksRef.current.length);
+            if (chunksRef.current.length === 0) {
+              console.warn('[VOICE] No chunks recorded');
+              setError('Не удалось записать звук (chunks empty)');
+              setVoiceState('error');
+              setTimeout(() => setVoiceState('idle'), 2000);
+              resolve();
+              return;
             }
-          }, 50);
+            const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+            console.log('[VOICE] Blob created, size:', audioBlob.size);
+            sendAudioToServer(audioBlob).then(resolve);
+          };
+
+          // Use stop event listener instead of polling
+          if (mediaRecorderRef.current) {
+            mediaRecorderRef.current.addEventListener('stop', onStop, { once: true });
+          }
         });
       } else if (recognitionRef.current && stateRef.current === 'recording') {
         recognitionRef.current.stop();

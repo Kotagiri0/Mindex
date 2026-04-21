@@ -632,8 +632,18 @@ app.get("/api/chat", (req, res) => {
 
 app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
   try {
+    console.log('[VOICE] file mimetype:', req.file?.mimetype);
+    console.log('[VOICE] file size:', req.file?.size);
+    console.log('[VOICE] file originalname:', req.file?.originalname);
+    console.log('[VOICE] file buffer length:', req.file?.buffer?.length);
+
     if (!req.file) {
       return res.status(400).json({ error: "Аудиофайл не загружен." });
+    }
+
+    if (req.file.size === 0) {
+      console.error('[VOICE] ERROR: Empty file received');
+      return res.status(400).json({ error: "Аудиофайл пуст (0 байт). Возможно, микрофон не захватил звук." });
     }
 
     const apiKey = process.env.GROQ_API_KEY;
@@ -643,11 +653,15 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
 
     const groq = new Groq({ apiKey });
 
+    console.log('[VOICE] Creating transcription with', req.file.size, 'bytes');
+
     const transcription = await groq.audio.transcriptions.create({
       file: new File([req.file.buffer], "audio.webm", { type: "audio/webm" }),
       model: "whisper-large-v3",
       language: "ru",
     });
+
+    console.log('[VOICE] Transcription success:', transcription.text?.slice(0, 100));
 
     return res.status(200).json({ text: transcription.text });
   } catch (error: any) {
