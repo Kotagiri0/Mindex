@@ -10,71 +10,12 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recognitionRef = useRef<any>(null);
+  const stateRef = useRef<VoiceState>('idle');
 
-  const startRecording = useCallback(async () => {
-    try {
-      setError(null);
-      setState('recording');
-      chunksRef.current = [];
-
-      // Try native MediaRecorder first
-      if (navigator.mediaDevices?.getUserMedia) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          streamRef.current = stream;
-
-          const mediaRecorder = new MediaRecorder(stream, {
-            mimeType: 'audio/webm;codecs=opus',
-          });
-
-          mediaRecorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-              chunksRef.current.push(event.data);
-            }
-          };
-
-          mediaRecorderRef.current = mediaRecorder;
-          mediaRecorder.start();
-        } catch (err) {
-          console.warn('[VOICE] MediaRecorder not available, falling back to SpeechRecognition');
-          // Fallback to webkitSpeechRecognition
-          useFallbackRecognition();
-        }
-      } else {
-        useFallbackRecognition();
-      }
-    } catch (err: any) {
-      console.error('[VOICE] Error starting recording:', err);
-      setError('Не удалось получить доступ к микрофону.');
-      setState('error');
-    }
-  }, []);
-
-  const stopRecording = useCallback(async () => {
-    try {
-      if (mediaRecorderRef.current && state === 'recording') {
-        mediaRecorderRef.current.stop();
-        setState('processing');
-
-        return new Promise<void>((resolve) => {
-          const checkRecorder = setInterval(() => {
-            if (mediaRecorderRef.current?.state === 'inactive') {
-              clearInterval(checkRecorder);
-              const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
-              sendAudioToServer(audioBlob).then(resolve);
-            }
-          }, 50);
-        });
-      } else if (recognitionRef.current && state === 'recording') {
-        recognitionRef.current.stop();
-        setState('processing');
-      }
-    } catch (err: any) {
-      console.error('[VOICE] Error stopping recording:', err);
-      setError('Ошибка при остановке записи.');
-      setState('error');
-    }
-  }, [state]);
+  const setVoiceState = (s: VoiceState) => {
+    stateRef.current = s;
+    setState(s);
+  };
 
   const sendAudioToServer = useCallback(async (audioBlob: Blob) => {
     try {
@@ -96,15 +37,14 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
         onTranscript(data.text);
       }
 
-      setState('idle');
+      setVoiceState('idle');
       setError(null);
     } catch (err: any) {
       console.error('[VOICE] Transcription error:', err);
       setError(err.message || 'Ошибка при транскрибации.');
-      setState('error');
-      setTimeout(() => setState('idle'), 2000);
+      setVoiceState('error');
+      setTimeout(() => setVoiceState('idle'), 2000);
     } finally {
-      // Clean up
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
@@ -114,11 +54,11 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
     }
   }, [onTranscript]);
 
-  const useFallbackRecognition = useCallback(() => {
+  const startFallbackRecognition = useCallback(() => {
     const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
     if (!SpeechRecognition) {
       setError('Голосовой ввод не поддерживается вашим браузером.');
-      setState('error');
+      setVoiceState('error');
       return;
     }
 
@@ -128,13 +68,10 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
     recognition.interimResults = false;
 
     recognition.onresult = (event: any) => {
-      let interimTranscript = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
           onTranscript(transcript);
-        } else {
-          interimTranscript += transcript;
         }
       }
     };
@@ -142,17 +79,82 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
     recognition.onerror = (event: any) => {
       console.error('[VOICE] Recognition error:', event.error);
       setError(`Ошибка при распознавании: ${event.error}`);
-      setState('error');
-      setTimeout(() => setState('idle'), 2000);
+      setVoiceState('error');
+      setTimeout(() => setVoiceState('idle'), 2000);
     };
 
     recognition.onend = () => {
-      setState('idle');
+      setVoiceState('idle');
     };
 
     recognitionRef.current = recognition;
     recognition.start();
   }, [onTranscript]);
+
+  const startRecording = useCallback(async () => {
+    try {
+      setError(null);
+      setVoiceState('recording');
+      chunksRef.current = [];
+
+      if (navigator.mediaDevices?.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          streamRef.current = stream;
+
+          const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+            ? 'audio/webm;codecs=opus'
+            : 'audio/webm';
+
+          const mediaRecorder = new MediaRecorder(stream, { mimeType });
+
+          mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              chunksRef.current.push(event.data);
+            }
+          };
+
+          mediaRecorderRef.current = mediaRecorder;
+          mediaRecorder.start();
+        } catch (err) {
+          console.warn('[VOICE] MediaRecorder not available, falling back to SpeechRecognition');
+          startFallbackRecognition();
+        }
+      } else {
+        startFallbackRecognition();
+      }
+    } catch (err: any) {
+      console.error('[VOICE] Error starting recording:', err);
+      setError('Не удалось получить доступ к микрофону.');
+      setVoiceState('error');
+    }
+  }, [startFallbackRecognition]);
+
+  const stopRecording = useCallback(async () => {
+    try {
+      if (mediaRecorderRef.current && stateRef.current === 'recording') {
+        mediaRecorderRef.current.stop();
+        setVoiceState('processing');
+
+        await new Promise<void>((resolve) => {
+          const checkRecorder = setInterval(() => {
+            if (mediaRecorderRef.current?.state === 'inactive') {
+              clearInterval(checkRecorder);
+              const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+              sendAudioToServer(audioBlob).then(resolve);
+            }
+          }, 50);
+        });
+      } else if (recognitionRef.current && stateRef.current === 'recording') {
+        recognitionRef.current.stop();
+        setVoiceState('processing');
+      }
+    } catch (err: any) {
+      console.error('[VOICE] Error stopping recording:', err);
+      setError('Ошибка при остановке записи.');
+      setVoiceState('error');
+    }
+  }, [sendAudioToServer]);
 
   return {
     state,

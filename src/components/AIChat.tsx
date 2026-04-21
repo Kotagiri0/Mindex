@@ -584,22 +584,22 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                 onMouseUp={stopRecording}
                 onTouchStart={startRecording}
                 onTouchEnd={stopRecording}
-                className={`w-11 h-11 rounded-full flex items-center justify-center transition-all flex-shrink-0 ${
+                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all flex-shrink-0 border-2 ${
                   voiceState === 'recording'
-                    ? 'bg-red-500 animate-pulse'
+                    ? 'bg-red-500 border-red-600 animate-pulse'
                     : voiceState === 'processing'
-                    ? 'bg-accent'
-                    : 'bg-accent/10 hover:bg-accent/20'
+                    ? 'bg-accent border-accent'
+                    : 'bg-gray-200 border-gray-400 hover:bg-gray-300'
                 }`}
                 title={voiceState === 'recording' ? 'Отпустите для завершения' : 'Нажмите для записи'}
               >
                 {voiceState === 'processing' ? (
-                  <Loader size={20} strokeWidth={2} color="#ffffff" className="animate-spin" />
+                  <Loader size={24} strokeWidth={2.5} color="#000000" className="animate-spin" />
                 ) : (
                   <Mic
-                    size={20}
-                    strokeWidth={2}
-                    color={voiceState === 'recording' ? '#ffffff' : '#222224'}
+                    size={24}
+                    strokeWidth={2.5}
+                    color={voiceState === 'recording' ? '#ffffff' : '#000000'}
                   />
                 )}
               </motion.button>

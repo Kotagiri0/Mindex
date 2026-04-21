@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   CalendarDays, MessageCircle, Settings, Plus, LogOut, ChevronLeft,
   ChevronRight, PenLine, Search, ArrowUp, StickyNote, Check,
-  ChevronDown as ChevronDownIcon
+  ChevronDown as ChevronDownIcon, Mic, Loader
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Task, Thread, Settings as SettingsType, Screen } from '../types';
@@ -12,6 +12,7 @@ import SettingsScreen from './Settings';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
+import { useVoiceInput } from '../lib/useVoiceInput';
 
 const MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
 const DAYS = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
@@ -287,6 +288,12 @@ function DesktopChat({
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const didAutoSend = useRef(false);
+
+  const { state: voiceState, error: voiceError, startRecording, stopRecording } = useVoiceInput(
+    (text) => {
+      setInput(prev => prev + (prev ? ' ' : '') + text);
+    }
+  );
 
   const thread = threads.find(t => t.id === threadId);
 
@@ -751,9 +758,33 @@ function DesktopChat({
             <button className="w-8 h-8 flex items-center justify-center" onClick={() => alert('Вложения будут в ближайших обновлениях')}>
               <Plus size={20} strokeWidth={1.75} color="rgba(34,34,36,0.32)" />
             </button>
-            <button disabled={!input.trim() || isTyping} onClick={handleSend} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors" style={{ background: input.trim() && !isTyping ? '#222224' : 'rgba(34,34,36,0.12)' }}>
-              <ArrowUp size={18} strokeWidth={2} color="#ffffff" />
-            </button>
+            <div className="flex items-center gap-2">
+              <motion.button
+                onMouseDown={startRecording}
+                onMouseUp={stopRecording}
+                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all border ${
+                  voiceState === 'recording'
+                    ? 'bg-red-500 border-red-600'
+                    : voiceState === 'processing'
+                    ? 'bg-[#222224] border-[#222224]'
+                    : 'bg-gray-200 border-gray-400 hover:bg-gray-300'
+                }`}
+                title={voiceState === 'recording' ? 'Отпустите для завершения' : 'Нажмите для записи'}
+              >
+                {voiceState === 'processing' ? (
+                  <Loader size={18} strokeWidth={2} color="#ffffff" className="animate-spin" />
+                ) : (
+                  <Mic
+                    size={18}
+                    strokeWidth={2}
+                    color={voiceState === 'recording' ? '#ffffff' : '#000000'}
+                  />
+                )}
+              </motion.button>
+              <button disabled={!input.trim() || isTyping} onClick={handleSend} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors" style={{ background: input.trim() && !isTyping ? '#222224' : 'rgba(34,34,36,0.12)' }}>
+                <ArrowUp size={18} strokeWidth={2} color="#ffffff" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
