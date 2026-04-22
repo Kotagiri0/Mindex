@@ -19,6 +19,11 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
 
   const sendAudioToServer = useCallback(async (audioBlob: Blob) => {
     try {
+      // Read the first bytes to verify the recorded container signature.
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer).slice(0, 16);
+      console.log('[VOICE] First bytes:', Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' '));
+
       const formData = new FormData();
       formData.append('audio', audioBlob, 'audio.webm');
 
