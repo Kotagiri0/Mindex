@@ -5,6 +5,9 @@ import Groq from "groq-sdk";
 import dotenv from "dotenv";
 import cors from "cors";
 import crypto from "crypto";
+import { spawn } from 'child_process';
+import fs from 'fs';
+import os from 'os';
 import { Pool } from "pg";
 import multer from "multer";
 import {
@@ -631,42 +634,59 @@ app.get("/api/chat", (req, res) => {
 });
 
 app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
+  const tmpIn = path.join(os.tmpdir(), `voice_in_${Date.now()}`);
+  const tmpOut = path.join(os.tmpdir(), `voice_out_${Date.now()}.wav`);
+
   try {
     console.log('[VOICE] file mimetype:', req.file?.mimetype);
     console.log('[VOICE] file size:', req.file?.size);
-    console.log('[VOICE] file originalname:', req.file?.originalname);
-    console.log('[VOICE] file buffer length:', req.file?.buffer?.length);
 
     if (!req.file) {
       return res.status(400).json({ error: "Аудиофайл не загружен." });
     }
-
     if (req.file.size === 0) {
-      console.error('[VOICE] ERROR: Empty file received');
-      return res.status(400).json({ error: "Аудиофайл пуст (0 байт). Возможно, микрофон не захватил звук." });
+      return res.status(400).json({ error: "Аудиофайл пуст (0 байт)." });
     }
 
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: "GROQ_API_KEY не найден в .env" });
+      return res.status(500).json({ error: "GROQ_API_KEY не найден." });
     }
 
+    fs.writeFileSync(tmpIn, req.file.buffer);
+
+    await new Promise<void>((resolve, reject) => {
+      const ff = spawn('ffmpeg', ['-y', '-f', 'webm', '-i', tmpIn, '-ar', '16000', '-ac', '1', '-f', 'wav', tmpOut]);
+      let stderr = '';
+      ff.stderr.on('data', (d) => { stderr += d.toString(); });
+      ff.on('close', (code) => {
+        if (code !== 0) {
+          console.error('[VOICE] ffmpeg stderr:', stderr);
+          reject(new Error(`ffmpeg failed: ${stderr.slice(-200)}`));
+        } else resolve();
+      });
+      ff.on('error', (e) => reject(new Error(`ffmpeg not found: ${e.message}`)));
+    });
+
+    const wavBuffer = fs.readFileSync(tmpOut);
+    console.log('[VOICE] Converted to wav:', wavBuffer.length, 'bytes');
+
     const groq = new Groq({ apiKey });
-
-    console.log('[VOICE] Creating transcription with', req.file.size, 'bytes');
-
     const transcription = await groq.audio.transcriptions.create({
-      file: new File([req.file.buffer], "audio.webm", { type: "audio/webm" }),
+      file: new File([wavBuffer], "audio.wav", { type: "audio/wav" }),
       model: "whisper-large-v3",
       language: "ru",
     });
 
     console.log('[VOICE] Transcription success:', transcription.text?.slice(0, 100));
-
     return res.status(200).json({ text: transcription.text });
+
   } catch (error: any) {
     console.error("[VOICE] Transcription error:", error?.message || error);
     res.status(500).json({ error: error?.message || "Не удалось транскрибировать аудио." });
+  } finally {
+    try { fs.unlinkSync(tmpIn); } catch {}
+    try { fs.unlinkSync(tmpOut); } catch {}
   }
 });
 

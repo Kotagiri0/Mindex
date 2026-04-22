@@ -119,7 +119,7 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
           };
 
           mediaRecorderRef.current = mediaRecorder;
-          mediaRecorder.start();
+          mediaRecorder.start(100);
           console.log('[VOICE] Recording started');
         } catch (err) {
           console.warn('[VOICE] MediaRecorder not available, falling back to SpeechRecognition');
@@ -139,30 +139,32 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
   const stopRecording = useCallback(async () => {
     try {
       if (mediaRecorderRef.current && stateRef.current === 'recording') {
-        mediaRecorderRef.current.stop();
         setVoiceState('processing');
 
-        return new Promise<void>((resolve) => {
-          const onStop = () => {
-            console.log('[VOICE] MediaRecorder stopped event, chunks:', chunksRef.current.length);
+        await new Promise<void>((resolve) => {
+          const recorder = mediaRecorderRef.current!;
+
+          recorder.addEventListener('stop', () => {
+            console.log('[VOICE] stopped, chunks:', chunksRef.current.length);
+
             if (chunksRef.current.length === 0) {
-              console.warn('[VOICE] No chunks recorded');
-              setError('Не удалось записать звук (chunks empty)');
+              setError('Не удалось записать звук.');
               setVoiceState('error');
               setTimeout(() => setVoiceState('idle'), 2000);
               resolve();
               return;
             }
-            const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
-            console.log('[VOICE] Blob created, size:', audioBlob.size);
-            sendAudioToServer(audioBlob).then(resolve);
-          };
 
-          // Use stop event listener instead of polling
-          if (mediaRecorderRef.current) {
-            mediaRecorderRef.current.addEventListener('stop', onStop, { once: true });
-          }
+            const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+            console.log('[VOICE] Blob size:', audioBlob.size);
+            sendAudioToServer(audioBlob).then(resolve);
+          }, { once: true });
+
+          // Stop AFTER listener is attached
+          recorder.requestData(); // flush last chunk
+          recorder.stop();
         });
+
       } else if (recognitionRef.current && stateRef.current === 'recording') {
         recognitionRef.current.stop();
         setVoiceState('processing');
