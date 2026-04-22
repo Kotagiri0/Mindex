@@ -29,6 +29,25 @@ export default function App() {
   const [curTh, setCurTh] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(getCurrentUser()));
   const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [isDesktopViewport, setIsDesktopViewport] = useState(
+    typeof window !== 'undefined' ? window.innerWidth >= 1024 : false,
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const mediaQuery = window.matchMedia('(min-width: 1024px)');
+    const handleViewportChange = (event: MediaQueryListEvent) => {
+      setIsDesktopViewport(event.matches);
+    };
+
+    setIsDesktopViewport(mediaQuery.matches);
+    mediaQuery.addEventListener('change', handleViewportChange);
+
+    return () => {
+      mediaQuery.removeEventListener('change', handleViewportChange);
+    };
+  }, []);
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -148,10 +167,7 @@ export default function App() {
     );
   }
 
-  // Use DesktopApp for non-mobile web, mobile version for Telegram Mini App
-  const isTelegramWebView = typeof window !== 'undefined' && !!(window as any).Telegram;
-
-  if (!isTelegramWebView) {
+  if (isDesktopViewport) {
     return (
       <DesktopApp
         tasks={tasks}
