@@ -760,8 +760,15 @@ function DesktopChat({
             </button>
             <div className="flex items-center gap-2">
               <motion.button
-                onMouseDown={startRecording}
-                onMouseUp={stopRecording}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  startRecording();
+                }}
+                onPointerUp={(event) => {
+                  event.preventDefault();
+                  stopRecording();
+                }}
+                onPointerCancel={stopRecording}
                 className={`w-10 h-10 rounded-full flex items-center justify-center transition-all border ${
                   voiceState === 'recording'
                     ? 'bg-red-500 border-red-600'

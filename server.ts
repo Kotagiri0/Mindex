@@ -127,6 +127,27 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB limit
 });
 
+const extensionByMimeType: Record<string, string> = {
+  "audio/webm": ".webm",
+  "audio/webm;codecs=opus": ".webm",
+  "audio/ogg": ".ogg",
+  "audio/ogg;codecs=opus": ".ogg",
+  "audio/mp4": ".mp4",
+  "audio/mpeg": ".mp3",
+  "audio/wav": ".wav",
+  "audio/x-wav": ".wav",
+};
+
+function resolveAudioExtension(mimeType?: string, originalName?: string): string {
+  const fromMime = mimeType ? extensionByMimeType[mimeType.toLowerCase()] : undefined;
+  if (fromMime) return fromMime;
+  if (originalName) {
+    const fromOriginalName = path.extname(originalName).toLowerCase();
+    if (fromOriginalName) return fromOriginalName;
+  }
+  return ".bin";
+}
+
 app.get('/api/config', (_req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -634,8 +655,8 @@ app.get("/api/chat", (req, res) => {
 });
 
 app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
-  const tmpIn = path.join(os.tmpdir(), `voice_in_${Date.now()}`);
-  const tmpOut = path.join(os.tmpdir(), `voice_out_${Date.now()}.wav`);
+  let tmpIn = "";
+  let tmpOut = "";
 
   try {
     console.log('[VOICE] file mimetype:', req.file?.mimetype);
@@ -653,10 +674,14 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
       return res.status(500).json({ error: "GROQ_API_KEY не найден." });
     }
 
+    const inputExtension = resolveAudioExtension(req.file.mimetype, req.file.originalname);
+    tmpIn = path.join(os.tmpdir(), `voice_in_${Date.now()}${inputExtension}`);
+    tmpOut = path.join(os.tmpdir(), `voice_out_${Date.now()}.wav`);
+
     fs.writeFileSync(tmpIn, req.file.buffer);
 
     await new Promise<void>((resolve, reject) => {
-      const ff = spawn('ffmpeg', ['-y', '-f', 'webm', '-i', tmpIn, '-ar', '16000', '-ac', '1', '-f', 'wav', tmpOut]);
+      const ff = spawn('ffmpeg', ['-y', '-i', tmpIn, '-vn', '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le', '-f', 'wav', tmpOut]);
       let stderr = '';
       ff.stderr.on('data', (d) => { stderr += d.toString(); });
       ff.on('close', (code) => {
@@ -685,8 +710,8 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
     console.error("[VOICE] Transcription error:", error?.message || error);
     res.status(500).json({ error: error?.message || "Не удалось транскрибировать аудио." });
   } finally {
-    try { fs.unlinkSync(tmpIn); } catch {}
-    try { fs.unlinkSync(tmpOut); } catch {}
+    if (tmpIn && fs.existsSync(tmpIn)) fs.unlinkSync(tmpIn);
+    if (tmpOut && fs.existsSync(tmpOut)) fs.unlinkSync(tmpOut);
   }
 });
 
