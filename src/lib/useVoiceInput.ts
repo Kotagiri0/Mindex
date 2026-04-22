@@ -11,44 +11,32 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
   const chunksRef = useRef<Blob[]>([]);
   const recognitionRef = useRef<any>(null);
   const stateRef = useRef<VoiceState>('idle');
-  const mimeTypeRef = useRef<string>('audio/webm');
+  const recordingStartedAtRef = useRef<number>(0);
+  const recorderMimeTypeRef = useRef<string>('audio/webm');
 
   const setVoiceState = (s: VoiceState) => {
     stateRef.current = s;
     setState(s);
   };
 
-  const getSupportedMimeType = () => {
-    const types = [
-      'audio/webm',
-      'audio/mp4',
-      'audio/ogg;codecs=opus',
-      'audio/ogg',
-    ];
-    for (const type of types) {
-      if (MediaRecorder.isTypeSupported(type)) return type;
-    }
-    return '';
+  const getFileNameForMimeType = (mimeType?: string) => {
+    if (!mimeType) return 'audio.webm';
+    if (mimeType.includes('mp4')) return 'audio.mp4';
+    if (mimeType.includes('ogg')) return 'audio.ogg';
+    if (mimeType.includes('wav')) return 'audio.wav';
+    if (mimeType.includes('mpeg')) return 'audio.mp3';
+    return 'audio.webm';
   };
 
-  const getFileExtension = (mimeType: string) => {
-    if (mimeType.includes('mp4')) return 'mp4';
-    if (mimeType.includes('ogg')) return 'ogg';
-    return 'webm';
-  };
-
-  const sendAudioToServer = useCallback(async (audioBlob: Blob) => {
+  const sendAudioToServer = useCallback(async (audioBlob: Blob, mimeType?: string) => {
     try {
-      const mimeType = mimeTypeRef.current;
-      const ext = getFileExtension(mimeType);
-
-      // Send with correct filename and type so Groq can identify the format
-      const file = new File([audioBlob], `audio.${ext}`, { type: mimeType.split(';')[0] });
-
-      console.log('[VOICE] Sending to server:', file.name, file.type, file.size, 'bytes');
+      // Read the first bytes to verify the recorded container signature.
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer).slice(0, 16);
+      console.log('[VOICE] First bytes:', Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' '));
 
       const formData = new FormData();
-      formData.append('audio', file);
+      formData.append('audio', audioBlob, getFileNameForMimeType(mimeType || audioBlob.type));
 
       const response = await fetch('/api/voice/transcribe', {
         method: 'POST',
@@ -79,6 +67,7 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
       }
       chunksRef.current = [];
       mediaRecorderRef.current = null;
+      recordingStartedAtRef.current = 0;
     }
   }, [onTranscript]);
 
@@ -121,24 +110,33 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
 
   const startRecording = useCallback(async () => {
     try {
+      if (stateRef.current !== 'idle') return;
+
       setError(null);
       setVoiceState('recording');
       chunksRef.current = [];
+      recordingStartedAtRef.current = Date.now();
 
       if (navigator.mediaDevices?.getUserMedia) {
         try {
+          console.log('[VOICE] Requesting microphone permission...');
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           streamRef.current = stream;
+          console.log('[VOICE] Stream acquired, tracks:', stream.getTracks().length);
 
-          const mimeType = getSupportedMimeType();
-
-          const mediaRecorder = mimeType
-            ? new MediaRecorder(stream, { mimeType })
+          const preferredMimeTypes = [
+            'audio/webm;codecs=opus',
+            'audio/webm',
+            'audio/mp4',
+            'audio/ogg;codecs=opus',
+            'audio/ogg',
+          ];
+          const selectedMimeType = preferredMimeTypes.find((type) => MediaRecorder.isTypeSupported(type));
+          console.log('[VOICE] Creating MediaRecorder with mimeType:', selectedMimeType || 'browser-default');
+          const mediaRecorder = selectedMimeType
+            ? new MediaRecorder(stream, { mimeType: selectedMimeType })
             : new MediaRecorder(stream);
-
-          // Store actual mimeType assigned by browser after construction
-          mimeTypeRef.current = mediaRecorder.mimeType || mimeType || 'audio/webm';
-          console.log('[VOICE] Recording started, actual mimeType:', mimeTypeRef.current);
+          recorderMimeTypeRef.current = mediaRecorder.mimeType || selectedMimeType || 'audio/webm';
 
           mediaRecorder.ondataavailable = (event) => {
             console.log('[VOICE] ondataavailable:', event.data.size, 'bytes');
@@ -148,12 +146,14 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
           };
 
           mediaRecorderRef.current = mediaRecorder;
-          mediaRecorder.start(100); // собирать chunks каждые 100мс
+          mediaRecorder.start(100);
+          console.log('[VOICE] Recording started');
         } catch (err) {
-          console.warn('[VOICE] MediaRecorder failed, falling back to SpeechRecognition:', err);
+          console.warn('[VOICE] MediaRecorder not available, falling back to SpeechRecognition');
           startFallbackRecognition();
         }
       } else {
+        console.warn('[VOICE] navigator.mediaDevices not available');
         startFallbackRecognition();
       }
     } catch (err: any) {
@@ -172,10 +172,9 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
           const recorder = mediaRecorderRef.current!;
 
           recorder.addEventListener('stop', () => {
-            console.log('[VOICE] Stop event fired, chunks:', chunksRef.current.length);
+            console.log('[VOICE] stopped, chunks:', chunksRef.current.length);
 
             if (chunksRef.current.length === 0) {
-              console.warn('[VOICE] No chunks recorded');
               setError('Не удалось записать звук.');
               setVoiceState('error');
               setTimeout(() => setVoiceState('idle'), 2000);
@@ -183,15 +182,25 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
               return;
             }
 
-            // Strip codec params for Blob — Groq needs clean mime type
-            const blobType = mimeTypeRef.current.split(';')[0];
-            const audioBlob = new Blob(chunksRef.current, { type: blobType });
-            console.log('[VOICE] Blob size:', audioBlob.size, 'type:', blobType);
-            sendAudioToServer(audioBlob).then(resolve);
+            const recordingDurationMs = Date.now() - recordingStartedAtRef.current;
+            if (recordingDurationMs < 300) {
+              setError('Слишком короткая запись. Удерживайте кнопку чуть дольше.');
+              setVoiceState('error');
+              setTimeout(() => setVoiceState('idle'), 2000);
+              resolve();
+              return;
+            }
+
+            const audioBlob = new Blob(chunksRef.current, { type: recorderMimeTypeRef.current });
+            console.log('[VOICE] Blob size:', audioBlob.size);
+            sendAudioToServer(audioBlob, recorderMimeTypeRef.current).then(resolve);
           }, { once: true });
 
+          // Stop AFTER listener is attached
+          recorder.requestData(); // flush last chunk
           recorder.stop();
         });
+
       } else if (recognitionRef.current && stateRef.current === 'recording') {
         recognitionRef.current.stop();
         setVoiceState('processing');

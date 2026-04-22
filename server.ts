@@ -5,6 +5,9 @@ import Groq from "groq-sdk";
 import dotenv from "dotenv";
 import cors from "cors";
 import crypto from "crypto";
+import { spawn } from 'child_process';
+import fs from 'fs';
+import os from 'os';
 import { Pool } from "pg";
 import multer from "multer";
 import {
@@ -123,6 +126,27 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB limit
 });
+
+const extensionByMimeType: Record<string, string> = {
+  "audio/webm": ".webm",
+  "audio/webm;codecs=opus": ".webm",
+  "audio/ogg": ".ogg",
+  "audio/ogg;codecs=opus": ".ogg",
+  "audio/mp4": ".mp4",
+  "audio/mpeg": ".mp3",
+  "audio/wav": ".wav",
+  "audio/x-wav": ".wav",
+};
+
+function resolveAudioExtension(mimeType?: string, originalName?: string): string {
+  const fromMime = mimeType ? extensionByMimeType[mimeType.toLowerCase()] : undefined;
+  if (fromMime) return fromMime;
+  if (originalName) {
+    const fromOriginalName = path.extname(originalName).toLowerCase();
+    if (fromOriginalName) return fromOriginalName;
+  }
+  return ".bin";
+}
 
 app.get('/api/config', (_req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -631,42 +655,63 @@ app.get("/api/chat", (req, res) => {
 });
 
 app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
+  let tmpIn = "";
+  let tmpOut = "";
+
   try {
     console.log('[VOICE] file mimetype:', req.file?.mimetype);
     console.log('[VOICE] file size:', req.file?.size);
-    console.log('[VOICE] file originalname:', req.file?.originalname);
-    console.log('[VOICE] file buffer length:', req.file?.buffer?.length);
 
     if (!req.file) {
       return res.status(400).json({ error: "Аудиофайл не загружен." });
     }
-
     if (req.file.size === 0) {
-      console.error('[VOICE] ERROR: Empty file received');
-      return res.status(400).json({ error: "Аудиофайл пуст (0 байт). Возможно, микрофон не захватил звук." });
+      return res.status(400).json({ error: "Аудиофайл пуст (0 байт)." });
     }
 
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: "GROQ_API_KEY не найден в .env" });
+      return res.status(500).json({ error: "GROQ_API_KEY не найден." });
     }
 
+    const inputExtension = resolveAudioExtension(req.file.mimetype, req.file.originalname);
+    tmpIn = path.join(os.tmpdir(), `voice_in_${Date.now()}${inputExtension}`);
+    tmpOut = path.join(os.tmpdir(), `voice_out_${Date.now()}.wav`);
+
+    fs.writeFileSync(tmpIn, req.file.buffer);
+
+    await new Promise<void>((resolve, reject) => {
+      const ff = spawn('ffmpeg', ['-y', '-i', tmpIn, '-vn', '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le', '-f', 'wav', tmpOut]);
+      let stderr = '';
+      ff.stderr.on('data', (d) => { stderr += d.toString(); });
+      ff.on('close', (code) => {
+        if (code !== 0) {
+          console.error('[VOICE] ffmpeg stderr:', stderr);
+          reject(new Error(`ffmpeg failed: ${stderr.slice(-200)}`));
+        } else resolve();
+      });
+      ff.on('error', (e) => reject(new Error(`ffmpeg not found: ${e.message}`)));
+    });
+
+    const wavBuffer = fs.readFileSync(tmpOut);
+    console.log('[VOICE] Converted to wav:', wavBuffer.length, 'bytes');
+
     const groq = new Groq({ apiKey });
-
-    console.log('[VOICE] Creating transcription with', req.file.size, 'bytes');
-
     const transcription = await groq.audio.transcriptions.create({
-      file: new File([req.file.buffer], "audio.webm", { type: "audio/webm" }),
+      file: new File([wavBuffer], "audio.wav", { type: "audio/wav" }),
       model: "whisper-large-v3",
       language: "ru",
     });
 
     console.log('[VOICE] Transcription success:', transcription.text?.slice(0, 100));
-
     return res.status(200).json({ text: transcription.text });
+
   } catch (error: any) {
     console.error("[VOICE] Transcription error:", error?.message || error);
     res.status(500).json({ error: error?.message || "Не удалось транскрибировать аудио." });
+  } finally {
+    if (tmpIn && fs.existsSync(tmpIn)) fs.unlinkSync(tmpIn);
+    if (tmpOut && fs.existsSync(tmpOut)) fs.unlinkSync(tmpOut);
   }
 });
 

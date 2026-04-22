@@ -580,10 +580,15 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             </button>
             <div className="flex items-center gap-2">
               <motion.button
-                onMouseDown={startRecording}
-                onMouseUp={stopRecording}
-                onTouchStart={startRecording}
-                onTouchEnd={stopRecording}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  startRecording();
+                }}
+                onPointerUp={(event) => {
+                  event.preventDefault();
+                  stopRecording();
+                }}
+                onPointerCancel={stopRecording}
                 className={`w-12 h-12 rounded-full flex items-center justify-center transition-all flex-shrink-0 border-2 ${
                   voiceState === 'recording'
                     ? 'bg-red-500 border-red-600 animate-pulse'
