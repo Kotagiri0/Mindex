@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pencil } from 'lucide-react';
+import { Pencil, Pause } from 'lucide-react';
 import { Settings } from '../types';
 import { getCurrentUser } from '../lib/auth';
 import { storage } from '../lib/storage';
@@ -116,9 +116,7 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
             {settings.avatar ? (
               <img src={settings.avatar} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
             ) : (
-              <span style={{ fontFamily: M, fontSize: 16, fontWeight: 500, color: '#fff', letterSpacing: '0.02em' }}>
-                {getInitials(displayName) || '⏸'}
-              </span>
+              <Pause size={18} color="#fff" strokeWidth={2} fill="#fff" />
             )}
           </div>
 
