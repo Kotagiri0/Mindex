@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import {
-  CalendarDays, MessageCircle, Settings, Plus, LogOut, ChevronLeft,
-  ChevronRight, PenLine, Search, ArrowUp, StickyNote, Check,
-  ChevronDown as ChevronDownIcon
-} from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import {
+  Sun, Calendar, MessageCircle, Settings as SettingsIcon,
+  Plus, ChevronDown, ArrowUp, Search, Check, Mic,
+  PanelLeftClose, PanelLeftOpen,
+} from 'lucide-react';
 import { Task, Thread, Settings as SettingsType, Screen } from '../types';
 import AddTaskModal from './AddTaskModal';
 import EditTaskModal from './EditTaskModal';
@@ -13,15 +13,24 @@ import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
 
-const MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
-const DAYS = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
-
-// Random Grotesque — brand/logo only
-const F = "'Random Grotesque', sans-serif";
-// Muller — all content
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const F = "'Random Grotesque', sans-serif";
 
-// ─── Logo icon (no text) ────────────────────────────────────────────────────
+const DAY_NAMES_RU = ['ВОСКРЕСЕНЬЕ','ПОНЕДЕЛЬНИК','ВТОРНИК','СРЕДА','ЧЕТВЕРГ','ПЯТНИЦА','СУББОТА'];
+const WEEK_DAYS = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+const MONTH_SHORT = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+
+function todayStr() { return new Date().toISOString().split('T')[0]; }
+function fmt2(n: number) { return n.toString().padStart(2, '0'); }
+function formatDateCard(d: Date) {
+  return `${fmt2(d.getDate())}.${fmt2(d.getMonth() + 1)}.${d.getFullYear().toString().slice(2)}`;
+}
+function nowTime() {
+  const n = new Date();
+  return `${fmt2(n.getHours())}:${fmt2(n.getMinutes())}`;
+}
+
+// ─── Logo ──────────────────────────────────────────────────────────────────────
 
 function LogoIcon({ size = 28 }: { size?: number }) {
   return (
@@ -35,7 +44,7 @@ function LogoIcon({ size = 28 }: { size?: number }) {
   );
 }
 
-// ─── Desktop app props ───────────────────────────────────────────────────────
+// ─── Root props ────────────────────────────────────────────────────────────────
 
 interface DesktopAppProps {
   tasks: Task[];
@@ -52,285 +61,113 @@ interface DesktopAppProps {
   handleLogout: () => void;
 }
 
-// ─── Sidebar nav item ────────────────────────────────────────────────────────
+// ─── Typing indicator ──────────────────────────────────────────────────────────
 
-function NavItem({ icon, label, active, onClick, collapsed }: {
-  icon: React.ReactNode; label: string; active: boolean; onClick: () => void; collapsed: boolean;
-}) {
+function TypingDots() {
   return (
-    <button
-      onClick={onClick}
-      title={collapsed ? label : undefined}
-      className="w-full h-10 rounded-[10px] flex items-center gap-3 transition-colors"
-      style={{
-        background: active ? 'rgba(34,34,36,0.07)' : 'transparent',
-        color: active ? '#222224' : 'rgba(34,34,36,0.45)',
-        padding: collapsed ? '0 10px' : '0 12px',
-        justifyContent: collapsed ? 'center' : 'flex-start',
-      }}
-    >
-      {icon}
-      {!collapsed && <span style={{ fontFamily: M, fontSize: '14px' }}>{label}</span>}
-    </button>
-  );
-}
-
-// ─── Task item (desktop) ─────────────────────────────────────────────────────
-
-function DesktopTaskItem({ task, onToggle, onToggleSubtask, onClick }: {
-  task: Task; onToggle: () => void; onClick: () => void;
-  onToggleSubtask?: (taskId: string, subtaskId: string) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const hasSub = task.subtasks && task.subtasks.length > 0;
-
-  return (
-    <div style={{ borderBottom: '1px solid rgba(34,34,36,0.07)' }}>
-      <div className="flex items-center gap-4 py-3.5 cursor-pointer group" onClick={onClick}>
-        <button
-          onClick={e => { e.stopPropagation(); onToggle(); }}
-          className="flex-shrink-0 flex items-center justify-center transition-all"
-          style={{
-            width: '26px', height: '26px', borderRadius: '50%',
-            border: `1.75px solid ${task.done ? '#222224' : 'rgba(34,34,36,0.25)'}`,
-            background: task.done ? '#222224' : 'transparent',
-          }}
-        >
-          {task.done && <Check size={12} color="#ffffff" strokeWidth={2.5} />}
-        </button>
-
-        <span className="flex-1 truncate" style={{
-          fontFamily: M, fontSize: '15px',
-          color: task.done ? 'rgba(34,34,36,0.3)' : '#222224',
-          textDecoration: task.done ? 'line-through' : 'none',
-        }}>
-          {task.name}
-        </span>
-
-        {task.time && (
-          <span style={{ fontFamily: M, fontSize: '13px', color: 'rgba(34,34,36,0.38)', flexShrink: 0 }}>
-            {task.time}
-          </span>
-        )}
-
-        {hasSub && (
-          <button
-            onClick={e => { e.stopPropagation(); setExpanded(v => !v); }}
-            style={{ transform: `rotate(${expanded ? 180 : 0}deg)`, transition: 'transform 0.2s', flexShrink: 0 }}
-          >
-            <ChevronDownIcon size={16} color="rgba(34,34,36,0.35)" />
-          </button>
-        )}
-      </div>
-
-      {expanded && hasSub && (
-        <div className="pl-12 pb-2 flex flex-col gap-1.5">
-          {task.subtasks?.map(st => (
-            <div key={st.id} onClick={() => onToggleSubtask?.(task.id, st.id)} className="flex items-center gap-3 py-1 cursor-pointer">
-              <div style={{
-                width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0,
-                border: `1.5px solid ${st.done ? '#222224' : 'rgba(34,34,36,0.22)'}`,
-                background: st.done ? '#222224' : 'transparent',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                {st.done && <Check size={10} color="#ffffff" strokeWidth={2.5} />}
-              </div>
-              <span style={{
-                fontFamily: M, fontSize: '13px',
-                color: st.done ? 'rgba(34,34,36,0.3)' : '#222224',
-                textDecoration: st.done ? 'line-through' : 'none',
-              }}>{st.name}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Dashboard panel ─────────────────────────────────────────────────────────
-
-function DashboardPanel({
-  weekDays, weekOffset, setWeekOffset, selectedDate, setSelectedDate,
-  today, filteredTasks, toggleTask, toggleSubtask, onAddTask, onEditTask,
-  onQuickAddTask, onQuickChat,
-}: {
-  weekDays: Date[]; weekOffset: number; setWeekOffset: (fn: (v: number) => number) => void;
-  selectedDate: string; setSelectedDate: (d: string) => void; today: string;
-  filteredTasks: Task[]; toggleTask: (id: string) => void;
-  toggleSubtask: (tId: string, sId: string) => void;
-  onAddTask: () => void; onEditTask: (t: Task) => void;
-  onQuickAddTask: (name: string) => void;
-  onQuickChat: (msg: string) => void;
-}) {
-  const [quickTask, setQuickTask] = useState('');
-  const [quickChat, setQuickChat] = useState('');
-
-  const month = MONTHS[weekDays[3].getMonth()];
-  const year = weekDays[3].getFullYear();
-
-  const selDay = new Date(selectedDate);
-  const selLabel = selDay.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', weekday: 'long' });
-
-  const handleQuickTask = () => {
-    if (!quickTask.trim()) return;
-    onQuickAddTask(quickTask.trim());
-    setQuickTask('');
-  };
-
-  const handleQuickChat = () => {
-    if (!quickChat.trim()) return;
-    onQuickChat(quickChat.trim());
-    setQuickChat('');
-  };
-
-  return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-8 py-5 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setWeekOffset(v => v - 1)}
-            className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-[rgba(34,34,36,0.06)]"
-          >
-            <ChevronLeft size={17} strokeWidth={1.75} color="#222224" />
-          </button>
-          <button
-            onClick={() => setWeekOffset(v => v + 1)}
-            className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-[rgba(34,34,36,0.06)]"
-          >
-            <ChevronRight size={17} strokeWidth={1.75} color="#222224" />
-          </button>
-          <div>
-            <span style={{ fontFamily: M, fontSize: '11px', color: 'rgba(34,34,36,0.38)', letterSpacing: '0.06em', display: 'block' }}>
-              {year}
-            </span>
-            <span style={{ fontFamily: M, fontSize: '20px', color: '#222224', lineHeight: 1 }}>
-              {month}
-            </span>
-          </div>
-        </div>
-
-        <button
-          onClick={onAddTask}
-          className="h-9 px-4 rounded-full flex items-center gap-2 transition-opacity hover:opacity-80"
-          style={{ background: '#222224' }}
-        >
-          <Plus size={15} strokeWidth={2} color="#ffffff" />
-          <span style={{ fontFamily: M, fontSize: '13px', color: '#ffffff' }}>Добавить задачу</span>
-        </button>
-      </div>
-
-      <div style={{ height: '1px', background: 'rgba(34,34,36,0.08)', margin: '0 32px' }} />
-
-      {/* Week grid — horizontal: "Пн 14" */}
-      <div className="grid grid-cols-7 px-8 py-3 flex-shrink-0">
-        {weekDays.map((d, i) => {
-          const ds = d.toISOString().split('T')[0];
-          const isSelected = ds === selectedDate;
-          const isToday = ds === today;
-
-          return (
-            <button
-              key={ds}
-              onClick={() => setSelectedDate(ds)}
-              className="flex flex-row items-center justify-center gap-2 py-2 rounded-[10px] transition-colors hover:bg-[rgba(34,34,36,0.04)]"
-            >
-              <span style={{ fontSize: '12px', color: 'rgba(34,34,36,0.38)', fontFamily: M }}>
-                {DAYS[i]}
-              </span>
-              <div
-                className="w-9 h-9 rounded-full flex items-center justify-center"
-                style={{ background: isSelected ? '#222224' : 'transparent' }}
-              >
-                <span style={{
-                  fontSize: '17px', fontFamily: M,
-                  color: isSelected ? '#ffffff' : isToday ? '#222224' : 'rgba(34,34,36,0.65)',
-                  fontWeight: isToday && !isSelected ? 700 : 400,
-                }}>
-                  {d.getDate()}
-                </span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      <div style={{ height: '1px', background: 'rgba(34,34,36,0.08)', margin: '0 32px' }} />
-
-      {/* Section label */}
-      <div className="px-8 pt-4 pb-2 flex-shrink-0">
-        <span style={{ fontFamily: M, fontSize: '13px', color: 'rgba(34,34,36,0.38)', textTransform: 'capitalize' }}>
-          {selLabel}
-        </span>
-      </div>
-
-      {/* Quick task add */}
-      <div className="px-8 pb-3 flex-shrink-0">
-        <div className="flex items-center gap-2 h-9 px-3 rounded-[10px]" style={{ background: '#ffffff', border: '1px solid rgba(34,34,36,0.09)' }}>
-          <Plus size={14} strokeWidth={1.75} color="rgba(34,34,36,0.3)" />
-          <input
-            className="flex-1 bg-transparent outline-none"
-            style={{ fontFamily: M, fontSize: '14px', color: '#222224' }}
-            placeholder="Добавить задачу..."
-            value={quickTask}
-            onChange={e => setQuickTask(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleQuickTask()}
-          />
-        </div>
-      </div>
-
-      {/* Task list */}
-      <div className="flex-1 overflow-y-auto px-8 pb-4 min-h-0">
-        {filteredTasks.length === 0 ? (
-          <div className="flex items-center justify-center h-24">
-            <span style={{ fontFamily: M, fontSize: '14px', color: 'rgba(34,34,36,0.25)' }}>
-              Нет задач на этот день
-            </span>
-          </div>
-        ) : (
-          <AnimatePresence mode="popLayout">
-            {filteredTasks.map((t, idx) => (
-              <motion.div
-                key={t.id}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ delay: idx * 0.03 }}
-              >
-                <DesktopTaskItem
-                  task={t}
-                  onToggle={() => toggleTask(t.id)}
-                  onToggleSubtask={toggleSubtask}
-                  onClick={() => onEditTask(t)}
-                />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        )}
-      </div>
-
-      {/* Quick chat input at bottom */}
-      <div className="px-8 pb-6 flex-shrink-0">
+    <div style={{ display: 'flex', gap: '5px', padding: '4px 0' }}>
+      {[0, 0.18, 0.36].map((delay, i) => (
         <div
-          className="flex items-center gap-3 px-4 rounded-2xl"
-          style={{ background: '#ffffff', border: '1px solid rgba(34,34,36,0.09)', height: '52px' }}
+          key={i}
+          className="dot-bounce"
+          style={{
+            width: 7, height: 7, borderRadius: '50%',
+            background: 'var(--text-30)',
+            animationDelay: `${delay}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ─── Chat input bar ────────────────────────────────────────────────────────────
+
+function ChatInputBar({
+  value, onChange, onSend, disabled, placeholder = 'Спрашивай о чём угодно',
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSend: () => void;
+  disabled?: boolean;
+  placeholder?: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      onSend();
+    }
+  };
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.style.height = 'auto';
+      ref.current.style.height = Math.min(ref.current.scrollHeight, 120) + 'px';
+    }
+  }, [value]);
+
+  const canSend = value.trim().length > 0 && !disabled;
+
+  return (
+    <div style={{
+      background: 'var(--surface)',
+      border: '1px solid var(--border-input)',
+      borderRadius: 24,
+      padding: '14px 16px 12px',
+      boxShadow: 'var(--shadow-input)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 10,
+    }}>
+      <textarea
+        ref={ref}
+        rows={1}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onKeyDown={handleKey}
+        placeholder={placeholder}
+        style={{
+          fontFamily: M,
+          fontSize: 15,
+          color: 'var(--text-primary)',
+          background: 'transparent',
+          border: 'none',
+          outline: 'none',
+          resize: 'none',
+          width: '100%',
+          lineHeight: 1.55,
+        }}
+      />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <button
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+          onClick={() => alert('Вложения — скоро')}
         >
-          <input
-            className="flex-1 bg-transparent outline-none"
-            style={{ fontFamily: M, fontSize: '15px', color: '#222224' }}
-            placeholder="Написать Мысли..."
-            value={quickChat}
-            onChange={e => setQuickChat(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleQuickChat()}
-          />
+          <Plus size={20} strokeWidth={1.5} color="var(--text-30)" />
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button
-            onClick={handleQuickChat}
-            disabled={!quickChat.trim()}
-            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
-            style={{ background: quickChat.trim() ? '#222224' : 'rgba(34,34,36,0.1)' }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+            onClick={() => alert('Голосовой ввод — скоро')}
           >
-            <ArrowUp size={16} strokeWidth={2} color="#ffffff" />
+            <Mic size={18} strokeWidth={1.5} color="var(--text-30)" />
+          </button>
+          <button
+            onClick={onSend}
+            disabled={!canSend}
+            style={{
+              width: 36, height: 36, borderRadius: '50%',
+              background: canSend ? 'var(--accent)' : 'rgba(9,14,23,0.1)',
+              border: 'none',
+              cursor: canSend ? 'pointer' : 'default',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'background 0.15s',
+              flexShrink: 0,
+            }}
+          >
+            <ArrowUp size={16} strokeWidth={2} color="var(--accent-text)" />
           </button>
         </div>
       </div>
@@ -338,18 +175,197 @@ function DashboardPanel({
   );
 }
 
-// ─── Chat panel ───────────────────────────────────────────────────────────────
+// ─── Today screen ──────────────────────────────────────────────────────────────
 
-interface Message {
-  role: 'user' | 'assistant' | 'tool';
-  content: string;
-  time: string;
-  tool_calls?: any[];
-  tool_call_id?: string;
+function TodayScreen({
+  tasks, setTasks, onQuickChat, onAddTask, onEditTask,
+}: {
+  tasks: Task[];
+  setTasks: (t: Task[] | ((p: Task[]) => Task[])) => void;
+  onQuickChat: (msg: string) => void;
+  onAddTask: () => void;
+  onEditTask: (t: Task) => void;
+}) {
+  const [chatInput, setChatInput] = useState('');
+  const today = todayStr();
+  const now = new Date();
+
+  const todayTasks = useMemo(() =>
+    (Array.isArray(tasks) ? tasks : [])
+      .filter(t => (t.date || today) === today)
+      .sort((a, b) => {
+        if (!a.time && !b.time) return 0;
+        if (!a.time) return 1;
+        if (!b.time) return -1;
+        return a.time.localeCompare(b.time);
+      }),
+    [tasks, today]
+  );
+
+  const toggleTask = (id: string) => {
+    setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
+      if (t.id === id) { const u = { ...t, done: !t.done }; db.saveTask(u); return u; }
+      return t;
+    }));
+  };
+
+  const handleChat = () => {
+    if (!chatInput.trim()) return;
+    onQuickChat(chatInput.trim());
+    setChatInput('');
+  };
+
+  const taskWord = (n: number) => {
+    if (n % 10 === 1 && n % 100 !== 11) return 'дело';
+    if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return 'дела';
+    return 'дел';
+  };
+
+  return (
+    <div style={{
+      flex: 1, display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      padding: '32px 40px', gap: 20, overflow: 'auto',
+    }}>
+      {/* Date & day */}
+      <div style={{ textAlign: 'center', marginBottom: 8 }}>
+        <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-30)', letterSpacing: '0.04em', marginBottom: 6 }}>
+          {formatDateCard(now)}
+        </div>
+        <div style={{ fontFamily: F, fontSize: 34, color: 'var(--text-80)', lineHeight: 1 }}>
+          {DAY_NAMES_RU[now.getDay()]}
+        </div>
+      </div>
+
+      {/* Card */}
+      <div style={{
+        background: 'var(--surface)',
+        borderRadius: 20,
+        border: '1px solid var(--border)',
+        boxShadow: 'var(--shadow-card)',
+        width: '100%',
+        maxWidth: 560,
+        overflow: 'hidden',
+      }}>
+        {/* Card header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '16px 20px',
+          borderBottom: '1px solid var(--border)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 9l5-5 5 5" stroke="var(--text-40)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-80)' }}>
+              {todayTasks.length > 0
+                ? `Ещё ${todayTasks.length} ${taskWord(todayTasks.length)}`
+                : 'Нет дел на сегодня'}
+            </span>
+          </div>
+          <button
+            onClick={onAddTask}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
+          >
+            <Plus size={18} strokeWidth={1.75} color="var(--text-40)" />
+          </button>
+        </div>
+
+        {/* Tasks */}
+        {todayTasks.map((task, idx) => (
+          <div
+            key={task.id}
+            onClick={() => onEditTask(task)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 14,
+              padding: '14px 20px',
+              borderBottom: idx < todayTasks.length - 1 ? '1px solid var(--border)' : undefined,
+              cursor: 'pointer',
+            }}
+          >
+            <button
+              onClick={e => { e.stopPropagation(); toggleTask(task.id); }}
+              style={{
+                width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                border: `1.5px solid ${task.done ? 'var(--text-primary)' : 'var(--text-30)'}`,
+                background: task.done ? 'var(--text-primary)' : 'transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}
+            >
+              {task.done && <Check size={10} color="#fff" strokeWidth={2.5} />}
+            </button>
+            <span style={{
+              fontFamily: M, fontSize: 14, flex: 1,
+              color: task.done ? 'var(--text-30)' : 'var(--text-primary)',
+              textDecoration: task.done ? 'line-through' : 'none',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {task.name}
+            </span>
+            {task.time && (
+              <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', flexShrink: 0 }}>
+                {task.time}
+              </span>
+            )}
+          </div>
+        ))}
+
+        {/* Quick chat input */}
+        <div style={{ borderTop: '1px solid var(--border)', padding: '13px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleChat()}
+              placeholder="Спрашивай о чём угодно"
+              style={{
+                flex: 1, border: 'none', outline: 'none', background: 'transparent',
+                fontFamily: M, fontSize: 14, color: 'var(--text-primary)',
+              }}
+            />
+            <button
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}
+              onClick={() => alert('Голосовой ввод — скоро')}
+            >
+              <Mic size={17} strokeWidth={1.5} color="var(--text-30)" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function DesktopChat({
-  threadId, threads, setThreads, tasks, setTasks, onClose, initialMessage, onInitialConsumed,
+// ─── Empty chat screen ──────────────────────────────────────────────────────────
+
+function EmptyChatScreen({ onSend }: { onSend: (msg: string) => void }) {
+  const [input, setInput] = useState('');
+  return (
+    <div style={{
+      flex: 1, display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      padding: '40px',
+    }}>
+      <div style={{ fontFamily: F, fontSize: 36, color: 'var(--text-80)', marginBottom: 32 }}>
+        есть мысли?
+      </div>
+      <div style={{ width: '100%', maxWidth: 560 }}>
+        <ChatInputBar
+          value={input}
+          onChange={setInput}
+          onSend={() => { if (input.trim()) { onSend(input.trim()); setInput(''); } }}
+          placeholder="Спрашивай о чём угодно"
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─── Chat view ──────────────────────────────────────────────────────────────────
+
+function ChatView({
+  threadId, threads, setThreads, tasks, setTasks, initialMessage, onInitialConsumed,
 }: {
   key?: React.Key;
   threadId: string;
@@ -357,13 +373,12 @@ function DesktopChat({
   setThreads: (t: Thread[] | ((p: Thread[]) => Thread[])) => void;
   tasks: Task[];
   setTasks: (t: Task[] | ((p: Task[]) => Task[])) => void;
-  onClose: () => void;
   initialMessage?: string | null;
   onInitialConsumed?: () => void;
 }) {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const didAutoSend = useRef(false);
 
   const thread = threads.find(t => t.id === threadId);
@@ -372,7 +387,6 @@ function DesktopChat({
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [thread?.messages, isTyping]);
 
-  // Auto-send pending message on mount
   useEffect(() => {
     if (initialMessage && !didAutoSend.current) {
       didAutoSend.current = true;
@@ -383,16 +397,11 @@ function DesktopChat({
 
   if (!thread) return null;
 
-  const ft = () => {
-    const n = new Date();
-    return n.getHours().toString().padStart(2, '0') + ':' + n.getMinutes().toString().padStart(2, '0');
-  };
-
   const sendMessage = async (text: string) => {
     if (!text.trim() || isTyping) return;
     setInput('');
 
-    const userMsg: Message = { role: 'user', content: text, time: ft() };
+    const userMsg = { role: 'user' as const, content: text, time: nowTime() };
     let updatedThread: Thread | undefined;
 
     setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
@@ -409,13 +418,13 @@ function DesktopChat({
       const current = threads.find(t => t.id === threadId);
       if (!current) return;
 
-      let history: Message[] = [...current.messages, userMsg];
-      const turnMsgs: Message[] = [];
+      let history = [...current.messages, userMsg];
+      const turnMsgs: typeof history = [];
       let response = await generateResponse(history);
 
       while (response.tool_calls) {
-        const toolResults: Message[] = [];
-        const assistantMsg: Message = { role: 'assistant', content: response.content || '', tool_calls: response.tool_calls, time: ft() };
+        const toolResults: typeof history = [];
+        const assistantMsg = { role: 'assistant' as const, content: response.content || '', tool_calls: response.tool_calls, time: nowTime() };
         turnMsgs.push(assistantMsg);
 
         for (const call of response.tool_calls) {
@@ -427,7 +436,7 @@ function DesktopChat({
             const filtered = args.date ? tasks.filter(t => t.date === args.date) : tasks;
             result = filtered.length > 0 ? filtered : 'Задач не найдено.';
           } else if (name === 'add_task') {
-            const newTask: Task = { id: uuid(), name: args.name, time: args.time || '', date: args.date || new Date().toISOString().split('T')[0], done: false, threadId };
+            const newTask: Task = { id: uuid(), name: args.name, time: args.time || '', date: args.date || todayStr(), done: false, threadId };
             setTasks(prev => [...(Array.isArray(prev) ? prev : []), newTask]);
             db.saveTask(newTask);
             result = { status: 'success', task: newTask };
@@ -443,7 +452,7 @@ function DesktopChat({
             result = { status: 'success' };
           }
 
-          toolResults.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result ?? { status: 'ok' }), time: ft() });
+          toolResults.push({ role: 'tool' as const, tool_call_id: call.id, content: JSON.stringify(result ?? { status: 'ok' }), time: nowTime() });
         }
 
         turnMsgs.push(...toolResults);
@@ -451,7 +460,7 @@ function DesktopChat({
         response = await generateResponse(history);
       }
 
-      const finalMsg: Message = { role: 'assistant', content: response.content || 'Готово!', time: ft() };
+      const finalMsg = { role: 'assistant' as const, content: response.content || 'Готово!', time: nowTime() };
       setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
         if (t.id === threadId) {
           const hasUser = t.messages.some(m => m.role === 'user' && m.content === userMsg.content && m.time === userMsg.time);
@@ -463,7 +472,7 @@ function DesktopChat({
         return t;
       }));
     } catch (err: any) {
-      const errMsg: Message = { role: 'assistant', content: `Ошибка: ${err.message || 'Не удалось связаться с ИИ.'}`, time: ft() };
+      const errMsg = { role: 'assistant' as const, content: `Ошибка: ${err.message || 'Не удалось связаться с ИИ.'}`, time: nowTime() };
       setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
         if (t.id === threadId) { const u = { ...t, messages: [...t.messages, errMsg] }; db.saveThread(u); return u; }
         return t;
@@ -473,101 +482,80 @@ function DesktopChat({
     }
   };
 
-  const handleSend = () => sendMessage(input);
-  const visibleMessages = thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls);
+  const visible = thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls);
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Chat header */}
-      <div className="flex items-center px-6 py-4 flex-shrink-0" style={{ borderBottom: '1px solid rgba(34,34,36,0.08)' }}>
-        <span style={{ fontFamily: M, fontSize: '15px', fontWeight: 600, color: '#222224', flex: 1 }}>
-          {thread.title}
-        </span>
-        <div className="flex items-center gap-1 rounded-full p-1" style={{ background: '#f0f0f0' }}>
-          <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: '#ffffff' }}>
-            <MessageCircle size={16} strokeWidth={1.75} color="#222224" />
-          </div>
-          <button
-            className="w-8 h-8 rounded-full flex items-center justify-center"
-            onClick={() => alert('Заметки будут в ближайших обновлениях')}
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Messages scroll area */}
+      <div
+        ref={scrollRef}
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '32px 48px 16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 24,
+        }}
+      >
+        {visible.map((m, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: m.role === 'user' ? 'flex-end' : 'flex-start',
+              maxWidth: m.role === 'user' ? '70%' : '100%',
+              alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+              gap: 5,
+            }}
           >
-            <StickyNote size={16} strokeWidth={1.75} color="rgba(34,34,36,0.3)" />
-          </button>
-        </div>
-      </div>
-
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-3 min-h-0">
-        {visibleMessages.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center">
-            <span style={{ fontFamily: M, fontSize: '16px', color: 'rgba(34,34,36,0.22)', textAlign: 'center', lineHeight: 1.6 }}>
-              Есть мысли?<br />Напиши сюда
-            </span>
-          </div>
-        ) : (
-          visibleMessages.map((m, i) => (
-            <div key={i} className={`flex flex-col max-w-[72%] gap-1 ${m.role === 'user' ? 'self-end items-end' : 'self-start items-start'}`}>
-              <div
-                className="px-4 py-2.5"
-                style={{
-                  fontSize: '14px', lineHeight: 1.6, fontFamily: M,
-                  background: m.role === 'user' ? '#222224' : '#ffffff',
-                  color: m.role === 'user' ? '#ffffff' : '#222224',
-                  borderRadius: m.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                }}
-              >
+            {m.role === 'user' ? (
+              <div style={{
+                background: 'rgba(9,14,23,0.06)',
+                borderRadius: 20,
+                padding: '10px 16px',
+                fontFamily: M, fontSize: 15, color: 'var(--text-80)',
+                lineHeight: 1.6,
+              }}>
                 {m.content}
               </div>
-              <span style={{ fontSize: '11px', color: 'rgba(34,34,36,0.3)', fontFamily: M }}>{m.time}</span>
-            </div>
-          ))
-        )}
+            ) : (
+              <div style={{
+                fontFamily: M, fontSize: 15, color: 'var(--text-80)',
+                lineHeight: 1.75, whiteSpace: 'pre-wrap',
+              }}>
+                {m.content}
+              </div>
+            )}
+            <span style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)' }}>{m.time}</span>
+          </div>
+        ))}
 
         {isTyping && (
-          <div className="self-start flex gap-1.5 px-4 py-3 rounded-[16px] rounded-bl-[4px]" style={{ background: '#ffffff' }}>
-            {[0, 0.15, 0.3].map((d, i) => (
-              <div key={i} className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'rgba(34,34,36,0.4)', animationDelay: `${d}s` }} />
-            ))}
+          <div style={{ alignSelf: 'flex-start' }}>
+            <TypingDots />
           </div>
         )}
       </div>
 
-      {/* Input */}
-      <div className="px-6 pb-6 flex-shrink-0">
-        <div className="rounded-[18px] p-4" style={{ background: '#ffffff' }}>
-          <input
-            className="w-full bg-transparent outline-none"
-            style={{ fontFamily: M, fontSize: '15px', color: '#222224' }}
-            placeholder="Есть мысли?"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-          />
-          <div className="flex items-center justify-between mt-3">
-            <button
-              className="w-8 h-8 flex items-center justify-center"
-              onClick={() => alert('Вложения будут в ближайших обновлениях')}
-            >
-              <Plus size={20} strokeWidth={1.75} color="rgba(34,34,36,0.32)" />
-            </button>
-            <button
-              disabled={!input.trim() || isTyping}
-              onClick={handleSend}
-              className="w-10 h-10 rounded-full flex items-center justify-center transition-colors"
-              style={{ background: input.trim() && !isTyping ? '#222224' : 'rgba(34,34,36,0.12)' }}
-            >
-              <ArrowUp size={18} strokeWidth={2} color="#ffffff" />
-            </button>
-          </div>
-        </div>
+      {/* Full-width input */}
+      <div style={{ padding: '0 40px 32px', flexShrink: 0 }}>
+        <ChatInputBar
+          value={input}
+          onChange={setInput}
+          onSend={() => sendMessage(input)}
+          disabled={isTyping}
+          placeholder="Задайте уточняющий вопрос"
+        />
       </div>
     </div>
   );
 }
 
-// ─── Threads + Chat split panel ───────────────────────────────────────────────
+// ─── Threads list ──────────────────────────────────────────────────────────────
 
-function ThreadsPanel({
+function ThreadsView({
   threads, setThreads, tasks, setTasks, curTh, setCurTh, startNewThread,
   pendingMessage, onPendingConsumed,
 }: {
@@ -582,8 +570,9 @@ function ThreadsPanel({
   onPendingConsumed: () => void;
 }) {
   const [search, setSearch] = useState('');
+  const [tab, setTab] = useState<'thoughts' | 'notes'>('thoughts');
 
-  const filtered = threads.filter(t =>
+  const filtered = (Array.isArray(threads) ? threads : []).filter(t =>
     t.title.toLowerCase().includes(search.toLowerCase()) ||
     t.preview.toLowerCase().includes(search.toLowerCase())
   );
@@ -596,105 +585,170 @@ function ThreadsPanel({
   };
 
   return (
-    <div className="flex h-full">
-      {/* Thread list */}
-      <div className="flex flex-col flex-shrink-0" style={{ width: '280px', borderRight: '1px solid rgba(34,34,36,0.08)' }}>
-        <div className="px-5 py-4 flex-shrink-0" style={{ borderBottom: '1px solid rgba(34,34,36,0.08)' }}>
-          <div className="h-9 rounded-full flex items-center gap-2 px-3" style={{ background: '#ffffff', border: '1px solid rgba(34,34,36,0.1)' }}>
-            <Search size={14} strokeWidth={1.75} color="rgba(34,34,36,0.32)" />
+    <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      {/* Thread list panel */}
+      <div style={{
+        width: curTh ? 320 : '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        borderRight: curTh ? '1px solid var(--border)' : undefined,
+        overflow: 'hidden',
+        flexShrink: 0,
+      }}>
+        {/* Header */}
+        <div style={{ padding: '32px 32px 20px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            {/* Tab switcher */}
+            <div style={{
+              display: 'flex',
+              background: 'rgba(0,0,0,0.05)',
+              borderRadius: 40,
+              padding: 4,
+              gap: 2,
+            }}>
+              {([['thoughts', 'ТВОИ МЫСЛИ'], ['notes', 'ЗАМЕТКИ']] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setTab(key)}
+                  style={{
+                    fontFamily: M, fontSize: 11, fontWeight: 600,
+                    letterSpacing: '0.08em',
+                    padding: '6px 14px',
+                    borderRadius: 40,
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: tab === key ? 'var(--surface)' : 'transparent',
+                    color: tab === key ? 'var(--text-primary)' : 'var(--text-muted)',
+                    transition: 'all 0.15s',
+                    boxShadow: tab === key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={startNewThread}
+              style={{
+                fontFamily: M, fontSize: 13, letterSpacing: '0.06em',
+                color: 'var(--text-primary)', background: 'none', border: 'none',
+                cursor: 'pointer', textTransform: 'uppercase', padding: 0,
+              }}
+            >
+              {tab === 'thoughts' ? 'НОВАЯ МЫСЛЬ' : 'НОВАЯ ЗАМЕТКА'}
+            </button>
+          </div>
+
+          {/* Search */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            background: 'rgba(0,0,0,0.04)',
+            borderRadius: 40,
+            padding: '10px 16px',
+          }}>
+            <Search size={15} strokeWidth={1.75} color="var(--text-30)" />
             <input
-              className="flex-1 bg-transparent outline-none"
-              style={{ fontFamily: M, fontSize: '13px', color: '#222224' }}
-              placeholder="Поиск мыслей..."
               value={search}
               onChange={e => setSearch(e.target.value)}
+              placeholder={tab === 'thoughts' ? 'Поиск по архиву мыслей' : 'Поиск по заметкам'}
+              style={{
+                flex: 1, border: 'none', outline: 'none', background: 'transparent',
+                fontFamily: M, fontSize: 14, color: 'var(--text-primary)',
+              }}
             />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        {/* List */}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
           {filtered.length === 0 ? (
-            <div className="text-center py-10" style={{ color: 'rgba(34,34,36,0.25)', fontFamily: M, fontSize: '13px' }}>
-              Нет мыслей.<br />Начни новую!
+            <div style={{ padding: '32px', fontFamily: M, fontSize: 14, color: 'var(--text-30)', textAlign: 'center' }}>
+              {search ? 'Ничего не найдено' : 'Мыслей пока нет'}
             </div>
           ) : (
             filtered.map(th => (
               <div
                 key={th.id}
                 onClick={() => setCurTh(th.id)}
-                className="px-5 py-3.5 cursor-pointer transition-colors"
                 style={{
-                  background: curTh === th.id ? 'rgba(34,34,36,0.05)' : 'transparent',
-                  borderBottom: '1px solid rgba(34,34,36,0.06)',
+                  padding: '16px 32px',
+                  borderTop: '1px solid var(--border)',
+                  cursor: 'pointer',
+                  background: curTh === th.id ? 'rgba(9,14,23,0.03)' : 'transparent',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 12,
                 }}
               >
-                <div style={{
-                  fontFamily: M, fontSize: '14px', fontWeight: 600, color: '#222224',
-                  marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
-                  {th.title}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontFamily: M, fontSize: 15, fontWeight: 500,
+                    color: 'var(--text-primary)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    marginBottom: 3,
+                  }}>
+                    {th.title}
+                  </div>
+                  <div style={{
+                    fontFamily: M, fontSize: 13, color: 'var(--text-muted)',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical' as const,
+                    overflow: 'hidden',
+                    lineHeight: 1.5,
+                  }}>
+                    {th.preview || 'Нет сообщений'}
+                  </div>
                 </div>
-                <div style={{
-                  fontSize: '12px', color: 'rgba(34,34,36,0.42)', lineHeight: 1.45,
-                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden',
-                  fontFamily: M,
-                }}>
-                  {th.preview || 'Нет сообщений'}
-                </div>
+                <button
+                  onClick={e => deleteThread(e, th.id)}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--text-30)', flexShrink: 0,
+                    fontSize: 18, lineHeight: 1, padding: '2px 0',
+                  }}
+                  title="Удалить"
+                >
+                  ···
+                </button>
               </div>
             ))
           )}
         </div>
       </div>
 
-      {/* Chat area */}
-      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        {curTh ? (
-          <DesktopChat
+      {/* Chat panel when thread selected */}
+      {curTh && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <ChatView
             key={curTh}
             threadId={curTh}
             threads={threads}
             setThreads={setThreads}
             tasks={tasks}
             setTasks={setTasks}
-            onClose={() => setCurTh(null)}
             initialMessage={pendingMessage}
             onInitialConsumed={onPendingConsumed}
           />
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center gap-5">
-            <span style={{ fontFamily: M, fontSize: '16px', color: 'rgba(34,34,36,0.22)', textAlign: 'center', lineHeight: 1.6 }}>
-              Выбери мысль слева<br />или начни новую
-            </span>
-            <button
-              onClick={startNewThread}
-              className="h-10 px-5 rounded-full flex items-center gap-2 transition-opacity hover:opacity-80"
-              style={{ background: '#222224' }}
-            >
-              <PenLine size={15} strokeWidth={1.75} color="#ffffff" />
-              <span style={{ fontFamily: M, fontSize: '13px', color: '#ffffff' }}>Новая мысль</span>
-            </button>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// ─── Root desktop layout ──────────────────────────────────────────────────────
+// ─── Calendar screen ───────────────────────────────────────────────────────────
 
-export default function DesktopApp({
-  tasks, setTasks, threads, setThreads, settings, setSettings,
-  screen, setScreen, curTh, setCurTh, startNewThread, handleLogout,
-}: DesktopAppProps) {
+function CalendarView({
+  tasks, setTasks, onAddTask, onEditTask,
+}: {
+  tasks: Task[];
+  setTasks: (t: Task[] | ((p: Task[]) => Task[])) => void;
+  onAddTask: () => void;
+  onEditTask: (t: Task) => void;
+}) {
   const [weekOffset, setWeekOffset] = useState(0);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
-
-  const today = new Date().toISOString().split('T')[0];
+  const [selectedDate, setSelectedDate] = useState(todayStr());
+  const today = todayStr();
 
   const weekDays = useMemo(() => {
     const now = new Date();
@@ -708,46 +762,339 @@ export default function DesktopApp({
     });
   }, [weekOffset]);
 
-  const filteredTasks = useMemo(() => {
-    return (Array.isArray(tasks) ? tasks : [])
+  const filteredTasks = useMemo(() =>
+    (Array.isArray(tasks) ? tasks : [])
       .filter(t => (t.date || today) === selectedDate)
       .sort((a, b) => {
         if (!a.time && !b.time) return 0;
         if (!a.time) return 1;
         if (!b.time) return -1;
         return a.time.localeCompare(b.time);
-      });
-  }, [tasks, selectedDate, today]);
+      }),
+    [tasks, selectedDate, today]
+  );
 
-  const toggleTask = (id: string) => {
-    setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
-      if (t.id === id) { const u = { ...t, done: !t.done }; db.saveTask(u); return u; }
-      return t;
-    }));
-  };
+  const month = MONTH_SHORT[weekDays[3].getMonth()];
+  const year = weekDays[3].getFullYear();
 
-  const toggleSubtask = (taskId: string, subtaskId: string) => {
-    setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
-      if (t.id === taskId && t.subtasks) {
-        const u = { ...t, subtasks: t.subtasks.map(s => s.id === subtaskId ? { ...s, done: !s.done } : s) };
-        db.saveTask(u);
-        return u;
-      }
-      return t;
-    }));
-  };
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ padding: '28px 40px 16px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div>
+            <div style={{ fontFamily: F, fontSize: 14, color: 'var(--text-30)' }}>{year}</div>
+            <div style={{ fontFamily: F, fontSize: 32, color: 'var(--text-80)', lineHeight: 1, marginTop: 2 }}>{month}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button onClick={() => setWeekOffset(v => v - 1)} style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="var(--text-40)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </button>
+            <button onClick={() => setWeekOffset(v => v + 1)} style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="var(--text-40)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </button>
+          </div>
+        </div>
+        <button
+          onClick={onAddTask}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--accent)', border: 'none', borderRadius: 40, padding: '8px 18px', cursor: 'pointer' }}
+        >
+          <Plus size={14} strokeWidth={2} color="var(--accent-text)" />
+          <span style={{ fontFamily: M, fontSize: 13, color: 'var(--accent-text)' }}>Добавить</span>
+        </button>
+      </div>
+
+      <div style={{ height: 1, background: 'var(--border)', margin: '0 40px' }} />
+
+      {/* Week row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', padding: '12px 40px', flexShrink: 0 }}>
+        {weekDays.map((d, i) => {
+          const ds = d.toISOString().split('T')[0];
+          const isSelected = ds === selectedDate;
+          const isToday = ds === today;
+          return (
+            <button
+              key={ds}
+              onClick={() => setSelectedDate(ds)}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '8px 4px', borderRadius: 12, border: 'none', background: 'transparent', cursor: 'pointer' }}
+            >
+              <span style={{
+                fontFamily: "'Russisch Sans', 'Muller', sans-serif",
+                fontSize: 13, fontWeight: 600, color: 'var(--text-30)', letterSpacing: '0.02em',
+              }}>
+                {WEEK_DAYS[i]}
+              </span>
+              <div style={{
+                width: 36, height: 36, borderRadius: '50%',
+                background: isSelected ? 'var(--accent)' : 'transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <span style={{
+                  fontSize: 18,
+                  fontFamily: "'Helvetica Neue', Helvetica, sans-serif",
+                  fontWeight: isToday && !isSelected ? 700 : 400,
+                  color: isSelected ? '#fff' : isToday ? 'var(--text-primary)' : 'var(--text-80)',
+                }}>
+                  {d.getDate()}
+                </span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ height: 1, background: 'var(--border)', margin: '0 40px' }} />
+
+      {/* Task list */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 40px' }}>
+        {filteredTasks.length === 0 ? (
+          <div style={{ padding: '32px 0', textAlign: 'center', fontFamily: M, fontSize: 14, color: 'var(--text-30)' }}>
+            Нет задач на этот день
+          </div>
+        ) : (
+          filteredTasks.map((task, idx) => (
+            <div
+              key={task.id}
+              onClick={() => onEditTask(task)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 14,
+                padding: '13px 0',
+                borderBottom: idx < filteredTasks.length - 1 ? '1px solid var(--border)' : undefined,
+                cursor: 'pointer',
+              }}
+            >
+              <button
+                onClick={e => {
+                  e.stopPropagation();
+                  setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
+                    if (t.id === task.id) { const u = { ...t, done: !t.done }; db.saveTask(u); return u; }
+                    return t;
+                  }));
+                }}
+                style={{
+                  width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                  border: `1.5px solid ${task.done ? 'var(--text-primary)' : 'var(--text-30)'}`,
+                  background: task.done ? 'var(--text-primary)' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', transition: 'all 0.15s',
+                }}
+              >
+                {task.done && <Check size={10} color="#fff" strokeWidth={2.5} />}
+              </button>
+              <span style={{
+                fontFamily: M, fontSize: 14, fontWeight: 500, flex: 1,
+                color: task.done ? 'var(--text-30)' : 'var(--text-primary)',
+                textDecoration: task.done ? 'line-through' : 'none',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {task.name}
+              </span>
+              {task.time && (
+                <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', flexShrink: 0 }}>{task.time}</span>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Sidebar ───────────────────────────────────────────────────────────────────
+
+function Sidebar({
+  collapsed, onToggle, screen, setScreen, threads, startNewThread,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+  screen: Screen;
+  setScreen: (s: Screen) => void;
+  threads: Thread[];
+  startNewThread: () => void;
+}) {
+  const [notesOpen, setNotesOpen] = useState(true);
+
+  const NavBtn = ({
+    icon, label, active, onClick,
+  }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) => (
+    <button
+      onClick={onClick}
+      title={collapsed ? label : undefined}
+      style={{
+        width: '100%',
+        display: 'flex', alignItems: 'center',
+        gap: collapsed ? 0 : 10,
+        justifyContent: collapsed ? 'center' : 'flex-start',
+        padding: collapsed ? '7px 0' : '7px 14px',
+        borderRadius: 40,
+        border: 'none',
+        cursor: 'pointer',
+        background: active ? 'var(--accent)' : 'transparent',
+        color: active ? '#fff' : 'var(--text-muted)',
+        transition: 'background 0.15s, color 0.15s',
+        minHeight: 36,
+        flexShrink: 0,
+      }}
+    >
+      <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{icon}</span>
+      {!collapsed && (
+        <span style={{ fontFamily: M, fontSize: 15, color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+          {label}
+        </span>
+      )}
+    </button>
+  );
+
+  const recentThreads = (Array.isArray(threads) ? threads : [])
+    .slice().sort((a, b) => b.createdAt - a.createdAt).slice(0, 8);
+
+  return (
+    <motion.div
+      animate={{ width: collapsed ? 60 : 190 }}
+      transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+      style={{
+        background: 'var(--surface)',
+        borderRight: '1px solid var(--border)',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        flexShrink: 0,
+        height: '100%',
+      }}
+    >
+      {/* Logo row */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: collapsed ? 'center' : 'space-between',
+        padding: collapsed ? '20px 0' : '20px 14px 20px 18px',
+        flexShrink: 0,
+      }}>
+        {/* Logo — clicking in collapsed mode expands */}
+        <button
+          onClick={collapsed ? onToggle : undefined}
+          style={{ background: 'none', border: 'none', padding: 0, cursor: collapsed ? 'pointer' : 'default', display: 'flex', alignItems: 'center' }}
+        >
+          <LogoIcon size={30} />
+        </button>
+        {!collapsed && (
+          <button
+            onClick={onToggle}
+            title="Свернуть"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', color: 'var(--text-30)', flexShrink: 0 }}
+          >
+            <PanelLeftClose size={18} strokeWidth={1.5} />
+          </button>
+        )}
+      </div>
+
+      {/* Nav */}
+      <nav style={{ padding: collapsed ? '0 8px' : '0 10px', display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
+        {/* New chat row */}
+        <button
+          onClick={startNewThread}
+          title={collapsed ? 'Новый чат' : undefined}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center',
+            gap: collapsed ? 0 : 10,
+            justifyContent: collapsed ? 'center' : 'flex-start',
+            padding: collapsed ? '7px 0' : '7px 14px',
+            borderRadius: 40,
+            border: 'none', cursor: 'pointer',
+            background: 'transparent',
+            minHeight: 36, flexShrink: 0,
+          }}
+        >
+          <Plus size={17} strokeWidth={1.75} color="var(--text-muted)" />
+          {!collapsed && <span style={{ fontFamily: M, fontSize: 15, color: 'var(--text-muted)' }}>Новый чат</span>}
+        </button>
+
+        <NavBtn icon={<Sun size={17} strokeWidth={1.75} />} label="Сегодня" active={screen === 'dash'} onClick={() => setScreen('dash')} />
+        <NavBtn icon={<Calendar size={17} strokeWidth={1.75} />} label="Календарь" active={screen === ('cal' as any)} onClick={() => setScreen('dash')} />
+        <NavBtn icon={<MessageCircle size={17} strokeWidth={1.75} />} label="Твои мысли" active={screen === 'threads' || screen === 'ai'} onClick={() => setScreen('threads')} />
+      </nav>
+
+      {/* Notes section — expanded only */}
+      {!collapsed && recentThreads.length > 0 && (
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', marginTop: 12 }}>
+          <button
+            onClick={() => setNotesOpen(v => !v)}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '4px 14px 4px 24px',
+              background: 'none', border: 'none', cursor: 'pointer', width: '100%',
+              flexShrink: 0,
+            }}
+          >
+            <span style={{ fontFamily: M, fontSize: 13, color: 'var(--text-30)' }}>Заметки</span>
+            <ChevronDown
+              size={14} strokeWidth={1.75} color="var(--text-30)"
+              style={{ transform: notesOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }}
+            />
+          </button>
+          {notesOpen && (
+            <div style={{ flex: 1, overflowY: 'auto', padding: '2px 10px' }}>
+              {recentThreads.map(th => (
+                <div
+                  key={th.id}
+                  style={{
+                    fontFamily: M, fontSize: 13, color: 'var(--text-muted)',
+                    padding: '4px 14px',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    cursor: 'pointer',
+                  }}
+                  title={th.title}
+                >
+                  {th.title}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Spacer */}
+      <div style={{ flex: 1 }} />
+
+      {/* Big "+" */}
+      <div style={{ textAlign: 'center', padding: '12px 0', borderTop: '1px solid var(--border)' }}>
+        <button
+          onClick={startNewThread}
+          title="Новый чат"
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: 26, color: 'var(--text-ultra)',
+            lineHeight: 1, display: 'block', width: '100%',
+            fontFamily: M,
+          }}
+        >
+          +
+        </button>
+      </div>
+
+      {/* Settings */}
+      <div style={{ padding: collapsed ? '12px 8px 20px' : '12px 10px 20px' }}>
+        <NavBtn icon={<SettingsIcon size={17} strokeWidth={1.75} />} label="Настройки" active={screen === 'settings'} onClick={() => setScreen('settings')} />
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Root ──────────────────────────────────────────────────────────────────────
+
+export default function DesktopApp({
+  tasks, setTasks, threads, setThreads, settings, setSettings,
+  screen, setScreen, curTh, setCurTh, startNewThread, handleLogout,
+}: DesktopAppProps) {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
 
   const addTask = async (name: string, time: string, date: string) => {
     const t: Task = { id: uuid(), name, time, date, done: false };
     setTasks(prev => [...(Array.isArray(prev) ? prev : []), t]);
     await db.saveTask(t);
     setIsAddModalOpen(false);
-  };
-
-  const quickAddTask = async (name: string) => {
-    const t: Task = { id: uuid(), name, time: '', date: selectedDate, done: false };
-    setTasks(prev => [...(Array.isArray(prev) ? prev : []), t]);
-    await db.saveTask(t);
   };
 
   const updateTask = async (id: string, name: string, time: string, date: string) => {
@@ -764,6 +1111,7 @@ export default function DesktopApp({
     setEditingTask(null);
   };
 
+  // Creates a thread and navigates to ai screen with pending first message
   const startNewThreadWithMessage = async (message: string) => {
     const newTh: Thread = {
       id: uuid(), title: 'Новая мысль', preview: message.slice(0, 60),
@@ -773,118 +1121,98 @@ export default function DesktopApp({
     await db.saveThread(newTh);
     setCurTh(newTh.id);
     setPendingMessage(message);
-    setScreen('threads');
+    setScreen('ai');
+  };
+
+  // "+" button in sidebar or header — new empty chat
+  const handleStartNewThread = () => {
+    startNewThread();
+    setScreen('ai');
   };
 
   const isThreadsOrAI = screen === 'threads' || screen === 'ai';
-  const sidebarWidth = sidebarCollapsed ? 60 : 220;
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: '#f0f0f0' }}>
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}>
+      {/* Sidebar */}
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed(v => !v)}
+        screen={screen}
+        setScreen={setScreen}
+        threads={threads}
+        startNewThread={handleStartNewThread}
+      />
 
-      {/* ── Sidebar ── */}
-      <div
-        className="flex flex-col flex-shrink-0 transition-all duration-200"
-        style={{
-          width: `${sidebarWidth}px`,
-          background: '#ffffff',
-          borderRight: '1px solid rgba(34,34,36,0.08)',
-          padding: '20px 0 20px',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Logo row + collapse button */}
-        <div
-          className="flex items-center mb-6 px-3"
-          style={{ justifyContent: sidebarCollapsed ? 'center' : 'space-between' }}
-        >
-          <div className="flex items-center" style={{ paddingLeft: sidebarCollapsed ? 0 : '4px' }}>
-            <LogoIcon size={28} />
-          </div>
-          {!sidebarCollapsed && (
-            <button
-              onClick={() => setSidebarCollapsed(true)}
-              className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-[rgba(34,34,36,0.06)]"
-              title="Свернуть"
-            >
-              <ChevronLeft size={16} strokeWidth={1.75} color="rgba(34,34,36,0.4)" />
-            </button>
-          )}
-          {sidebarCollapsed && (
-            <button
-              onClick={() => setSidebarCollapsed(false)}
-              className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-[rgba(34,34,36,0.06)]"
-              title="Развернуть"
-            >
-              <ChevronRight size={16} strokeWidth={1.75} color="rgba(34,34,36,0.4)" />
-            </button>
-          )}
-        </div>
-
-        {/* Primary nav */}
-        <nav className="flex flex-col gap-0.5 px-3 flex-1">
-          <NavItem
-            icon={<CalendarDays size={17} strokeWidth={1.75} />}
-            label="Календарь"
-            active={screen === 'dash'}
-            onClick={() => setScreen('dash')}
-            collapsed={sidebarCollapsed}
-          />
-          <NavItem
-            icon={<MessageCircle size={17} strokeWidth={1.75} />}
-            label="Мысли"
-            active={isThreadsOrAI}
-            onClick={() => setScreen('threads')}
-            collapsed={sidebarCollapsed}
-          />
-        </nav>
-
-        {/* New thread CTA */}
-        <div className="px-3 mb-4">
-          <button
-            onClick={startNewThread}
-            title={sidebarCollapsed ? 'Новая мысль' : undefined}
-            className="w-full h-10 rounded-[10px] flex items-center gap-2.5 transition-opacity hover:opacity-80"
-            style={{
-              background: '#222224',
-              padding: sidebarCollapsed ? '0 10px' : '0 12px',
-              justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-            }}
-          >
-            <PenLine size={15} strokeWidth={1.75} color="#ffffff" />
-            {!sidebarCollapsed && <span style={{ fontFamily: M, fontSize: '13px', color: '#ffffff' }}>Новая мысль</span>}
-          </button>
-        </div>
-
-        {/* Bottom nav */}
-        <div className="px-3 pt-3" style={{ borderTop: '1px solid rgba(34,34,36,0.08)' }}>
-          <NavItem
-            icon={<Settings size={17} strokeWidth={1.75} />}
-            label="Настройки"
-            active={screen === 'settings'}
-            onClick={() => setScreen('settings')}
-            collapsed={sidebarCollapsed}
-          />
-          <button
-            onClick={handleLogout}
-            title={sidebarCollapsed ? 'Выйти' : undefined}
-            className="w-full h-10 rounded-[10px] flex items-center gap-3 transition-colors hover:bg-[rgba(34,34,36,0.04)]"
-            style={{
-              padding: sidebarCollapsed ? '0 10px' : '0 12px',
-              justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-            }}
-          >
-            <LogOut size={17} strokeWidth={1.75} color="rgba(34,34,36,0.4)" />
-            {!sidebarCollapsed && <span style={{ fontFamily: M, fontSize: '14px', color: 'rgba(34,34,36,0.4)' }}>Выйти</span>}
-          </button>
-        </div>
-      </div>
-
-      {/* ── Main content ── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      {/* Main content */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
         <AnimatePresence mode="wait">
+
+          {screen === 'dash' && (
+            <motion.div
+              key="dash"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              style={{ flex: 1, display: 'flex', overflow: 'hidden' }}
+            >
+              <TodayScreen
+                tasks={tasks}
+                setTasks={setTasks}
+                onQuickChat={startNewThreadWithMessage}
+                onAddTask={() => setIsAddModalOpen(true)}
+                onEditTask={setEditingTask}
+              />
+            </motion.div>
+          )}
+
+          {screen === 'ai' && (
+            <motion.div
+              key="ai"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              style={{ flex: 1, display: 'flex', overflow: 'hidden' }}
+            >
+              {curTh ? (
+                <ChatView
+                  key={curTh}
+                  threadId={curTh}
+                  threads={threads}
+                  setThreads={setThreads}
+                  tasks={tasks}
+                  setTasks={setTasks}
+                  initialMessage={pendingMessage}
+                  onInitialConsumed={() => setPendingMessage(null)}
+                />
+              ) : (
+                <EmptyChatScreen onSend={startNewThreadWithMessage} />
+              )}
+            </motion.div>
+          )}
+
+          {screen === 'threads' && (
+            <motion.div
+              key="threads"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              style={{ flex: 1, display: 'flex', overflow: 'hidden' }}
+            >
+              <ThreadsView
+                threads={threads}
+                setThreads={setThreads}
+                tasks={tasks}
+                setTasks={setTasks}
+                curTh={curTh}
+                setCurTh={setCurTh}
+                startNewThread={handleStartNewThread}
+                pendingMessage={pendingMessage}
+                onPendingConsumed={() => setPendingMessage(null)}
+              />
+            </motion.div>
+          )}
+
           {screen === 'settings' && (
-            <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 overflow-hidden">
+            <motion.div
+              key="settings"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              style={{ flex: 1, display: 'flex', overflow: 'hidden' }}
+            >
               <SettingsScreen
                 settings={settings}
                 setSettings={setSettings}
@@ -894,41 +1222,6 @@ export default function DesktopApp({
             </motion.div>
           )}
 
-          {screen === 'dash' && (
-            <motion.div key="dash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 overflow-hidden flex flex-col">
-              <DashboardPanel
-                weekDays={weekDays}
-                weekOffset={weekOffset}
-                setWeekOffset={setWeekOffset}
-                selectedDate={selectedDate}
-                setSelectedDate={setSelectedDate}
-                today={today}
-                filteredTasks={filteredTasks}
-                toggleTask={toggleTask}
-                toggleSubtask={toggleSubtask}
-                onAddTask={() => setIsAddModalOpen(true)}
-                onEditTask={setEditingTask}
-                onQuickAddTask={quickAddTask}
-                onQuickChat={startNewThreadWithMessage}
-              />
-            </motion.div>
-          )}
-
-          {isThreadsOrAI && (
-            <motion.div key="threads" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 overflow-hidden flex flex-col">
-              <ThreadsPanel
-                threads={threads}
-                setThreads={setThreads}
-                tasks={tasks}
-                setTasks={setTasks}
-                curTh={curTh}
-                setCurTh={setCurTh}
-                startNewThread={startNewThread}
-                pendingMessage={pendingMessage}
-                onPendingConsumed={() => setPendingMessage(null)}
-              />
-            </motion.div>
-          )}
         </AnimatePresence>
       </div>
 
@@ -937,7 +1230,7 @@ export default function DesktopApp({
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onAdd={addTask}
-        initialDate={selectedDate}
+        initialDate={todayStr()}
       />
       <EditTaskModal
         task={editingTask}

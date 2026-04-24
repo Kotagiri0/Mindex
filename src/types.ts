@@ -51,6 +51,7 @@ export interface Settings {
   name?: string;
   avatar?: string;
   email?: string;
+  instructions?: string;
 }
 
 export interface LocalUser {
