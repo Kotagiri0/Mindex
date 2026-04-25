@@ -1268,7 +1268,6 @@ function Sidebar({
 }) {
   const [notesOpen, setNotesOpen] = useState(true);
 
-  // Правка №5: серый active вместо чёрного
   const NavBtn = ({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) => {
     const [hovered, setHovered] = useState(false);
     return (
@@ -1279,9 +1278,8 @@ function Sidebar({
         onMouseLeave={() => setHovered(false)}
         style={{
           width: '100%', display: 'flex', alignItems: 'center',
-          gap: collapsed ? 0 : 10,
-          justifyContent: collapsed ? 'center' : 'flex-start',
-          padding: collapsed ? '7px 0' : '7px 14px',
+          gap: 10, justifyContent: 'flex-start',
+          padding: '7px 12px',
           borderRadius: 40, border: 'none', cursor: 'pointer',
           background: active ? '#f0f0f0' : hovered ? '#f7f7f7' : 'transparent',
           color: active ? '#111' : '#888',
@@ -1291,11 +1289,13 @@ function Sidebar({
         }}
       >
         <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{icon}</span>
-        {!collapsed && (
-          <span style={{ fontFamily: M, fontSize: 15, color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden', fontWeight: 'inherit' }}>
-            {label}
-          </span>
-        )}
+        <motion.span
+          animate={{ opacity: collapsed ? 0 : 1 }}
+          transition={collapsed ? { duration: 0.1 } : { duration: 0.18, delay: 0.13 }}
+          style={{ fontFamily: M, fontSize: 15, whiteSpace: 'nowrap', fontWeight: 'inherit', color: 'inherit' }}
+        >
+          {label}
+        </motion.span>
       </button>
     );
   };
@@ -1309,7 +1309,7 @@ function Sidebar({
   return (
     <motion.div
       animate={{ width: collapsed ? 52 : 190 }}
-      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+      transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
       style={{
         background: 'var(--surface)',
         borderRight: '1px solid var(--border)',
@@ -1317,132 +1317,112 @@ function Sidebar({
         overflow: 'hidden', flexShrink: 0, height: '100%',
       }}
     >
-      {/* Правка №7: при свёрнутом — только кнопка разворачивания, без лого */}
-      <div style={{
-        display: 'flex', alignItems: 'center',
-        justifyContent: collapsed ? 'center' : 'space-between',
-        padding: collapsed ? '18px 0' : '18px 12px 18px 16px',
-        flexShrink: 0,
-      }}>
-        {collapsed ? (
-          <button onClick={onToggle} title="Развернуть" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', color: 'var(--text-40)' }}>
-            <PanelLeftOpen size={18} strokeWidth={1.5} />
-          </button>
-        ) : (
-          <>
-            <LogoIcon size={28} />
-            <button onClick={onToggle} title="Свернуть" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', color: 'var(--text-30)', flexShrink: 0 }}>
-              <PanelLeftClose size={18} strokeWidth={1.5} />
-            </button>
-          </>
-        )}
+      {/* Header: logo fades, toggle button always visible */}
+      <div style={{ display: 'flex', alignItems: 'center', padding: '18px 12px 18px 14px', flexShrink: 0, gap: 8 }}>
+        <motion.div
+          animate={{ opacity: collapsed ? 0 : 1, width: collapsed ? 0 : 28 }}
+          transition={collapsed ? { duration: 0.12 } : { duration: 0.2, delay: 0.14 }}
+          style={{ overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center' }}
+        >
+          <LogoIcon size={28} />
+        </motion.div>
+        <div style={{ flex: 1 }} />
+        <button
+          onClick={onToggle}
+          title={collapsed ? 'Развернуть' : 'Свернуть'}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', color: 'var(--text-30)', flexShrink: 0 }}
+        >
+          {collapsed ? <PanelLeftOpen size={18} strokeWidth={1.5} /> : <PanelLeftClose size={18} strokeWidth={1.5} />}
+        </button>
       </div>
 
       {/* Nav */}
-      <nav style={{ padding: collapsed ? '0 6px' : '0 8px', display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
+      <nav style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
         <button
           onClick={startNewThread}
           title={collapsed ? 'Новый чат' : undefined}
-          style={{
-            width: '100%', display: 'flex', alignItems: 'center',
-            gap: collapsed ? 0 : 10,
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            padding: collapsed ? '7px 0' : '7px 14px',
-            borderRadius: 40, border: 'none', cursor: 'pointer',
-            background: 'transparent', color: '#888', minHeight: 36, flexShrink: 0,
-          }}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-start', padding: '7px 12px', borderRadius: 40, border: 'none', cursor: 'pointer', background: 'transparent', color: '#888', minHeight: 36, flexShrink: 0 }}
         >
-          <Plus size={17} strokeWidth={1.75} color="#888" />
-          {!collapsed && <span style={{ fontFamily: M, fontSize: 15, color: '#888' }}>Новый чат</span>}
+          <span style={{ display: 'flex', flexShrink: 0 }}><Plus size={17} strokeWidth={1.75} color="#888" /></span>
+          <motion.span
+            animate={{ opacity: collapsed ? 0 : 1 }}
+            transition={collapsed ? { duration: 0.1 } : { duration: 0.18, delay: 0.13 }}
+            style={{ fontFamily: M, fontSize: 15, color: '#888', whiteSpace: 'nowrap' }}
+          >
+            Новый чат
+          </motion.span>
         </button>
 
-        <NavBtn
-          icon={<Sun size={17} strokeWidth={1.75} />} label="Сегодня"
-          active={screen === 'dash' && !calActive}
-          onClick={() => { setScreen('dash'); setCalActive(false); }}
-        />
-        {/* Правка №3: Календарь теперь реально переключает вид */}
-        <NavBtn
-          icon={<Calendar size={17} strokeWidth={1.75} />} label="Календарь"
-          active={screen === 'dash' && calActive}
-          onClick={() => { setScreen('dash'); setCalActive(true); }}
-        />
-        <NavBtn
-          icon={<MessageCircle size={17} strokeWidth={1.75} />} label="Твои мысли"
-          active={screen === 'threads' || screen === 'ai'}
-          onClick={() => setScreen('threads')}
-        />
+        <NavBtn icon={<Sun size={17} strokeWidth={1.75} />} label="Сегодня" active={screen === 'dash' && !calActive} onClick={() => { setScreen('dash'); setCalActive(false); }} />
+        <NavBtn icon={<Calendar size={17} strokeWidth={1.75} />} label="Календарь" active={screen === 'dash' && calActive} onClick={() => { setScreen('dash'); setCalActive(true); }} />
+        <NavBtn icon={<MessageCircle size={17} strokeWidth={1.75} />} label="Твои мысли" active={screen === 'threads' || screen === 'ai'} onClick={() => setScreen('threads')} />
       </nav>
 
       {/* Notes section */}
-      {!collapsed && recentThreads.length > 0 && (
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', marginTop: 10 }}>
-          <button onClick={() => setNotesOpen(v => !v)} style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '4px 12px 4px 22px',
-            background: 'none', border: 'none', cursor: 'pointer', width: '100%', flexShrink: 0,
-          }}>
-            <span style={{ fontFamily: M, fontSize: 13, color: 'var(--text-30)' }}>Заметки</span>
-            <ChevronDown size={13} strokeWidth={1.75} color="var(--text-30)"
-              style={{ transform: notesOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
-          </button>
-          {notesOpen && (
-            <div style={{ flex: 1, overflowY: 'auto', padding: '2px 8px' }}>
-              {recentThreads.map(th => (
-                <div key={th.id} onClick={() => onOpenNote(th.id)} style={{
-                  fontFamily: M, fontSize: 13, color: 'var(--text-muted)',
-                  padding: '4px 12px', overflow: 'hidden', textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap', cursor: 'pointer', borderRadius: 6,
-                  transition: 'background 0.1s',
-                }}
-                title={th.title}
-                onMouseEnter={e => (e.currentTarget.style.background = '#f7f7f7')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                >
-                  {th.title}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      <AnimatePresence>
+        {!collapsed && recentThreads.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15, delay: 0.12 }}
+            style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', marginTop: 10 }}
+          >
+            <button onClick={() => setNotesOpen(v => !v)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 12px 4px 22px', background: 'none', border: 'none', cursor: 'pointer', width: '100%', flexShrink: 0 }}>
+              <span style={{ fontFamily: M, fontSize: 13, color: 'var(--text-30)' }}>Заметки</span>
+              <ChevronDown size={13} strokeWidth={1.75} color="var(--text-30)" style={{ transform: notesOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+            </button>
+            {notesOpen && (
+              <div style={{ flex: 1, overflowY: 'auto', padding: '2px 8px' }}>
+                {recentThreads.map(th => (
+                  <div key={th.id} onClick={() => onOpenNote(th.id)}
+                    title={th.title}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#f7f7f7')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)', padding: '4px 12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer', borderRadius: 6, transition: 'background 0.1s' }}
+                  >
+                    {th.title}
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Spacer — заполняет пространство когда notes-секция не рендерится */}
+      {/* Spacer */}
       {(collapsed || recentThreads.length === 0) && <div style={{ flex: 1 }} />}
 
-      {/* Drag & drop catch zone */}
+      {/* Drag & drop zone */}
       <div
         onMouseEnter={() => setDropHovered(true)}
         onMouseLeave={() => setDropHovered(false)}
         onDragOver={e => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={e => {
-          e.preventDefault();
-          setDragOver(false);
+          e.preventDefault(); setDragOver(false);
           const text = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text');
           if (text.trim()) onDropText(text.trim());
         }}
         style={{
-          margin: collapsed ? '0 6px 10px' : '0 8px 10px',
-          borderRadius: 10,
+          margin: '0 8px 10px', borderRadius: 10,
           border: `1.5px dashed ${dragOver ? 'var(--text-primary)' : dropHovered ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.12)'}`,
           background: dragOver ? 'rgba(0,0,0,0.04)' : 'transparent',
           transition: 'border-color 0.15s, background 0.15s',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          gap: 4,
-          minHeight: 72, cursor: 'default',
+          gap: 4, minHeight: 72, cursor: 'default',
         }}
       >
         <span style={{ fontFamily: M, fontSize: 20, color: dragOver ? 'var(--text-primary)' : dropHovered ? 'var(--text-30)' : 'var(--text-ultra)', lineHeight: 1, transition: 'color 0.15s' }}>+</span>
         {!collapsed && (dropHovered || dragOver) && (
-          <span style={{ fontFamily: M, fontSize: 11, color: dragOver ? 'var(--text-primary)' : 'var(--text-30)', textAlign: 'center', lineHeight: 1.4, padding: '0 6px', transition: 'color 0.15s' }}>
+          <span style={{ fontFamily: M, fontSize: 11, color: dragOver ? 'var(--text-primary)' : 'var(--text-30)', textAlign: 'center', lineHeight: 1.4, padding: '0 6px' }}>
             {dragOver ? 'Отпусти — создастся заметка' : 'Перетащи сюда любой текст'}
           </span>
         )}
       </div>
 
       {/* Settings */}
-      <div style={{ padding: collapsed ? '10px 6px 18px' : '10px 8px 18px' }}>
+      <div style={{ padding: '10px 8px 18px' }}>
         <NavBtn icon={<SettingsIcon size={17} strokeWidth={1.75} />} label="Настройки" active={screen === 'settings'} onClick={() => setScreen('settings')} />
       </div>
     </motion.div>
