@@ -104,6 +104,20 @@ input, textarea, button {
 ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.1); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.18); }
 
+/* ─── Content container ──────────────────────────────────────────────────── */
+
+.content-container {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* Sidebar nav button hover */
+.nav-btn:hover:not([data-active="true"]) {
+  background: #f7f7f7 !important;
+}
+
 /* ─── Animations ─────────────────────────────────────────────────────────── */
 
 @keyframes fadeIn {

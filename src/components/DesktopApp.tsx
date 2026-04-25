@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Sun, Calendar, MessageCircle, Settings as SettingsIcon,
   Plus, ChevronDown, ArrowUp, Search, Check, Mic,
-  PanelLeftClose, PanelLeftOpen,
+  PanelLeftOpen, PanelLeftClose,
 } from 'lucide-react';
 import { Task, Thread, Settings as SettingsType, Screen } from '../types';
 import AddTaskModal from './AddTaskModal';
@@ -30,6 +30,14 @@ function nowTime() {
   return `${fmt2(n.getHours())}:${fmt2(n.getMinutes())}`;
 }
 
+// Правка №1: контейнер 720px по центру
+const CC: React.CSSProperties = {
+  width: '100%',
+  maxWidth: 720,
+  margin: '0 auto',
+  padding: '0 24px',
+};
+
 // ─── Logo ──────────────────────────────────────────────────────────────────────
 
 function LogoIcon({ size = 28 }: { size?: number }) {
@@ -44,7 +52,7 @@ function LogoIcon({ size = 28 }: { size?: number }) {
   );
 }
 
-// ─── Root props ────────────────────────────────────────────────────────────────
+// ─── Props ─────────────────────────────────────────────────────────────────────
 
 interface DesktopAppProps {
   tasks: Task[];
@@ -65,17 +73,12 @@ interface DesktopAppProps {
 
 function TypingDots() {
   return (
-    <div style={{ display: 'flex', gap: '5px', padding: '4px 0' }}>
+    <div style={{ display: 'flex', gap: 5, padding: '4px 0' }}>
       {[0, 0.18, 0.36].map((delay, i) => (
-        <div
-          key={i}
-          className="dot-bounce"
-          style={{
-            width: 7, height: 7, borderRadius: '50%',
-            background: 'var(--text-30)',
-            animationDelay: `${delay}s`,
-          }}
-        />
+        <div key={i} className="dot-bounce" style={{
+          width: 7, height: 7, borderRadius: '50%',
+          background: 'var(--text-30)', animationDelay: `${delay}s`,
+        }} />
       ))}
     </div>
   );
@@ -95,10 +98,7 @@ function ChatInputBar({
   const ref = useRef<HTMLTextAreaElement>(null);
 
   const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      onSend();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); }
   };
 
   useEffect(() => {
@@ -117,60 +117,96 @@ function ChatInputBar({
       borderRadius: 24,
       padding: '14px 16px 12px',
       boxShadow: 'var(--shadow-input)',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 10,
+      display: 'flex', flexDirection: 'column', gap: 10,
     }}>
       <textarea
-        ref={ref}
-        rows={1}
-        value={value}
+        ref={ref} rows={1} value={value}
         onChange={e => onChange(e.target.value)}
         onKeyDown={handleKey}
         placeholder={placeholder}
         style={{
-          fontFamily: M,
-          fontSize: 15,
-          color: 'var(--text-primary)',
-          background: 'transparent',
-          border: 'none',
-          outline: 'none',
-          resize: 'none',
-          width: '100%',
-          lineHeight: 1.55,
+          fontFamily: M, fontSize: 15, color: 'var(--text-primary)',
+          background: 'transparent', border: 'none', outline: 'none',
+          resize: 'none', width: '100%', lineHeight: 1.55,
         }}
       />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <button
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
-          onClick={() => alert('Вложения — скоро')}
-        >
+        <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}
+          onClick={() => alert('Вложения — скоро')}>
           <Plus size={20} strokeWidth={1.5} color="var(--text-30)" />
         </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
-            onClick={() => alert('Голосовой ввод — скоро')}
-          >
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}
+            onClick={() => alert('Голосовой ввод — скоро')}>
             <Mic size={18} strokeWidth={1.5} color="var(--text-30)" />
           </button>
-          <button
-            onClick={onSend}
-            disabled={!canSend}
-            style={{
-              width: 36, height: 36, borderRadius: '50%',
-              background: canSend ? 'var(--accent)' : 'rgba(9,14,23,0.1)',
-              border: 'none',
-              cursor: canSend ? 'pointer' : 'default',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'background 0.15s',
-              flexShrink: 0,
-            }}
-          >
+          <button onClick={onSend} disabled={!canSend} style={{
+            width: 36, height: 36, borderRadius: '50%',
+            background: canSend ? 'var(--accent)' : 'rgba(9,14,23,0.1)',
+            border: 'none', cursor: canSend ? 'pointer' : 'default',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'background 0.15s', flexShrink: 0,
+          }}>
             <ArrowUp size={16} strokeWidth={2} color="var(--accent-text)" />
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Thread dropdown menu (правка №4) ─────────────────────────────────────────
+
+function ThreadMenu({ onDelete }: { onDelete: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        onClick={e => { e.stopPropagation(); setOpen(v => !v); }}
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: 'var(--text-30)', fontSize: 18, lineHeight: 1,
+          padding: '2px 4px', letterSpacing: 1,
+        }}
+      >
+        ···
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', right: 0, top: 'calc(100% + 4px)',
+          background: 'var(--surface)',
+          border: '1px solid var(--border-input)',
+          borderRadius: 10,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+          zIndex: 50,
+          minWidth: 130,
+          overflow: 'hidden',
+        }}>
+          <button
+            onClick={e => { e.stopPropagation(); onDelete(); setOpen(false); }}
+            style={{
+              width: '100%', display: 'block', background: 'none', border: 'none',
+              padding: '10px 16px', textAlign: 'left', cursor: 'pointer',
+              fontFamily: M, fontSize: 14, color: '#c0392b',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+          >
+            Удалить
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -222,114 +258,74 @@ function TodayScreen({
   };
 
   return (
-    <div style={{
-      flex: 1, display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      padding: '32px 40px', gap: 20, overflow: 'auto',
-    }}>
-      {/* Date & day */}
-      <div style={{ textAlign: 'center', marginBottom: 8 }}>
-        <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-30)', letterSpacing: '0.04em', marginBottom: 6 }}>
-          {formatDateCard(now)}
-        </div>
-        <div style={{ fontFamily: F, fontSize: 34, color: 'var(--text-80)', lineHeight: 1 }}>
-          {DAY_NAMES_RU[now.getDay()]}
-        </div>
-      </div>
-
-      {/* Card */}
-      <div style={{
-        background: 'var(--surface)',
-        borderRadius: 20,
-        border: '1px solid var(--border)',
-        boxShadow: 'var(--shadow-card)',
-        width: '100%',
-        maxWidth: 560,
-        overflow: 'hidden',
-      }}>
-        {/* Card header */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '16px 20px',
-          borderBottom: '1px solid var(--border)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M2 9l5-5 5 5" stroke="var(--text-40)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-80)' }}>
-              {todayTasks.length > 0
-                ? `Ещё ${todayTasks.length} ${taskWord(todayTasks.length)}`
-                : 'Нет дел на сегодня'}
-            </span>
+    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: 20 }}>
+      <div style={{ ...CC }}>
+        {/* Date & day */}
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-30)', letterSpacing: '0.04em', marginBottom: 6 }}>
+            {formatDateCard(now)}
           </div>
-          <button
-            onClick={onAddTask}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
-          >
-            <Plus size={18} strokeWidth={1.75} color="var(--text-40)" />
-          </button>
+          <div style={{ fontFamily: F, fontSize: 34, color: 'var(--text-80)', lineHeight: 1 }}>
+            {DAY_NAMES_RU[now.getDay()]}
+          </div>
         </div>
 
-        {/* Tasks */}
-        {todayTasks.map((task, idx) => (
-          <div
-            key={task.id}
-            onClick={() => onEditTask(task)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 14,
-              padding: '14px 20px',
+        {/* Card */}
+        <div style={{
+          background: 'var(--surface)', borderRadius: 20,
+          border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)',
+          overflow: 'hidden',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M2 9l5-5 5 5" stroke="var(--text-40)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-80)' }}>
+                {todayTasks.length > 0 ? `Ещё ${todayTasks.length} ${taskWord(todayTasks.length)}` : 'Нет дел на сегодня'}
+              </span>
+            </div>
+            <button onClick={onAddTask} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}>
+              <Plus size={18} strokeWidth={1.75} color="var(--text-40)" />
+            </button>
+          </div>
+
+          {todayTasks.map((task, idx) => (
+            <div key={task.id} onClick={() => onEditTask(task)} style={{
+              display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px',
               borderBottom: idx < todayTasks.length - 1 ? '1px solid var(--border)' : undefined,
               cursor: 'pointer',
-            }}
-          >
-            <button
-              onClick={e => { e.stopPropagation(); toggleTask(task.id); }}
-              style={{
+            }}>
+              <button onClick={e => { e.stopPropagation(); toggleTask(task.id); }} style={{
                 width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
                 border: `1.5px solid ${task.done ? 'var(--text-primary)' : 'var(--text-30)'}`,
                 background: task.done ? 'var(--text-primary)' : 'transparent',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 cursor: 'pointer', transition: 'all 0.15s',
-              }}
-            >
-              {task.done && <Check size={10} color="#fff" strokeWidth={2.5} />}
-            </button>
-            <span style={{
-              fontFamily: M, fontSize: 14, flex: 1,
-              color: task.done ? 'var(--text-30)' : 'var(--text-primary)',
-              textDecoration: task.done ? 'line-through' : 'none',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              {task.name}
-            </span>
-            {task.time && (
-              <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', flexShrink: 0 }}>
-                {task.time}
-              </span>
-            )}
-          </div>
-        ))}
+              }}>
+                {task.done && <Check size={10} color="#fff" strokeWidth={2.5} />}
+              </button>
+              <span style={{
+                fontFamily: M, fontSize: 14, flex: 1,
+                color: task.done ? 'var(--text-30)' : 'var(--text-primary)',
+                textDecoration: task.done ? 'line-through' : 'none',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>{task.name}</span>
+              {task.time && <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', flexShrink: 0 }}>{task.time}</span>}
+            </div>
+          ))}
 
-        {/* Quick chat input */}
-        <div style={{ borderTop: '1px solid var(--border)', padding: '13px 20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <input
-              value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleChat()}
-              placeholder="Спрашивай о чём угодно"
-              style={{
-                flex: 1, border: 'none', outline: 'none', background: 'transparent',
-                fontFamily: M, fontSize: 14, color: 'var(--text-primary)',
-              }}
-            />
-            <button
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}
-              onClick={() => alert('Голосовой ввод — скоро')}
-            >
-              <Mic size={17} strokeWidth={1.5} color="var(--text-30)" />
-            </button>
+          <div style={{ borderTop: '1px solid var(--border)', padding: '13px 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input value={chatInput} onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleChat()}
+                placeholder="Спрашивай о чём угодно"
+                style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 14, color: 'var(--text-primary)' }} />
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}
+                onClick={() => alert('Голосовой ввод — скоро')}>
+                <Mic size={17} strokeWidth={1.5} color="var(--text-30)" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -342,21 +338,19 @@ function TodayScreen({
 function EmptyChatScreen({ onSend }: { onSend: (msg: string) => void }) {
   const [input, setInput] = useState('');
   return (
-    <div style={{
-      flex: 1, display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      padding: '40px',
-    }}>
-      <div style={{ fontFamily: F, fontSize: 36, color: 'var(--text-80)', marginBottom: 32 }}>
-        есть мысли?
-      </div>
-      <div style={{ width: '100%', maxWidth: 560 }}>
-        <ChatInputBar
-          value={input}
-          onChange={setInput}
-          onSend={() => { if (input.trim()) { onSend(input.trim()); setInput(''); } }}
-          placeholder="Спрашивай о чём угодно"
-        />
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0' }}>
+        <div style={{ ...CC, textAlign: 'center' }}>
+          <div style={{ fontFamily: F, fontSize: 36, color: 'var(--text-80)', marginBottom: 32 }}>
+            есть мысли?
+          </div>
+          <ChatInputBar
+            value={input}
+            onChange={setInput}
+            onSend={() => { if (input.trim()) { onSend(input.trim()); setInput(''); } }}
+            placeholder="Спрашивай о чём угодно"
+          />
+        </div>
       </div>
     </div>
   );
@@ -486,88 +480,63 @@ function ChatView({
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Messages scroll area */}
-      <div
-        ref={scrollRef}
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: '32px 48px 16px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 24,
-        }}
-      >
-        {visible.map((m, i) => (
-          <div
-            key={i}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
+      {/* Messages — правка №2: контейнер 720px */}
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', paddingTop: 32, paddingBottom: 16 }}>
+        <div style={{ ...CC, display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {visible.map((m, i) => (
+            <div key={i} style={{
+              display: 'flex', flexDirection: 'column',
               alignItems: m.role === 'user' ? 'flex-end' : 'flex-start',
-              maxWidth: m.role === 'user' ? '70%' : '100%',
               alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+              maxWidth: m.role === 'user' ? '80%' : '100%',
+              width: m.role === 'user' ? undefined : '100%',
               gap: 5,
-            }}
-          >
-            {m.role === 'user' ? (
-              <div style={{
-                background: 'rgba(9,14,23,0.06)',
-                borderRadius: 20,
-                padding: '10px 16px',
-                fontFamily: M, fontSize: 15, color: 'var(--text-80)',
-                lineHeight: 1.6,
-              }}>
-                {m.content}
-              </div>
-            ) : (
-              <div style={{
-                fontFamily: M, fontSize: 15, color: 'var(--text-80)',
-                lineHeight: 1.75, whiteSpace: 'pre-wrap',
-              }}>
-                {m.content}
-              </div>
-            )}
-            <span style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)' }}>{m.time}</span>
-          </div>
-        ))}
-
-        {isTyping && (
-          <div style={{ alignSelf: 'flex-start' }}>
-            <TypingDots />
-          </div>
-        )}
+            }}>
+              {m.role === 'user' ? (
+                <div style={{
+                  background: 'rgba(9,14,23,0.06)', borderRadius: 20,
+                  padding: '10px 16px', fontFamily: M, fontSize: 15,
+                  color: 'var(--text-80)', lineHeight: 1.6,
+                }}>
+                  {m.content}
+                </div>
+              ) : (
+                <div style={{ fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>
+                  {m.content}
+                </div>
+              )}
+              <span style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)' }}>{m.time}</span>
+            </div>
+          ))}
+          {isTyping && <div style={{ alignSelf: 'flex-start' }}><TypingDots /></div>}
+        </div>
       </div>
 
-      {/* Full-width input */}
-      <div style={{ padding: '0 40px 32px', flexShrink: 0 }}>
-        <ChatInputBar
-          value={input}
-          onChange={setInput}
-          onSend={() => sendMessage(input)}
-          disabled={isTyping}
-          placeholder="Задайте уточняющий вопрос"
-        />
+      {/* Input — правка №2: фиксированная ширина = контейнер */}
+      <div style={{ padding: '0 0 32px', flexShrink: 0 }}>
+        <div style={{ ...CC }}>
+          <ChatInputBar
+            value={input}
+            onChange={setInput}
+            onSend={() => sendMessage(input)}
+            disabled={isTyping}
+            placeholder="Задайте уточняющий вопрос"
+          />
+        </div>
       </div>
     </div>
   );
 }
 
-// ─── Threads list ──────────────────────────────────────────────────────────────
+// ─── Threads view (правка №6: без правого сайдбара) ───────────────────────────
 
 function ThreadsView({
-  threads, setThreads, tasks, setTasks, curTh, setCurTh, startNewThread,
-  pendingMessage, onPendingConsumed,
+  threads, setThreads, startNewThread, onOpenThread,
 }: {
   threads: Thread[];
   setThreads: (t: Thread[] | ((p: Thread[]) => Thread[])) => void;
-  tasks: Task[];
-  setTasks: (t: Task[] | ((p: Task[]) => Task[])) => void;
-  curTh: string | null;
-  setCurTh: (id: string | null) => void;
   startNewThread: () => void;
-  pendingMessage: string | null;
-  onPendingConsumed: () => void;
+  onOpenThread: (id: string) => void;
 }) {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'thoughts' | 'notes'>('thoughts');
@@ -577,166 +546,88 @@ function ThreadsView({
     t.preview.toLowerCase().includes(search.toLowerCase())
   );
 
-  const deleteThread = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
+  const deleteThread = async (id: string) => {
     setThreads(prev => (Array.isArray(prev) ? prev : []).filter(t => t.id !== id));
     await db.deleteThread(id);
-    if (curTh === id) setCurTh(null);
   };
 
   return (
-    <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-      {/* Thread list panel */}
-      <div style={{
-        width: curTh ? 320 : '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        borderRight: curTh ? '1px solid var(--border)' : undefined,
-        overflow: 'hidden',
-        flexShrink: 0,
-      }}>
+    <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ ...CC, paddingTop: 40, paddingBottom: 40 }}>
         {/* Header */}
-        <div style={{ padding: '32px 32px 20px', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            {/* Tab switcher */}
-            <div style={{
-              display: 'flex',
-              background: 'rgba(0,0,0,0.05)',
-              borderRadius: 40,
-              padding: 4,
-              gap: 2,
-            }}>
-              {([['thoughts', 'ТВОИ МЫСЛИ'], ['notes', 'ЗАМЕТКИ']] as const).map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => setTab(key)}
-                  style={{
-                    fontFamily: M, fontSize: 11, fontWeight: 600,
-                    letterSpacing: '0.08em',
-                    padding: '6px 14px',
-                    borderRadius: 40,
-                    border: 'none',
-                    cursor: 'pointer',
-                    background: tab === key ? 'var(--surface)' : 'transparent',
-                    color: tab === key ? 'var(--text-primary)' : 'var(--text-muted)',
-                    transition: 'all 0.15s',
-                    boxShadow: tab === key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={startNewThread}
-              style={{
-                fontFamily: M, fontSize: 13, letterSpacing: '0.06em',
-                color: 'var(--text-primary)', background: 'none', border: 'none',
-                cursor: 'pointer', textTransform: 'uppercase', padding: 0,
-              }}
-            >
-              {tab === 'thoughts' ? 'НОВАЯ МЫСЛЬ' : 'НОВАЯ ЗАМЕТКА'}
-            </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          {/* Tab switcher */}
+          <div style={{ display: 'flex', background: 'rgba(0,0,0,0.05)', borderRadius: 40, padding: 4, gap: 2 }}>
+            {([['thoughts', 'ТВОИ МЫСЛИ'], ['notes', 'ЗАМЕТКИ']] as const).map(([key, label]) => (
+              <button key={key} onClick={() => setTab(key)} style={{
+                fontFamily: M, fontSize: 11, fontWeight: 600, letterSpacing: '0.08em',
+                padding: '6px 14px', borderRadius: 40, border: 'none', cursor: 'pointer',
+                background: tab === key ? 'var(--surface)' : 'transparent',
+                color: tab === key ? 'var(--text-primary)' : 'var(--text-muted)',
+                transition: 'all 0.15s',
+                boxShadow: tab === key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+              }}>
+                {label}
+              </button>
+            ))}
           </div>
-
-          {/* Search */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            background: 'rgba(0,0,0,0.04)',
-            borderRadius: 40,
-            padding: '10px 16px',
+          <button onClick={startNewThread} style={{
+            fontFamily: M, fontSize: 13, letterSpacing: '0.06em',
+            color: 'var(--text-primary)', background: 'none', border: 'none',
+            cursor: 'pointer', textTransform: 'uppercase', padding: 0,
           }}>
-            <Search size={15} strokeWidth={1.75} color="var(--text-30)" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder={tab === 'thoughts' ? 'Поиск по архиву мыслей' : 'Поиск по заметкам'}
-              style={{
-                flex: 1, border: 'none', outline: 'none', background: 'transparent',
-                fontFamily: M, fontSize: 14, color: 'var(--text-primary)',
-              }}
-            />
+            {tab === 'thoughts' ? 'НОВАЯ МЫСЛЬ' : 'НОВАЯ ЗАМЕТКА'}
+          </button>
+        </div>
+
+        {/* Search */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(0,0,0,0.04)', borderRadius: 40, padding: '10px 16px', marginBottom: 8 }}>
+          <Search size={15} strokeWidth={1.75} color="var(--text-30)" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder={tab === 'thoughts' ? 'Поиск по архиву мыслей' : 'Поиск по заметкам'}
+            style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 14, color: 'var(--text-primary)' }} />
+        </div>
+
+        {/* Thread list */}
+        {filtered.length === 0 ? (
+          <div style={{ padding: '40px 0', fontFamily: M, fontSize: 14, color: 'var(--text-30)', textAlign: 'center' }}>
+            {search ? 'Ничего не найдено' : 'Мыслей пока нет'}
           </div>
-        </div>
-
-        {/* List */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          {filtered.length === 0 ? (
-            <div style={{ padding: '32px', fontFamily: M, fontSize: 14, color: 'var(--text-30)', textAlign: 'center' }}>
-              {search ? 'Ничего не найдено' : 'Мыслей пока нет'}
-            </div>
-          ) : (
-            filtered.map(th => (
-              <div
-                key={th.id}
-                onClick={() => setCurTh(th.id)}
-                style={{
-                  padding: '16px 32px',
-                  borderTop: '1px solid var(--border)',
-                  cursor: 'pointer',
-                  background: curTh === th.id ? 'rgba(9,14,23,0.03)' : 'transparent',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 12,
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{
-                    fontFamily: M, fontSize: 15, fontWeight: 500,
-                    color: 'var(--text-primary)',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    marginBottom: 3,
-                  }}>
-                    {th.title}
-                  </div>
-                  <div style={{
-                    fontFamily: M, fontSize: 13, color: 'var(--text-muted)',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical' as const,
-                    overflow: 'hidden',
-                    lineHeight: 1.5,
-                  }}>
-                    {th.preview || 'Нет сообщений'}
-                  </div>
+        ) : (
+          filtered.map(th => (
+            <div key={th.id} onClick={() => onOpenThread(th.id)} style={{
+              padding: '16px 0',
+              borderTop: '1px solid var(--border)',
+              cursor: 'pointer',
+              display: 'flex', alignItems: 'flex-start', gap: 12,
+            }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3,
+                }}>
+                  {th.title}
                 </div>
-                <button
-                  onClick={e => deleteThread(e, th.id)}
-                  style={{
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    color: 'var(--text-30)', flexShrink: 0,
-                    fontSize: 18, lineHeight: 1, padding: '2px 0',
-                  }}
-                  title="Удалить"
-                >
-                  ···
-                </button>
+                <div style={{
+                  fontFamily: M, fontSize: 13, color: 'var(--text-muted)',
+                  display: '-webkit-box', WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical' as const,
+                  overflow: 'hidden', lineHeight: 1.5,
+                }}>
+                  {th.preview || 'Нет сообщений'}
+                </div>
               </div>
-            ))
-          )}
-        </div>
+              {/* Правка №4: дропдаун вместо прямого удаления */}
+              <ThreadMenu onDelete={() => deleteThread(th.id)} />
+            </div>
+          ))
+        )}
       </div>
-
-      {/* Chat panel when thread selected */}
-      {curTh && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <ChatView
-            key={curTh}
-            threadId={curTh}
-            threads={threads}
-            setThreads={setThreads}
-            tasks={tasks}
-            setTasks={setTasks}
-            initialMessage={pendingMessage}
-            onInitialConsumed={onPendingConsumed}
-          />
-        </div>
-      )}
     </div>
   );
 }
 
-// ─── Calendar screen ───────────────────────────────────────────────────────────
+// ─── Calendar view ─────────────────────────────────────────────────────────────
 
 function CalendarView({
   tasks, setTasks, onAddTask, onEditTask,
@@ -779,121 +670,84 @@ function CalendarView({
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{ padding: '28px 40px 16px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div>
-            <div style={{ fontFamily: F, fontSize: 14, color: 'var(--text-30)' }}>{year}</div>
-            <div style={{ fontFamily: F, fontSize: 32, color: 'var(--text-80)', lineHeight: 1, marginTop: 2 }}>{month}</div>
-          </div>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button onClick={() => setWeekOffset(v => v - 1)} style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="var(--text-40)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            </button>
-            <button onClick={() => setWeekOffset(v => v + 1)} style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="var(--text-40)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            </button>
-          </div>
-        </div>
-        <button
-          onClick={onAddTask}
-          style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--accent)', border: 'none', borderRadius: 40, padding: '8px 18px', cursor: 'pointer' }}
-        >
-          <Plus size={14} strokeWidth={2} color="var(--accent-text)" />
-          <span style={{ fontFamily: M, fontSize: 13, color: 'var(--accent-text)' }}>Добавить</span>
-        </button>
-      </div>
-
-      <div style={{ height: 1, background: 'var(--border)', margin: '0 40px' }} />
-
-      {/* Week row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', padding: '12px 40px', flexShrink: 0 }}>
-        {weekDays.map((d, i) => {
-          const ds = d.toISOString().split('T')[0];
-          const isSelected = ds === selectedDate;
-          const isToday = ds === today;
-          return (
-            <button
-              key={ds}
-              onClick={() => setSelectedDate(ds)}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '8px 4px', borderRadius: 12, border: 'none', background: 'transparent', cursor: 'pointer' }}
-            >
-              <span style={{
-                fontFamily: "'Russisch Sans', 'Muller', sans-serif",
-                fontSize: 13, fontWeight: 600, color: 'var(--text-30)', letterSpacing: '0.02em',
-              }}>
-                {WEEK_DAYS[i]}
-              </span>
-              <div style={{
-                width: 36, height: 36, borderRadius: '50%',
-                background: isSelected ? 'var(--accent)' : 'transparent',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <span style={{
-                  fontSize: 18,
-                  fontFamily: "'Helvetica Neue', Helvetica, sans-serif",
-                  fontWeight: isToday && !isSelected ? 700 : 400,
-                  color: isSelected ? '#fff' : isToday ? 'var(--text-primary)' : 'var(--text-80)',
-                }}>
-                  {d.getDate()}
-                </span>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ ...CC, paddingTop: 32, paddingBottom: 32 }}>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div>
+                <div style={{ fontFamily: F, fontSize: 13, color: 'var(--text-30)' }}>{year}</div>
+                <div style={{ fontFamily: F, fontSize: 30, color: 'var(--text-80)', lineHeight: 1.1 }}>{month}</div>
               </div>
+              <div style={{ display: 'flex', gap: 2 }}>
+                <button onClick={() => setWeekOffset(v => v - 1)} style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 11L5 7l4-4" stroke="var(--text-40)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </button>
+                <button onClick={() => setWeekOffset(v => v + 1)} style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="var(--text-40)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+            <button onClick={onAddTask} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--accent)', border: 'none', borderRadius: 40, padding: '8px 18px', cursor: 'pointer' }}>
+              <Plus size={14} strokeWidth={2} color="var(--accent-text)" />
+              <span style={{ fontFamily: M, fontSize: 13, color: 'var(--accent-text)' }}>Добавить</span>
             </button>
-          );
-        })}
-      </div>
-
-      <div style={{ height: 1, background: 'var(--border)', margin: '0 40px' }} />
-
-      {/* Task list */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 40px' }}>
-        {filteredTasks.length === 0 ? (
-          <div style={{ padding: '32px 0', textAlign: 'center', fontFamily: M, fontSize: 14, color: 'var(--text-30)' }}>
-            Нет задач на этот день
           </div>
-        ) : (
-          filteredTasks.map((task, idx) => (
-            <div
-              key={task.id}
-              onClick={() => onEditTask(task)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 14,
-                padding: '13px 0',
+
+          <div style={{ height: 1, background: 'var(--border)', marginBottom: 4 }} />
+
+          {/* Week row */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 4 }}>
+            {weekDays.map((d, i) => {
+              const ds = d.toISOString().split('T')[0];
+              const isSelected = ds === selectedDate;
+              const isToday = ds === today;
+              return (
+                <button key={ds} onClick={() => setSelectedDate(ds)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '8px 4px', borderRadius: 12, border: 'none', background: 'transparent', cursor: 'pointer' }}>
+                  <span style={{ fontFamily: "'Russisch Sans', 'Muller', sans-serif", fontSize: 12, fontWeight: 600, color: 'var(--text-30)', letterSpacing: '0.02em' }}>{WEEK_DAYS[i]}</span>
+                  <div style={{ width: 34, height: 34, borderRadius: '50%', background: isSelected ? 'var(--accent)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: 16, fontFamily: "'Helvetica Neue', Helvetica, sans-serif", fontWeight: isToday && !isSelected ? 700 : 400, color: isSelected ? '#fff' : isToday ? 'var(--text-primary)' : 'var(--text-80)' }}>
+                      {d.getDate()}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ height: 1, background: 'var(--border)', marginBottom: 16 }} />
+
+          {/* Tasks */}
+          {filteredTasks.length === 0 ? (
+            <div style={{ padding: '32px 0', textAlign: 'center', fontFamily: M, fontSize: 14, color: 'var(--text-30)' }}>Нет задач на этот день</div>
+          ) : (
+            filteredTasks.map((task, idx) => (
+              <div key={task.id} onClick={() => onEditTask(task)} style={{
+                display: 'flex', alignItems: 'center', gap: 14, padding: '13px 0',
                 borderBottom: idx < filteredTasks.length - 1 ? '1px solid var(--border)' : undefined,
                 cursor: 'pointer',
-              }}
-            >
-              <button
-                onClick={e => {
+              }}>
+                <button onClick={e => {
                   e.stopPropagation();
                   setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
                     if (t.id === task.id) { const u = { ...t, done: !t.done }; db.saveTask(u); return u; }
                     return t;
                   }));
-                }}
-                style={{
+                }} style={{
                   width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
                   border: `1.5px solid ${task.done ? 'var(--text-primary)' : 'var(--text-30)'}`,
                   background: task.done ? 'var(--text-primary)' : 'transparent',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer', transition: 'all 0.15s',
-                }}
-              >
-                {task.done && <Check size={10} color="#fff" strokeWidth={2.5} />}
-              </button>
-              <span style={{
-                fontFamily: M, fontSize: 14, fontWeight: 500, flex: 1,
-                color: task.done ? 'var(--text-30)' : 'var(--text-primary)',
-                textDecoration: task.done ? 'line-through' : 'none',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>
-                {task.name}
-              </span>
-              {task.time && (
-                <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', flexShrink: 0 }}>{task.time}</span>
-              )}
-            </div>
-          ))
-        )}
+                }}>
+                  {task.done && <Check size={10} color="#fff" strokeWidth={2.5} />}
+                </button>
+                <span style={{ fontFamily: M, fontSize: 14, fontWeight: 500, flex: 1, color: task.done ? 'var(--text-30)' : 'var(--text-primary)', textDecoration: task.done ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.name}</span>
+                {task.time && <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', flexShrink: 0 }}>{task.time}</span>}
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
@@ -902,94 +756,88 @@ function CalendarView({
 // ─── Sidebar ───────────────────────────────────────────────────────────────────
 
 function Sidebar({
-  collapsed, onToggle, screen, setScreen, threads, startNewThread,
+  collapsed, onToggle, screen, setScreen, calActive, setCalActive, threads, startNewThread,
 }: {
   collapsed: boolean;
   onToggle: () => void;
   screen: Screen;
   setScreen: (s: Screen) => void;
+  calActive: boolean;
+  setCalActive: (v: boolean) => void;
   threads: Thread[];
   startNewThread: () => void;
 }) {
   const [notesOpen, setNotesOpen] = useState(true);
 
-  const NavBtn = ({
-    icon, label, active, onClick,
-  }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) => (
-    <button
-      onClick={onClick}
-      title={collapsed ? label : undefined}
-      style={{
-        width: '100%',
-        display: 'flex', alignItems: 'center',
-        gap: collapsed ? 0 : 10,
-        justifyContent: collapsed ? 'center' : 'flex-start',
-        padding: collapsed ? '7px 0' : '7px 14px',
-        borderRadius: 40,
-        border: 'none',
-        cursor: 'pointer',
-        background: active ? 'var(--accent)' : 'transparent',
-        color: active ? '#fff' : 'var(--text-muted)',
-        transition: 'background 0.15s, color 0.15s',
-        minHeight: 36,
-        flexShrink: 0,
-      }}
-    >
-      <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{icon}</span>
-      {!collapsed && (
-        <span style={{ fontFamily: M, fontSize: 15, color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden' }}>
-          {label}
-        </span>
-      )}
-    </button>
-  );
+  // Правка №5: серый active вместо чёрного
+  const NavBtn = ({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) => {
+    const [hovered, setHovered] = useState(false);
+    return (
+      <button
+        onClick={onClick}
+        title={collapsed ? label : undefined}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center',
+          gap: collapsed ? 0 : 10,
+          justifyContent: collapsed ? 'center' : 'flex-start',
+          padding: collapsed ? '7px 0' : '7px 14px',
+          borderRadius: 40, border: 'none', cursor: 'pointer',
+          background: active ? '#f0f0f0' : hovered ? '#f7f7f7' : 'transparent',
+          color: active ? '#111' : '#888',
+          fontWeight: active ? 500 : 400,
+          transition: 'background 0.12s, color 0.12s',
+          minHeight: 36, flexShrink: 0,
+        }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{icon}</span>
+        {!collapsed && (
+          <span style={{ fontFamily: M, fontSize: 15, color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden', fontWeight: 'inherit' }}>
+            {label}
+          </span>
+        )}
+      </button>
+    );
+  };
 
   const recentThreads = (Array.isArray(threads) ? threads : [])
     .slice().sort((a, b) => b.createdAt - a.createdAt).slice(0, 8);
 
   return (
     <motion.div
-      animate={{ width: collapsed ? 60 : 190 }}
-      transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+      animate={{ width: collapsed ? 52 : 190 }}
+      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
       style={{
         background: 'var(--surface)',
         borderRight: '1px solid var(--border)',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        flexShrink: 0,
-        height: '100%',
+        display: 'flex', flexDirection: 'column',
+        overflow: 'hidden', flexShrink: 0, height: '100%',
       }}
     >
-      {/* Logo row */}
+      {/* Правка №7: при свёрнутом — только кнопка разворачивания, без лого */}
       <div style={{
-        display: 'flex',
-        alignItems: 'center',
+        display: 'flex', alignItems: 'center',
         justifyContent: collapsed ? 'center' : 'space-between',
-        padding: collapsed ? '20px 0' : '20px 14px 20px 18px',
+        padding: collapsed ? '18px 0' : '18px 12px 18px 16px',
         flexShrink: 0,
       }}>
-        {/* Logo — clicking in collapsed mode expands */}
-        <button
-          onClick={collapsed ? onToggle : undefined}
-          style={{ background: 'none', border: 'none', padding: 0, cursor: collapsed ? 'pointer' : 'default', display: 'flex', alignItems: 'center' }}
-        >
-          <LogoIcon size={30} />
-        </button>
-        {!collapsed && (
-          <button
-            onClick={onToggle}
-            title="Свернуть"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', color: 'var(--text-30)', flexShrink: 0 }}
-          >
-            <PanelLeftClose size={18} strokeWidth={1.5} />
+        {collapsed ? (
+          <button onClick={onToggle} title="Развернуть" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', color: 'var(--text-40)' }}>
+            <PanelLeftOpen size={18} strokeWidth={1.5} />
           </button>
+        ) : (
+          <>
+            <LogoIcon size={28} />
+            <button onClick={onToggle} title="Свернуть" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', color: 'var(--text-30)', flexShrink: 0 }}>
+              <PanelLeftClose size={18} strokeWidth={1.5} />
+            </button>
+          </>
         )}
       </div>
 
       {/* Nav */}
-      <nav style={{ padding: collapsed ? '0 8px' : '0 10px', display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
-        {/* New chat row */}
+      <nav style={{ padding: collapsed ? '0 6px' : '0 8px', display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
         <button
           onClick={startNewThread}
           title={collapsed ? 'Новый чат' : undefined}
@@ -998,52 +846,52 @@ function Sidebar({
             gap: collapsed ? 0 : 10,
             justifyContent: collapsed ? 'center' : 'flex-start',
             padding: collapsed ? '7px 0' : '7px 14px',
-            borderRadius: 40,
-            border: 'none', cursor: 'pointer',
-            background: 'transparent',
-            minHeight: 36, flexShrink: 0,
+            borderRadius: 40, border: 'none', cursor: 'pointer',
+            background: 'transparent', color: '#888', minHeight: 36, flexShrink: 0,
           }}
         >
-          <Plus size={17} strokeWidth={1.75} color="var(--text-muted)" />
-          {!collapsed && <span style={{ fontFamily: M, fontSize: 15, color: 'var(--text-muted)' }}>Новый чат</span>}
+          <Plus size={17} strokeWidth={1.75} color="#888" />
+          {!collapsed && <span style={{ fontFamily: M, fontSize: 15, color: '#888' }}>Новый чат</span>}
         </button>
 
-        <NavBtn icon={<Sun size={17} strokeWidth={1.75} />} label="Сегодня" active={screen === 'dash'} onClick={() => setScreen('dash')} />
-        <NavBtn icon={<Calendar size={17} strokeWidth={1.75} />} label="Календарь" active={screen === ('cal' as any)} onClick={() => setScreen('dash')} />
-        <NavBtn icon={<MessageCircle size={17} strokeWidth={1.75} />} label="Твои мысли" active={screen === 'threads' || screen === 'ai'} onClick={() => setScreen('threads')} />
+        <NavBtn
+          icon={<Sun size={17} strokeWidth={1.75} />} label="Сегодня"
+          active={screen === 'dash' && !calActive}
+          onClick={() => { setScreen('dash'); setCalActive(false); }}
+        />
+        {/* Правка №3: Календарь теперь реально переключает вид */}
+        <NavBtn
+          icon={<Calendar size={17} strokeWidth={1.75} />} label="Календарь"
+          active={screen === 'dash' && calActive}
+          onClick={() => { setScreen('dash'); setCalActive(true); }}
+        />
+        <NavBtn
+          icon={<MessageCircle size={17} strokeWidth={1.75} />} label="Твои мысли"
+          active={screen === 'threads' || screen === 'ai'}
+          onClick={() => setScreen('threads')}
+        />
       </nav>
 
-      {/* Notes section — expanded only */}
+      {/* Notes section */}
       {!collapsed && recentThreads.length > 0 && (
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', marginTop: 12 }}>
-          <button
-            onClick={() => setNotesOpen(v => !v)}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '4px 14px 4px 24px',
-              background: 'none', border: 'none', cursor: 'pointer', width: '100%',
-              flexShrink: 0,
-            }}
-          >
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', marginTop: 10 }}>
+          <button onClick={() => setNotesOpen(v => !v)} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '4px 12px 4px 22px',
+            background: 'none', border: 'none', cursor: 'pointer', width: '100%', flexShrink: 0,
+          }}>
             <span style={{ fontFamily: M, fontSize: 13, color: 'var(--text-30)' }}>Заметки</span>
-            <ChevronDown
-              size={14} strokeWidth={1.75} color="var(--text-30)"
-              style={{ transform: notesOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }}
-            />
+            <ChevronDown size={13} strokeWidth={1.75} color="var(--text-30)"
+              style={{ transform: notesOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
           </button>
           {notesOpen && (
-            <div style={{ flex: 1, overflowY: 'auto', padding: '2px 10px' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '2px 8px' }}>
               {recentThreads.map(th => (
-                <div
-                  key={th.id}
-                  style={{
-                    fontFamily: M, fontSize: 13, color: 'var(--text-muted)',
-                    padding: '4px 14px',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    cursor: 'pointer',
-                  }}
-                  title={th.title}
-                >
+                <div key={th.id} style={{
+                  fontFamily: M, fontSize: 13, color: 'var(--text-muted)',
+                  padding: '4px 12px', overflow: 'hidden', textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap', cursor: 'pointer', borderRadius: 6,
+                }} title={th.title}>
                   {th.title}
                 </div>
               ))}
@@ -1052,27 +900,19 @@ function Sidebar({
         </div>
       )}
 
-      {/* Spacer */}
       <div style={{ flex: 1 }} />
 
       {/* Big "+" */}
-      <div style={{ textAlign: 'center', padding: '12px 0', borderTop: '1px solid var(--border)' }}>
-        <button
-          onClick={startNewThread}
-          title="Новый чат"
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: 26, color: 'var(--text-ultra)',
-            lineHeight: 1, display: 'block', width: '100%',
-            fontFamily: M,
-          }}
-        >
-          +
-        </button>
+      <div style={{ textAlign: 'center', padding: '10px 0', borderTop: '1px solid var(--border)' }}>
+        <button onClick={startNewThread} title="Новый чат" style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          fontSize: 24, color: 'var(--text-ultra)', lineHeight: 1,
+          display: 'block', width: '100%', fontFamily: M,
+        }}>+</button>
       </div>
 
       {/* Settings */}
-      <div style={{ padding: collapsed ? '12px 8px 20px' : '12px 10px 20px' }}>
+      <div style={{ padding: collapsed ? '10px 6px 18px' : '10px 8px 18px' }}>
         <NavBtn icon={<SettingsIcon size={17} strokeWidth={1.75} />} label="Настройки" active={screen === 'settings'} onClick={() => setScreen('settings')} />
       </div>
     </motion.div>
@@ -1086,6 +926,7 @@ export default function DesktopApp({
   screen, setScreen, curTh, setCurTh, startNewThread, handleLogout,
 }: DesktopAppProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [calActive, setCalActive] = useState(false); // правка №3
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
@@ -1111,12 +952,8 @@ export default function DesktopApp({
     setEditingTask(null);
   };
 
-  // Creates a thread and navigates to ai screen with pending first message
   const startNewThreadWithMessage = async (message: string) => {
-    const newTh: Thread = {
-      id: uuid(), title: 'Новая мысль', preview: message.slice(0, 60),
-      messages: [], createdAt: Date.now(),
-    };
+    const newTh: Thread = { id: uuid(), title: 'Новая мысль', preview: message.slice(0, 60), messages: [], createdAt: Date.now() };
     setThreads(prev => [...(Array.isArray(prev) ? prev : []), newTh]);
     await db.saveThread(newTh);
     setCurTh(newTh.id);
@@ -1124,52 +961,47 @@ export default function DesktopApp({
     setScreen('ai');
   };
 
-  // "+" button in sidebar or header — new empty chat
   const handleStartNewThread = () => {
     startNewThread();
     setScreen('ai');
   };
 
-  const isThreadsOrAI = screen === 'threads' || screen === 'ai';
+  // правка №6: открыть тред — перейти на ai экран
+  const handleOpenThread = (id: string) => {
+    setCurTh(id);
+    setScreen('ai');
+  };
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}>
-      {/* Sidebar */}
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(v => !v)}
         screen={screen}
         setScreen={setScreen}
+        calActive={calActive}
+        setCalActive={setCalActive}
         threads={threads}
         startNewThread={handleStartNewThread}
       />
 
-      {/* Main content */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
         <AnimatePresence mode="wait">
 
-          {screen === 'dash' && (
-            <motion.div
-              key="dash"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              style={{ flex: 1, display: 'flex', overflow: 'hidden' }}
-            >
-              <TodayScreen
-                tasks={tasks}
-                setTasks={setTasks}
-                onQuickChat={startNewThreadWithMessage}
-                onAddTask={() => setIsAddModalOpen(true)}
-                onEditTask={setEditingTask}
-              />
+          {screen === 'dash' && !calActive && (
+            <motion.div key="today" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+              <TodayScreen tasks={tasks} setTasks={setTasks} onQuickChat={startNewThreadWithMessage} onAddTask={() => setIsAddModalOpen(true)} onEditTask={setEditingTask} />
+            </motion.div>
+          )}
+
+          {screen === 'dash' && calActive && (
+            <motion.div key="cal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+              <CalendarView tasks={tasks} setTasks={setTasks} onAddTask={() => setIsAddModalOpen(true)} onEditTask={setEditingTask} />
             </motion.div>
           )}
 
           {screen === 'ai' && (
-            <motion.div
-              key="ai"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              style={{ flex: 1, display: 'flex', overflow: 'hidden' }}
-            >
+            <motion.div key="ai" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
               {curTh ? (
                 <ChatView
                   key={curTh}
@@ -1188,57 +1020,27 @@ export default function DesktopApp({
           )}
 
           {screen === 'threads' && (
-            <motion.div
-              key="threads"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              style={{ flex: 1, display: 'flex', overflow: 'hidden' }}
-            >
+            <motion.div key="threads" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
               <ThreadsView
                 threads={threads}
                 setThreads={setThreads}
-                tasks={tasks}
-                setTasks={setTasks}
-                curTh={curTh}
-                setCurTh={setCurTh}
                 startNewThread={handleStartNewThread}
-                pendingMessage={pendingMessage}
-                onPendingConsumed={() => setPendingMessage(null)}
+                onOpenThread={handleOpenThread}
               />
             </motion.div>
           )}
 
           {screen === 'settings' && (
-            <motion.div
-              key="settings"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              style={{ flex: 1, display: 'flex', overflow: 'hidden' }}
-            >
-              <SettingsScreen
-                settings={settings}
-                setSettings={setSettings}
-                onBack={() => setScreen('dash')}
-                onLogout={handleLogout}
-              />
+            <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+              <SettingsScreen settings={settings} setSettings={setSettings} onBack={() => setScreen('dash')} onLogout={handleLogout} />
             </motion.div>
           )}
 
         </AnimatePresence>
       </div>
 
-      {/* Modals */}
-      <AddTaskModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onAdd={addTask}
-        initialDate={todayStr()}
-      />
-      <EditTaskModal
-        task={editingTask}
-        onClose={() => setEditingTask(null)}
-        onUpdate={updateTask}
-        onDelete={deleteTask}
-        onOpenThread={id => { setCurTh(id); setScreen('ai'); }}
-      />
+      <AddTaskModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onAdd={addTask} initialDate={todayStr()} />
+      <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} onUpdate={updateTask} onDelete={deleteTask} onOpenThread={id => { setCurTh(id); setScreen('ai'); }} />
     </div>
   );
 }
