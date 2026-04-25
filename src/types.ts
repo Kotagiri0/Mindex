@@ -42,6 +42,8 @@ export interface Thread {
   preview: string;
   messages: Message[];
   createdAt: number;
+  source?: 'thread' | 'text';
+  summary?: string;
 }
 
 export interface Settings {

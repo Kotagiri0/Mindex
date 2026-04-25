@@ -9,6 +9,7 @@ import { Task, Thread, Settings as SettingsType, Screen } from '../types';
 import AddTaskModal from './AddTaskModal';
 import EditTaskModal from './EditTaskModal';
 import SettingsScreen from './Settings';
+import NoteView from './NoteView';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
@@ -528,27 +529,51 @@ function ChatView({
   );
 }
 
-// ─── Threads view (правка №6: без правого сайдбара) ───────────────────────────
+// ─── Threads view ──────────────────────────────────────────────────────────────
+
+function NoteTag({ label }: { label: string }) {
+  return (
+    <span style={{
+      fontFamily: M, fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
+      textTransform: 'uppercase' as const,
+      padding: '3px 8px', borderRadius: 40,
+      background: 'rgba(0,0,0,0.05)', color: 'var(--text-30)',
+      flexShrink: 0,
+    }}>{label}</span>
+  );
+}
 
 function ThreadsView({
-  threads, setThreads, startNewThread, onOpenThread,
+  threads, setThreads, startNewThread, onOpenThread, onOpenNote,
 }: {
   threads: Thread[];
   setThreads: (t: Thread[] | ((p: Thread[]) => Thread[])) => void;
   startNewThread: () => void;
   onOpenThread: (id: string) => void;
+  onOpenNote: (id: string) => void;
 }) {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'thoughts' | 'notes'>('thoughts');
 
-  const filtered = (Array.isArray(threads) ? threads : []).filter(t =>
+  const all = Array.isArray(threads) ? threads : [];
+  const thoughts = all.filter(t => t.source !== 'text');
+  const notes = all;
+
+  const applySearch = (list: Thread[]) => list.filter(t =>
     t.title.toLowerCase().includes(search.toLowerCase()) ||
     t.preview.toLowerCase().includes(search.toLowerCase())
   );
 
+  const displayed = tab === 'thoughts' ? applySearch(thoughts) : applySearch(notes);
+
   const deleteThread = async (id: string) => {
     setThreads(prev => (Array.isArray(prev) ? prev : []).filter(t => t.id !== id));
     await db.deleteThread(id);
+  };
+
+  const handleRowClick = (th: Thread) => {
+    if (tab === 'notes') onOpenNote(th.id);
+    else onOpenThread(th.id);
   };
 
   return (
@@ -556,7 +581,6 @@ function ThreadsView({
       <div style={{ ...CC, paddingTop: 40, paddingBottom: 40 }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          {/* Tab switcher */}
           <div style={{ display: 'flex', background: 'rgba(0,0,0,0.05)', borderRadius: 40, padding: 4, gap: 2 }}>
             {([['thoughts', 'ТВОИ МЫСЛИ'], ['notes', 'ЗАМЕТКИ']] as const).map(([key, label]) => (
               <button key={key} onClick={() => setTab(key)} style={{
@@ -574,9 +598,9 @@ function ThreadsView({
           <button onClick={startNewThread} style={{
             fontFamily: M, fontSize: 13, letterSpacing: '0.06em',
             color: 'var(--text-primary)', background: 'none', border: 'none',
-            cursor: 'pointer', textTransform: 'uppercase', padding: 0,
+            cursor: 'pointer', textTransform: 'uppercase' as const, padding: 0,
           }}>
-            {tab === 'thoughts' ? 'НОВАЯ МЫСЛЬ' : 'НОВАЯ ЗАМЕТКА'}
+            НОВАЯ МЫСЛЬ
           </button>
         </div>
 
@@ -588,36 +612,43 @@ function ThreadsView({
             style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 14, color: 'var(--text-primary)' }} />
         </div>
 
-        {/* Thread list */}
-        {filtered.length === 0 ? (
+        {/* List */}
+        {displayed.length === 0 ? (
           <div style={{ padding: '40px 0', fontFamily: M, fontSize: 14, color: 'var(--text-30)', textAlign: 'center' }}>
-            {search ? 'Ничего не найдено' : 'Мыслей пока нет'}
+            {search ? 'Ничего не найдено' : tab === 'thoughts' ? 'Мыслей пока нет' : 'Заметок пока нет'}
           </div>
         ) : (
-          filtered.map(th => (
-            <div key={th.id} onClick={() => onOpenThread(th.id)} style={{
+          displayed.map(th => (
+            <div key={th.id} onClick={() => handleRowClick(th)} style={{
               padding: '16px 0',
               borderTop: '1px solid var(--border)',
               cursor: 'pointer',
               display: 'flex', alignItems: 'flex-start', gap: 12,
             }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                  fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3,
-                }}>
-                  {th.title}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                  <div style={{
+                    fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+                  }}>
+                    {th.title}
+                  </div>
+                  {tab === 'notes' && <NoteTag label={th.source === 'text' ? 'Текст' : 'Мысль'} />}
                 </div>
-                <div style={{
-                  fontFamily: M, fontSize: 13, color: 'var(--text-muted)',
-                  display: '-webkit-box', WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical' as const,
-                  overflow: 'hidden', lineHeight: 1.5,
-                }}>
-                  {th.preview || 'Нет сообщений'}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{
+                    fontFamily: M, fontSize: 13, color: 'var(--text-muted)', flex: 1,
+                    display: '-webkit-box', WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical' as const,
+                    overflow: 'hidden', lineHeight: 1.5,
+                  }}>
+                    {th.preview || 'Нет сообщений'}
+                  </div>
+                  <span style={{ fontFamily: M, fontSize: 12, color: 'var(--text-30)', flexShrink: 0 }}>
+                    {new Date(th.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                  </span>
                 </div>
               </div>
-              {/* Правка №4: дропдаун вместо прямого удаления */}
               <ThreadMenu onDelete={() => deleteThread(th.id)} />
             </div>
           ))
@@ -756,7 +787,7 @@ function CalendarView({
 // ─── Sidebar ───────────────────────────────────────────────────────────────────
 
 function Sidebar({
-  collapsed, onToggle, screen, setScreen, calActive, setCalActive, threads, startNewThread,
+  collapsed, onToggle, screen, setScreen, calActive, setCalActive, threads, startNewThread, onOpenNote, onDropText,
 }: {
   collapsed: boolean;
   onToggle: () => void;
@@ -766,6 +797,8 @@ function Sidebar({
   setCalActive: (v: boolean) => void;
   threads: Thread[];
   startNewThread: () => void;
+  onOpenNote: (id: string) => void;
+  onDropText: (text: string) => void;
 }) {
   const [notesOpen, setNotesOpen] = useState(true);
 
@@ -800,6 +833,8 @@ function Sidebar({
       </button>
     );
   };
+
+  const [dragOver, setDragOver] = useState(false);
 
   const recentThreads = (Array.isArray(threads) ? threads : [])
     .slice().sort((a, b) => b.createdAt - a.createdAt).slice(0, 8);
@@ -887,11 +922,16 @@ function Sidebar({
           {notesOpen && (
             <div style={{ flex: 1, overflowY: 'auto', padding: '2px 8px' }}>
               {recentThreads.map(th => (
-                <div key={th.id} style={{
+                <div key={th.id} onClick={() => onOpenNote(th.id)} style={{
                   fontFamily: M, fontSize: 13, color: 'var(--text-muted)',
                   padding: '4px 12px', overflow: 'hidden', textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap', cursor: 'pointer', borderRadius: 6,
-                }} title={th.title}>
+                  transition: 'background 0.1s',
+                }}
+                title={th.title}
+                onMouseEnter={e => (e.currentTarget.style.background = '#f7f7f7')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
                   {th.title}
                 </div>
               ))}
@@ -900,15 +940,30 @@ function Sidebar({
         </div>
       )}
 
-      <div style={{ flex: 1 }} />
+      {collapsed && <div style={{ flex: 1 }} />}
 
-      {/* Big "+" */}
-      <div style={{ textAlign: 'center', padding: '10px 0', borderTop: '1px solid var(--border)' }}>
-        <button onClick={startNewThread} title="Новый чат" style={{
-          background: 'none', border: 'none', cursor: 'pointer',
-          fontSize: 24, color: 'var(--text-ultra)', lineHeight: 1,
-          display: 'block', width: '100%', fontFamily: M,
-        }}>+</button>
+      {/* Drag & drop catch zone */}
+      <div
+        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={e => {
+          e.preventDefault();
+          setDragOver(false);
+          const text = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text');
+          if (text.trim()) onDropText(text.trim());
+        }}
+        style={{
+          margin: collapsed ? '0 6px 10px' : '0 8px 10px',
+          borderRadius: 10,
+          border: `1.5px dashed ${dragOver ? 'var(--text-primary)' : 'rgba(0,0,0,0.12)'}`,
+          background: dragOver ? 'rgba(0,0,0,0.04)' : 'transparent',
+          transition: 'border-color 0.15s, background 0.15s',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          minHeight: 36, cursor: 'default',
+        }}
+        title="Перетащи текст сюда — создастся заметка"
+      >
+        <span style={{ fontFamily: M, fontSize: collapsed ? 18 : 20, color: dragOver ? 'var(--text-primary)' : 'var(--text-ultra)', lineHeight: 1 }}>+</span>
       </div>
 
       {/* Settings */}
@@ -926,7 +981,8 @@ export default function DesktopApp({
   screen, setScreen, curTh, setCurTh, startNewThread, handleLogout,
 }: DesktopAppProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [calActive, setCalActive] = useState(false); // правка №3
+  const [calActive, setCalActive] = useState(false);
+  const [noteMode, setNoteMode] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
@@ -966,10 +1022,32 @@ export default function DesktopApp({
     setScreen('ai');
   };
 
-  // правка №6: открыть тред — перейти на ai экран
   const handleOpenThread = (id: string) => {
     setCurTh(id);
+    setNoteMode(false);
     setScreen('ai');
+  };
+
+  const handleOpenNote = (id: string) => {
+    setCurTh(id);
+    setNoteMode(true);
+    setScreen('ai');
+  };
+
+  const handleDropText = async (text: string) => {
+    const words = text.trim().split(/\s+/).slice(0, 6).join(' ');
+    const title = words.length < text.trim().length ? words + '…' : words;
+    const newTh: Thread = {
+      id: uuid(),
+      title,
+      preview: text.slice(0, 60),
+      messages: [{ role: 'user', content: text, time: nowTime() }],
+      createdAt: Date.now(),
+      source: 'text',
+    };
+    setThreads(prev => [newTh, ...(Array.isArray(prev) ? prev : [])]);
+    await db.saveThread(newTh);
+    handleOpenNote(newTh.id);
   };
 
   return (
@@ -983,6 +1061,8 @@ export default function DesktopApp({
         setCalActive={setCalActive}
         threads={threads}
         startNewThread={handleStartNewThread}
+        onOpenNote={handleOpenNote}
+        onDropText={handleDropText}
       />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
@@ -1002,7 +1082,15 @@ export default function DesktopApp({
 
           {screen === 'ai' && (
             <motion.div key="ai" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-              {curTh ? (
+              {curTh && noteMode ? (
+                <NoteView
+                  threadId={curTh}
+                  threads={threads}
+                  setThreads={setThreads}
+                  tasks={tasks}
+                  onSwitchToChat={() => handleOpenThread(curTh)}
+                />
+              ) : curTh ? (
                 <ChatView
                   key={curTh}
                   threadId={curTh}
@@ -1026,6 +1114,7 @@ export default function DesktopApp({
                 setThreads={setThreads}
                 startNewThread={handleStartNewThread}
                 onOpenThread={handleOpenThread}
+                onOpenNote={handleOpenNote}
               />
             </motion.div>
           )}
