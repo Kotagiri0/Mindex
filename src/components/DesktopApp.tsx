@@ -71,6 +71,59 @@ interface DesktopAppProps {
   handleLogout: () => void;
 }
 
+// ─── Markdown renderer ────────────────────────────────────────────────────────
+
+function MarkdownText({ text, style }: { text: string; style?: React.CSSProperties }) {
+  const lines = text.split('\n');
+
+  const parseInline = (line: string, key: number): React.ReactNode => {
+    const parts: React.ReactNode[] = [];
+    const re = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
+    let last = 0, m: RegExpExecArray | null;
+    while ((m = re.exec(line)) !== null) {
+      if (m.index > last) parts.push(line.slice(last, m.index));
+      if (m[2]) parts.push(<strong key={m.index}>{m[2]}</strong>);
+      else if (m[3]) parts.push(<em key={m.index}>{m[3]}</em>);
+      else if (m[4]) parts.push(<code key={m.index} style={{ fontFamily: 'monospace', background: 'rgba(0,0,0,0.07)', borderRadius: 4, padding: '1px 5px', fontSize: '0.9em' }}>{m[4]}</code>);
+      last = m.index + m[0].length;
+    }
+    if (last < line.length) parts.push(line.slice(last));
+    return <React.Fragment key={key}>{parts}</React.Fragment>;
+  };
+
+  const nodes: React.ReactNode[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const numMatch = line.match(/^(\d+)\.\s+(.*)$/);
+    const bulletMatch = line.match(/^[-•]\s+(.*)$/);
+
+    if (numMatch || bulletMatch) {
+      const items: React.ReactNode[] = [];
+      while (i < lines.length) {
+        const l = lines[i];
+        const nm = l.match(/^(\d+)\.\s+(.*)$/);
+        const bm = l.match(/^[-•]\s+(.*)$/);
+        if (nm) { items.push(<li key={i}>{parseInline(nm[2], i)}</li>); i++; }
+        else if (bm) { items.push(<li key={i}>{parseInline(bm[1], i)}</li>); i++; }
+        else break;
+      }
+      nodes.push(numMatch
+        ? <ol key={`ol-${i}`} style={{ paddingLeft: 20, margin: '6px 0', display: 'flex', flexDirection: 'column', gap: 3 }}>{items}</ol>
+        : <ul key={`ul-${i}`} style={{ paddingLeft: 20, margin: '6px 0', listStyleType: 'disc', display: 'flex', flexDirection: 'column', gap: 3 }}>{items}</ul>
+      );
+    } else if (line === '') {
+      nodes.push(<br key={i} />);
+      i++;
+    } else {
+      nodes.push(<span key={i} style={{ display: 'block' }}>{parseInline(line, i)}</span>);
+      i++;
+    }
+  }
+
+  return <div style={style}>{nodes}</div>;
+}
+
 // ─── Typing indicator ──────────────────────────────────────────────────────────
 
 function TypingDots() {
@@ -702,8 +755,8 @@ function ChatView({
                     {m.content}
                   </div>
                 ) : (
-                  <div style={{ fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.75, whiteSpace: 'pre-wrap', width: '100%' }}>
-                    {m.content}
+                  <div style={{ width: '100%' }}>
+                    <MarkdownText text={m.content} style={{ fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.75 }} />
 
                     {/* Planning: questionnaire */}
                     {m.planning_data?.status === 'questionnaire' && (
