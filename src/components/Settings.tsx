@@ -109,14 +109,15 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
           {/* Avatar */}
           <div style={{
             width: 48, height: 48, borderRadius: '50%',
-            background: 'var(--text-primary)',
+            background: settings.avatar ? 'var(--text-primary)' : 'transparent',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0,
           }}>
             {settings.avatar ? (
               <img src={settings.avatar} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
             ) : (
-              <svg width="28" height="28" viewBox="0 0 125 125" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg width="48" height="48" viewBox="0 0 125 125" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="62.5" cy="62.5" r="62.5" fill="#222224"/>
                 <rect x="29.45" y="30.45" width="65.1" height="65.1" rx="32.55" stroke="#FEFEFE" strokeWidth="4.9"/>
                 <path d="M77 68L77 51" stroke="#FEFEFE" strokeWidth="4.9"/>
                 <path d="M65 68L65 51" stroke="#FEFEFE" strokeWidth="4.9"/>
