@@ -57,6 +57,35 @@ function IntegrationRow({ name, desc }: { name: string; desc: string }) {
   );
 }
 
+function SettingRow({ label, desc, value, onChange }: { label: string; desc?: string; value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div>
+      <div style={{ height: 1, background: 'rgba(0,0,0,0.06)' }} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0' }}>
+        <div>
+          <div style={{ fontFamily: M, fontSize: 15, color: 'var(--text-primary)', marginBottom: desc ? 2 : 0 }}>{label}</div>
+          {desc && <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)' }}>{desc}</div>}
+        </div>
+        <button
+          onClick={() => onChange(!value)}
+          style={{
+            width: 44, height: 24, borderRadius: 40, border: 'none',
+            background: value ? 'var(--accent)' : 'rgba(0,0,0,0.12)',
+            cursor: 'pointer', position: 'relative', transition: 'background 0.2s',
+            flexShrink: 0,
+          }}
+        >
+          <div style={{
+            width: 18, height: 18, borderRadius: '50%', background: '#fff',
+            position: 'absolute', top: 3, left: value ? 23 : 3,
+            transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+          }} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AccountRow({ label, action, onAction, danger }: { label: string; action: string; onAction: () => void; danger?: boolean }) {
   return (
     <div>
@@ -171,6 +200,32 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
               lineHeight: 1.6,
               boxSizing: 'border-box' as const,
             }}
+          />
+        </div>
+
+        {/* Toggles */}
+        <SectionDivider />
+        <div style={{ paddingTop: 24, marginBottom: 8 }}>
+          <div style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 4 }}>
+            Поведение
+          </div>
+          <SettingRow
+            label="Агент-режим"
+            desc="Мысль сама создаёт и редактирует задачи"
+            value={settings.agent}
+            onChange={v => setSettings({ ...settings, agent: v })}
+          />
+          <SettingRow
+            label="Подтверждение действий"
+            desc="Спрашивать перед изменением задач"
+            value={settings.confirm}
+            onChange={v => setSettings({ ...settings, confirm: v })}
+          />
+          <SettingRow
+            label="Уведомления"
+            desc="Напоминания о задачах"
+            value={settings.notifs}
+            onChange={v => setSettings({ ...settings, notifs: v })}
           />
         </div>
 

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Sun, Calendar, MessageCircle, Settings as SettingsIcon,
-  Plus, ChevronDown, ArrowUp, Search, Check, Mic,
+  Plus, ChevronDown, ArrowUp, Search, Check, Mic, Loader,
   PanelLeftOpen, PanelLeftClose,
 } from 'lucide-react';
 import { Task, Thread, Settings as SettingsType, Screen } from '../types';
@@ -143,16 +143,23 @@ function ChatInputBar({
           <Plus size={20} strokeWidth={1.5} color="var(--text-30)" />
         </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button
-            onMouseDown={startRecording}
-            onMouseUp={stopRecording}
-            onTouchStart={startRecording}
-            onTouchEnd={stopRecording}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}
-            title="Удерживай для записи"
+          <motion.button
+            onPointerDown={e => { e.preventDefault(); startRecording(); }}
+            onPointerUp={e => { e.preventDefault(); stopRecording(); }}
+            onPointerCancel={stopRecording}
+            title={isRecording ? 'Отпусти для завершения' : 'Удерживай для записи'}
+            style={{
+              width: 32, height: 32, borderRadius: '50%', border: 'none', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: isRecording ? '#c0392b' : isProcessing ? 'var(--accent)' : 'rgba(9,14,23,0.08)',
+              transition: 'background 0.15s',
+            }}
           >
-            <Mic size={18} strokeWidth={1.5} color={isRecording ? '#c0392b' : isProcessing ? 'var(--text-primary)' : 'var(--text-30)'} />
-          </button>
+            {isProcessing
+              ? <Loader size={15} strokeWidth={2} color="#fff" className="animate-spin" />
+              : <Mic size={15} strokeWidth={1.75} color={isRecording ? '#fff' : 'var(--text-40)'} />
+            }
+          </motion.button>
           <button onClick={onSend} disabled={!canSend} style={{
             width: 36, height: 36, borderRadius: '50%',
             background: canSend ? 'var(--accent)' : 'rgba(9,14,23,0.1)',
@@ -164,6 +171,73 @@ function ChatInputBar({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Task row with subtasks ────────────────────────────────────────────────────
+
+function TaskRow({
+  task, onToggle, onToggleSubtask, onClick,
+}: {
+  task: Task;
+  onToggle: () => void;
+  onToggleSubtask?: (subId: string) => void;
+  onClick: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const hasSubs = Boolean(task.subtasks?.length);
+
+  return (
+    <div>
+      <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', cursor: 'pointer' }}>
+        <button onClick={e => { e.stopPropagation(); onToggle(); }} style={{
+          width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+          border: `1.5px solid ${task.done ? 'var(--text-primary)' : 'var(--text-30)'}`,
+          background: task.done ? 'var(--text-primary)' : 'transparent',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', transition: 'all 0.15s',
+        }}>
+          {task.done && <Check size={10} color="#fff" strokeWidth={2.5} />}
+        </button>
+        <span style={{
+          fontFamily: M, fontSize: 14, flex: 1,
+          color: task.done ? 'var(--text-30)' : 'var(--text-primary)',
+          textDecoration: task.done ? 'line-through' : 'none',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{task.name}</span>
+        {task.time && <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', flexShrink: 0 }}>{task.time}</span>}
+        {hasSubs && (
+          <button onClick={e => { e.stopPropagation(); setExpanded(v => !v); }} style={{
+            background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+            display: 'flex', alignItems: 'center', color: 'var(--text-30)', flexShrink: 0,
+          }}>
+            <ChevronDown size={14} strokeWidth={1.75} style={{ transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+          </button>
+        )}
+      </div>
+      {hasSubs && expanded && (
+        <div style={{ paddingLeft: 54, paddingBottom: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {task.subtasks!.map(sub => (
+            <div key={sub.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button onClick={() => onToggleSubtask?.(sub.id)} style={{
+                width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                border: `1.5px solid ${sub.done ? 'var(--text-primary)' : 'var(--text-30)'}`,
+                background: sub.done ? 'var(--text-primary)' : 'transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}>
+                {sub.done && <Check size={8} color="#fff" strokeWidth={2.5} />}
+              </button>
+              <span style={{
+                fontFamily: M, fontSize: 13,
+                color: sub.done ? 'var(--text-30)' : 'var(--text-muted)',
+                textDecoration: sub.done ? 'line-through' : 'none',
+              }}>{sub.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -258,6 +332,15 @@ function TodayScreen({
     }));
   };
 
+  const toggleSubtask = (taskId: string, subId: string) => {
+    setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
+      if (t.id !== taskId) return t;
+      const u = { ...t, subtasks: t.subtasks?.map(s => s.id === subId ? { ...s, done: !s.done } : s) };
+      db.saveTask(u);
+      return u;
+    }));
+  };
+
   const handleChat = () => {
     if (!chatInput.trim()) return;
     onQuickChat(chatInput.trim());
@@ -304,27 +387,13 @@ function TodayScreen({
           </div>
 
           {todayTasks.map((task, idx) => (
-            <div key={task.id} onClick={() => onEditTask(task)} style={{
-              display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px',
-              borderBottom: idx < todayTasks.length - 1 ? '1px solid var(--border)' : undefined,
-              cursor: 'pointer',
-            }}>
-              <button onClick={e => { e.stopPropagation(); toggleTask(task.id); }} style={{
-                width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-                border: `1.5px solid ${task.done ? 'var(--text-primary)' : 'var(--text-30)'}`,
-                background: task.done ? 'var(--text-primary)' : 'transparent',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', transition: 'all 0.15s',
-              }}>
-                {task.done && <Check size={10} color="#fff" strokeWidth={2.5} />}
-              </button>
-              <span style={{
-                fontFamily: M, fontSize: 14, flex: 1,
-                color: task.done ? 'var(--text-30)' : 'var(--text-primary)',
-                textDecoration: task.done ? 'line-through' : 'none',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>{task.name}</span>
-              {task.time && <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', flexShrink: 0 }}>{task.time}</span>}
+            <div key={task.id} style={{ borderBottom: idx < todayTasks.length - 1 ? '1px solid var(--border)' : undefined }}>
+              <TaskRow
+                task={task}
+                onToggle={() => toggleTask(task.id)}
+                onToggleSubtask={(subId) => toggleSubtask(task.id, subId)}
+                onClick={() => onEditTask(task)}
+              />
             </div>
           ))}
 
@@ -457,6 +526,19 @@ function ChatView({
             setTasks(prev => (Array.isArray(prev) ? prev : []).filter(t => t.id !== args.id));
             db.deleteTask(args.id);
             result = { status: 'success' };
+          } else if (name === 'start_planning') {
+            const planningMsg = {
+              role: 'assistant' as const,
+              content: 'Чтобы составить лучший план, мне нужно уточнить пару деталей:',
+              time: nowTime(),
+              planning_data: { questions: args.questions, status: 'questionnaire' as const },
+            };
+            setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
+              if (t.id === threadId) { const u = { ...t, messages: [...t.messages, planningMsg] }; db.saveThread(u); return u; }
+              return t;
+            }));
+            setIsTyping(false);
+            return;
           }
 
           toolResults.push({ role: 'tool' as const, tool_call_id: call.id, content: JSON.stringify(result ?? { status: 'ok' }), time: nowTime() });
@@ -489,52 +571,214 @@ function ChatView({
     }
   };
 
+  const handleAnswer = (questionId: string, answer: string) => {
+    setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
+      if (t.id !== threadId) return t;
+      const msgs = [...t.messages];
+      const idx = msgs.findIndex(m => m.planning_data?.status === 'questionnaire');
+      if (idx === -1) return t;
+      const msg = { ...msgs[idx] };
+      if (msg.planning_data) {
+        msg.planning_data = { ...msg.planning_data, answers: { ...msg.planning_data.answers, [questionId]: answer } };
+        const allAnswered = msg.planning_data.questions.every((q: any) => msg.planning_data?.answers?.[q.id]);
+        if (allAnswered) {
+          msg.planning_data.status = 'plan_generated';
+          setTimeout(() => generatePlan(t, msg.planning_data!), 100);
+        }
+      }
+      msgs[idx] = msg;
+      const u = { ...t, messages: msgs };
+      db.saveThread(u);
+      return u;
+    }));
+  };
+
+  const generatePlan = async (t: Thread, planningData: any) => {
+    setIsTyping(true);
+    try {
+      const answersText = Object.entries(planningData.answers)
+        .map(([id, ans]) => {
+          const q = planningData.questions.find((q: any) => q.id === id);
+          return `Вопрос: ${q?.question}\nОтвет: ${ans}`;
+        }).join('\n\n');
+      const prompt = `Пользователь ответил на уточняющие вопросы:\n\n${answersText}\n\nНа основе этих ответов составь пошаговый план действий.\nОтвечай СТРОГО в формате JSON:\n{\n  "title": "Название плана",\n  "steps": ["шаг 1", "шаг 2", ...]\n}`;
+      const response = await generateResponse([...t.messages, { role: 'user', content: prompt, time: nowTime() }], { tool_choice: 'none' } as any);
+      if (!response?.content) throw new Error('Пустой ответ');
+      let json = response.content.trim();
+      if (json.includes('```json')) json = json.split('```json')[1].split('```')[0].trim();
+      else if (json.includes('```')) json = json.split('```')[1].split('```')[0].trim();
+      const plan = JSON.parse(json);
+      setThreads(prev => (Array.isArray(prev) ? prev : []).map(th => {
+        if (th.id !== threadId) return th;
+        const msgs = [...th.messages];
+        const idx = msgs.findIndex(m => m.planning_data?.status === 'plan_generated');
+        if (idx === -1) return th;
+        const m = { ...msgs[idx] };
+        if (m.planning_data) m.planning_data = { ...m.planning_data, plan, status: 'plan_generated' };
+        msgs[idx] = m;
+        const u = { ...th, messages: msgs };
+        db.saveThread(u);
+        return u;
+      }));
+    } catch (e) {
+      console.error('Plan generation error:', e);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const updatePlanStep = (msgIdx: number, stepIdx: number, val: string) => {
+    setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
+      if (t.id !== threadId) return t;
+      const msgs = [...t.messages];
+      const m = { ...msgs[msgIdx] };
+      if (m.planning_data?.plan) {
+        const steps = [...m.planning_data.plan.steps];
+        steps[stepIdx] = val;
+        m.planning_data = { ...m.planning_data, plan: { ...m.planning_data.plan, steps } };
+      }
+      msgs[msgIdx] = m;
+      const u = { ...t, messages: msgs };
+      db.saveThread(u);
+      return u;
+    }));
+  };
+
+  const acceptPlan = (msgIdx: number) => {
+    const msg = thread.messages[msgIdx];
+    if (!msg.planning_data?.plan) return;
+    const { title, steps } = msg.planning_data.plan;
+    const newTask: Task = {
+      id: uuid(), name: title, time: '', date: todayStr(), done: false,
+      threadId, type: 'thought',
+      subtasks: steps.map((s: string) => ({ id: uuid(), name: s, done: false })),
+    };
+    setTasks(prev => [...(Array.isArray(prev) ? prev : []), newTask]);
+    db.saveTask(newTask);
+    setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
+      if (t.id !== threadId) return t;
+      const msgs = [...t.messages];
+      const m = { ...msgs[msgIdx] };
+      if (m.planning_data) m.planning_data = { ...m.planning_data, status: 'accepted' };
+      msgs[msgIdx] = m;
+      const u = { ...t, messages: [...msgs, { role: 'assistant' as const, content: 'Отлично! План добавлен в список задач.', time: nowTime() }] };
+      db.saveThread(u);
+      return u;
+    }));
+  };
+
+  const rejectPlan = (msgIdx: number) => {
+    setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
+      if (t.id !== threadId) return t;
+      const msgs = [...t.messages];
+      const m = { ...msgs[msgIdx] };
+      if (m.planning_data) m.planning_data = { ...m.planning_data, status: 'rejected' };
+      msgs[msgIdx] = m;
+      const u = { ...t, messages: [...msgs, { role: 'assistant' as const, content: 'Хорошо, давай попробуем по-другому.', time: nowTime() }] };
+      db.saveThread(u);
+      return u;
+    }));
+  };
+
   const visible = thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls);
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Messages — правка №2: контейнер 720px */}
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', paddingTop: 32, paddingBottom: 16 }}>
         <div style={{ ...CC, display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {visible.map((m, i) => (
-            <div key={i} style={{
-              display: 'flex', flexDirection: 'column',
-              alignItems: m.role === 'user' ? 'flex-end' : 'flex-start',
-              alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-              maxWidth: m.role === 'user' ? '80%' : '100%',
-              width: m.role === 'user' ? undefined : '100%',
-              gap: 5,
-            }}>
-              {m.role === 'user' ? (
-                <div style={{
-                  background: 'rgba(9,14,23,0.06)', borderRadius: 20,
-                  padding: '10px 16px', fontFamily: M, fontSize: 15,
-                  color: 'var(--text-80)', lineHeight: 1.6,
-                }}>
-                  {m.content}
-                </div>
-              ) : (
-                <div style={{ fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>
-                  {m.content}
-                </div>
-              )}
-              <span style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)' }}>{m.time}</span>
-            </div>
-          ))}
+          {visible.map((m, i) => {
+            const realIdx = thread.messages.indexOf(m);
+            return (
+              <div key={i} style={{
+                display: 'flex', flexDirection: 'column',
+                alignItems: m.role === 'user' ? 'flex-end' : 'flex-start',
+                alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+                maxWidth: m.role === 'user' ? '80%' : '100%',
+                width: m.role === 'user' ? undefined : '100%',
+                gap: 5,
+              }}>
+                {m.role === 'user' ? (
+                  <div style={{ background: 'rgba(9,14,23,0.06)', borderRadius: 20, padding: '10px 16px', fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.6 }}>
+                    {m.content}
+                  </div>
+                ) : (
+                  <div style={{ fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.75, whiteSpace: 'pre-wrap', width: '100%' }}>
+                    {m.content}
+
+                    {/* Planning: questionnaire */}
+                    {m.planning_data?.status === 'questionnaire' && (
+                      <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        {m.planning_data.questions.map((q: any) => {
+                          const answered = m.planning_data?.answers?.[q.id];
+                          if (answered) return (
+                            <div key={q.id} style={{ background: 'rgba(0,0,0,0.04)', padding: '8px 12px', borderRadius: 10 }}>
+                              <div style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)', marginBottom: 2 }}>{q.question}</div>
+                              <div style={{ fontFamily: M, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{answered}</div>
+                            </div>
+                          );
+                          return (
+                            <div key={q.id} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              <div style={{ fontFamily: M, fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>{q.question}</div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                {q.options.map((opt: string) => (
+                                  <button key={opt} onClick={() => handleAnswer(q.id, opt)} style={{
+                                    textAlign: 'left', padding: '8px 14px',
+                                    background: 'rgba(0,0,0,0.04)', borderRadius: 10,
+                                    fontFamily: M, fontSize: 13, color: 'var(--text-primary)',
+                                    border: '1px solid var(--border)', cursor: 'pointer',
+                                  }}
+                                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.08)')}
+                                  onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.04)')}
+                                  >{opt}</button>
+                                ))}
+                                <input placeholder="Свой вариант..." onKeyDown={e => {
+                                  const val = (e.target as HTMLInputElement).value.trim();
+                                  if (e.key === 'Enter' && val) handleAnswer(q.id, val);
+                                }} style={{
+                                  padding: '8px 14px', borderRadius: 10, border: '1px solid var(--border-input)',
+                                  fontFamily: M, fontSize: 13, color: 'var(--text-primary)',
+                                  background: 'transparent', outline: 'none',
+                                }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Planning: plan generated */}
+                    {m.planning_data?.status === 'plan_generated' && m.planning_data.plan && (
+                      <div style={{ marginTop: 16, borderRadius: 16, padding: 16, background: 'rgba(0,0,0,0.03)', border: '1px solid var(--border)' }}>
+                        <div style={{ fontFamily: M, fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 12 }}>
+                          ⭐ {m.planning_data.plan.title}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+                          {m.planning_data.plan.steps.map((step: string, sIdx: number) => (
+                            <div key={sIdx} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: M, fontSize: 11, fontWeight: 600, flexShrink: 0 }}>{sIdx + 1}</div>
+                              <input value={step} onChange={e => updatePlanStep(realIdx, sIdx, e.target.value)} style={{ flex: 1, background: 'transparent', fontFamily: M, fontSize: 13, color: 'var(--text-primary)', outline: 'none', borderBottom: '1px solid var(--border-input)', paddingBottom: 3 }} />
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button onClick={() => acceptPlan(realIdx)} style={{ flex: 1, height: 36, background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 10, fontFamily: M, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer' }}>Принять</button>
+                          <button onClick={() => rejectPlan(realIdx)} style={{ flex: 1, height: 36, background: 'rgba(0,0,0,0.06)', color: 'var(--text-primary)', borderRadius: 10, fontFamily: M, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer' }}>Отмена</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <span style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)' }}>{m.time}</span>
+              </div>
+            );
+          })}
           {isTyping && <div style={{ alignSelf: 'flex-start' }}><TypingDots /></div>}
         </div>
       </div>
 
-      {/* Input — правка №2: фиксированная ширина = контейнер */}
       <div style={{ padding: '0 0 32px', flexShrink: 0 }}>
         <div style={{ ...CC }}>
-          <ChatInputBar
-            value={input}
-            onChange={setInput}
-            onSend={() => sendMessage(input)}
-            disabled={isTyping}
-            placeholder="Задайте уточняющий вопрос"
-          />
+          <ChatInputBar value={input} onChange={setInput} onSend={() => sendMessage(input)} disabled={isTyping} placeholder="Задай уточняющий вопрос" />
         </div>
       </div>
     </div>
@@ -708,6 +952,22 @@ function CalendarView({
     [tasks, selectedDate, today]
   );
 
+  const toggleTask = (id: string) => {
+    setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
+      if (t.id === id) { const u = { ...t, done: !t.done }; db.saveTask(u); return u; }
+      return t;
+    }));
+  };
+
+  const toggleSubtask = (taskId: string, subId: string) => {
+    setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
+      if (t.id !== taskId) return t;
+      const u = { ...t, subtasks: t.subtasks?.map(s => s.id === subId ? { ...s, done: !s.done } : s) };
+      db.saveTask(u);
+      return u;
+    }));
+  };
+
   const month = MONTH_SHORT[weekDays[3].getMonth()];
   const year = weekDays[3].getFullYear();
 
@@ -765,28 +1025,13 @@ function CalendarView({
             <div style={{ padding: '32px 0', textAlign: 'center', fontFamily: M, fontSize: 14, color: 'var(--text-30)' }}>Нет задач на этот день</div>
           ) : (
             filteredTasks.map((task, idx) => (
-              <div key={task.id} onClick={() => onEditTask(task)} style={{
-                display: 'flex', alignItems: 'center', gap: 14, padding: '13px 0',
-                borderBottom: idx < filteredTasks.length - 1 ? '1px solid var(--border)' : undefined,
-                cursor: 'pointer',
-              }}>
-                <button onClick={e => {
-                  e.stopPropagation();
-                  setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
-                    if (t.id === task.id) { const u = { ...t, done: !t.done }; db.saveTask(u); return u; }
-                    return t;
-                  }));
-                }} style={{
-                  width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-                  border: `1.5px solid ${task.done ? 'var(--text-primary)' : 'var(--text-30)'}`,
-                  background: task.done ? 'var(--text-primary)' : 'transparent',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', transition: 'all 0.15s',
-                }}>
-                  {task.done && <Check size={10} color="#fff" strokeWidth={2.5} />}
-                </button>
-                <span style={{ fontFamily: M, fontSize: 14, fontWeight: 500, flex: 1, color: task.done ? 'var(--text-30)' : 'var(--text-primary)', textDecoration: task.done ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.name}</span>
-                {task.time && <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', flexShrink: 0 }}>{task.time}</span>}
+              <div key={task.id} style={{ borderBottom: idx < filteredTasks.length - 1 ? '1px solid var(--border)' : undefined }}>
+                <TaskRow
+                  task={task}
+                  onToggle={() => toggleTask(task.id)}
+                  onToggleSubtask={(subId) => toggleSubtask(task.id, subId)}
+                  onClick={() => onEditTask(task)}
+                />
               </div>
             ))
           )}
