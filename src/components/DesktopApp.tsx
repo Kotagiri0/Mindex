@@ -1,28 +1,50 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import {
-  CalendarDays, MessageCircle, Settings, Plus, LogOut, ChevronLeft,
-  ChevronRight, PenLine, Search, ArrowUp, StickyNote, Check,
-  ChevronDown as ChevronDownIcon, Mic, Loader
-} from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import {
+  Sun, Calendar, MessageCircle, Settings as SettingsIcon,
+  Plus, ChevronDown, ArrowUp, Search, Check, Mic,
+  PanelLeftOpen, PanelLeftClose,
+} from 'lucide-react';
 import { Task, Thread, Settings as SettingsType, Screen } from '../types';
 import AddTaskModal from './AddTaskModal';
 import EditTaskModal from './EditTaskModal';
 import SettingsScreen from './Settings';
+import NoteView from './NoteView';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
 import { useVoiceInput } from '../lib/useVoiceInput';
 
-const MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
-const DAYS = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
-
-const F = "'Random Grotesque', sans-serif";
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const F = "'Random Grotesque', sans-serif";
+
+const DAY_NAMES_RU = ['ВОСКРЕСЕНЬЕ','ПОНЕДЕЛЬНИК','ВТОРНИК','СРЕДА','ЧЕТВЕРГ','ПЯТНИЦА','СУББОТА'];
+const WEEK_DAYS = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+const MONTH_SHORT = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+
+function todayStr() { return new Date().toISOString().split('T')[0]; }
+function fmt2(n: number) { return n.toString().padStart(2, '0'); }
+function formatDateCard(d: Date) {
+  return `${fmt2(d.getDate())}.${fmt2(d.getMonth() + 1)}.${d.getFullYear().toString().slice(2)}`;
+}
+function nowTime() {
+  const n = new Date();
+  return `${fmt2(n.getHours())}:${fmt2(n.getMinutes())}`;
+}
+
+// Правка №1: контейнер 720px по центру
+const CC: React.CSSProperties = {
+  width: '100%',
+  maxWidth: 720,
+  margin: '0 auto',
+  padding: '0 24px',
+};
+
+// ─── Logo ──────────────────────────────────────────────────────────────────────
 
 function LogoIcon({ size = 28 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="130 4 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width={size} height={size} viewBox="123 -2 172 172" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect x="131.436" y="5.883" width="156.324" height="156.324" rx="78.162" stroke="#222224" strokeWidth="11.766"/>
       <path d="M260.026 84.047H159.172" stroke="#222224" strokeWidth="11.766"/>
       <path d="M233.37 60.273L185.827 107.816" stroke="#222224" strokeWidth="11.766"/>
@@ -31,6 +53,8 @@ function LogoIcon({ size = 28 }: { size?: number }) {
     </svg>
   );
 }
+
+// ─── Props ─────────────────────────────────────────────────────────────────────
 
 interface DesktopAppProps {
   tasks: Task[];
@@ -47,232 +71,308 @@ interface DesktopAppProps {
   handleLogout: () => void;
 }
 
-function NavItem({ icon, label, active, onClick }: {
-  icon: React.ReactNode;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
+// ─── Typing indicator ──────────────────────────────────────────────────────────
+
+function TypingDots() {
   return (
-    <button
-      onClick={onClick}
-      title={label}
-      className="w-11 h-11 rounded-[12px] flex items-center justify-center transition-colors"
-      style={{ background: active ? '#222224' : 'transparent' }}
-    >
-      <span style={{ color: active ? '#ffffff' : 'rgba(34,34,36,0.4)', display: 'flex' }}>
-        {icon}
-      </span>
-    </button>
+    <div style={{ display: 'flex', gap: 5, padding: '4px 0' }}>
+      {[0, 0.18, 0.36].map((delay, i) => (
+        <div key={i} className="dot-bounce" style={{
+          width: 7, height: 7, borderRadius: '50%',
+          background: 'var(--text-30)', animationDelay: `${delay}s`,
+        }} />
+      ))}
+    </div>
   );
 }
 
-function DesktopTaskItem({ task, onToggle, onToggleSubtask, onClick }: {
-  task: Task; onToggle: () => void; onClick: () => void;
-  onToggleSubtask?: (taskId: string, subtaskId: string) => void;
+// ─── Chat input bar ────────────────────────────────────────────────────────────
+
+function ChatInputBar({
+  value, onChange, onSend, disabled, placeholder = 'Спрашивай о чём угодно',
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSend: () => void;
+  disabled?: boolean;
+  placeholder?: string;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const hasSub = task.subtasks && task.subtasks.length > 0;
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const { state: voiceState, startRecording, stopRecording } = useVoiceInput((text) => {
+    onChange(value ? value + ' ' + text : text);
+  });
+
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); }
+  };
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.style.height = 'auto';
+      ref.current.style.height = Math.min(ref.current.scrollHeight, 120) + 'px';
+    }
+  }, [value]);
+
+  const canSend = value.trim().length > 0 && !disabled;
+  const isRecording = voiceState === 'recording';
+  const isProcessing = voiceState === 'processing';
 
   return (
-    <div style={{ borderBottom: '1px solid rgba(34,34,36,0.07)' }}>
-      <div className="flex items-center gap-4 py-3.5 cursor-pointer group" onClick={onClick}>
-        <button
-          onClick={e => { e.stopPropagation(); onToggle(); }}
-          className="flex-shrink-0 flex items-center justify-center transition-all"
-          style={{
-            width: '26px', height: '26px', borderRadius: '50%',
-            border: `1.75px solid ${task.done ? '#222224' : 'rgba(34,34,36,0.25)'}`,
-            background: task.done ? '#222224' : 'transparent',
-          }}
-        >
-          {task.done && <Check size={12} color="#ffffff" strokeWidth={2.5} />}
+    <div style={{
+      background: 'var(--surface)',
+      border: '1px solid var(--border-input)',
+      borderRadius: 24,
+      padding: '14px 16px 12px',
+      boxShadow: 'var(--shadow-input)',
+      display: 'flex', flexDirection: 'column', gap: 10,
+    }}>
+      <textarea
+        ref={ref} rows={1} value={value}
+        onChange={e => onChange(e.target.value)}
+        onKeyDown={handleKey}
+        placeholder={isRecording ? 'Запись...' : isProcessing ? 'Обработка...' : placeholder}
+        style={{
+          fontFamily: M, fontSize: 15, color: 'var(--text-primary)',
+          background: 'transparent', border: 'none', outline: 'none',
+          resize: 'none', width: '100%', lineHeight: 1.55,
+        }}
+      />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}
+          onClick={() => alert('Вложения — скоро')}>
+          <Plus size={20} strokeWidth={1.5} color="var(--text-30)" />
         </button>
-        <span className="flex-1 truncate" style={{
-          fontFamily: M, fontSize: '15px',
-          color: task.done ? 'rgba(34,34,36,0.3)' : '#222224',
-          textDecoration: task.done ? 'line-through' : 'none',
-        }}>
-          {task.name}
-        </span>
-        {task.time && (
-          <span style={{ fontFamily: M, fontSize: '13px', color: 'rgba(34,34,36,0.38)', flexShrink: 0 }}>
-            {task.time}
-          </span>
-        )}
-        {hasSub && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button
-            onClick={e => { e.stopPropagation(); setExpanded(v => !v); }}
-            style={{ transform: `rotate(${expanded ? 180 : 0}deg)`, transition: 'transform 0.2s', flexShrink: 0 }}
+            onMouseDown={startRecording}
+            onMouseUp={stopRecording}
+            onTouchStart={startRecording}
+            onTouchEnd={stopRecording}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}
+            title="Удерживай для записи"
           >
-            <ChevronDownIcon size={16} color="rgba(34,34,36,0.35)" />
+            <Mic size={18} strokeWidth={1.5} color={isRecording ? '#c0392b' : isProcessing ? 'var(--text-primary)' : 'var(--text-30)'} />
           </button>
-        )}
+          <button onClick={onSend} disabled={!canSend} style={{
+            width: 36, height: 36, borderRadius: '50%',
+            background: canSend ? 'var(--accent)' : 'rgba(9,14,23,0.1)',
+            border: 'none', cursor: canSend ? 'pointer' : 'default',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'background 0.15s', flexShrink: 0,
+          }}>
+            <ArrowUp size={16} strokeWidth={2} color="var(--accent-text)" />
+          </button>
+        </div>
       </div>
-      {expanded && hasSub && (
-        <div className="pl-12 pb-2 flex flex-col gap-1.5">
-          {task.subtasks?.map(st => (
-            <div key={st.id} onClick={() => onToggleSubtask?.(task.id, st.id)} className="flex items-center gap-3 py-1 cursor-pointer">
-              <div style={{
-                width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0,
-                border: `1.5px solid ${st.done ? '#222224' : 'rgba(34,34,36,0.22)'}`,
-                background: st.done ? '#222224' : 'transparent',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                {st.done && <Check size={10} color="#ffffff" strokeWidth={2.5} />}
-              </div>
-              <span style={{
-                fontFamily: M, fontSize: '13px',
-                color: st.done ? 'rgba(34,34,36,0.3)' : '#222224',
-                textDecoration: st.done ? 'line-through' : 'none',
-              }}>{st.name}</span>
-            </div>
-          ))}
+    </div>
+  );
+}
+
+// ─── Thread dropdown menu (правка №4) ─────────────────────────────────────────
+
+function ThreadMenu({ onDelete }: { onDelete: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        onClick={e => { e.stopPropagation(); setOpen(v => !v); }}
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: 'var(--text-30)', fontSize: 18, lineHeight: 1,
+          padding: '2px 4px', letterSpacing: 1,
+        }}
+      >
+        ···
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', right: 0, top: 'calc(100% + 4px)',
+          background: 'var(--surface)',
+          border: '1px solid var(--border-input)',
+          borderRadius: 10,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+          zIndex: 50,
+          minWidth: 130,
+          overflow: 'hidden',
+        }}>
+          <button
+            onClick={e => { e.stopPropagation(); onDelete(); setOpen(false); }}
+            style={{
+              width: '100%', display: 'block', background: 'none', border: 'none',
+              padding: '10px 16px', textAlign: 'left', cursor: 'pointer',
+              fontFamily: M, fontSize: 14, color: '#c0392b',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+          >
+            Удалить
+          </button>
         </div>
       )}
     </div>
   );
 }
 
-function DashboardPanel({
-  weekDays, weekOffset, setWeekOffset, selectedDate, setSelectedDate,
-  today, filteredTasks, toggleTask, toggleSubtask, onAddTask, onEditTask,
-  onQuickAddTask, onQuickChat,
+// ─── Today screen ──────────────────────────────────────────────────────────────
+
+function TodayScreen({
+  tasks, setTasks, onQuickChat, onAddTask, onEditTask,
 }: {
-  weekDays: Date[]; weekOffset: number; setWeekOffset: (fn: (v: number) => number) => void;
-  selectedDate: string; setSelectedDate: (d: string) => void; today: string;
-  filteredTasks: Task[]; toggleTask: (id: string) => void;
-  toggleSubtask: (tId: string, sId: string) => void;
-  onAddTask: () => void; onEditTask: (t: Task) => void;
-  onQuickAddTask: (name: string) => void;
+  tasks: Task[];
+  setTasks: (t: Task[] | ((p: Task[]) => Task[])) => void;
   onQuickChat: (msg: string) => void;
+  onAddTask: () => void;
+  onEditTask: (t: Task) => void;
 }) {
-  const [quickTask, setQuickTask] = useState('');
-  const [quickChat, setQuickChat] = useState('');
+  const [chatInput, setChatInput] = useState('');
+  const today = todayStr();
+  const now = new Date();
 
-  const month = MONTHS[weekDays[3].getMonth()];
-  const year = weekDays[3].getFullYear();
-  const selDay = new Date(selectedDate);
-  const selLabel = selDay.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', weekday: 'long' });
+  const todayTasks = useMemo(() =>
+    (Array.isArray(tasks) ? tasks : [])
+      .filter(t => (t.date || today) === today)
+      .sort((a, b) => {
+        if (!a.time && !b.time) return 0;
+        if (!a.time) return 1;
+        if (!b.time) return -1;
+        return a.time.localeCompare(b.time);
+      }),
+    [tasks, today]
+  );
 
-  const handleQuickTask = () => {
-    if (!quickTask.trim()) return;
-    onQuickAddTask(quickTask.trim());
-    setQuickTask('');
+  const toggleTask = (id: string) => {
+    setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
+      if (t.id === id) { const u = { ...t, done: !t.done }; db.saveTask(u); return u; }
+      return t;
+    }));
   };
 
-  const handleQuickChat = () => {
-    if (!quickChat.trim()) return;
-    onQuickChat(quickChat.trim());
-    setQuickChat('');
+  const handleChat = () => {
+    if (!chatInput.trim()) return;
+    onQuickChat(chatInput.trim());
+    setChatInput('');
+  };
+
+  const taskWord = (n: number) => {
+    if (n % 10 === 1 && n % 100 !== 11) return 'дело';
+    if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return 'дела';
+    return 'дел';
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-8 py-5 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <button onClick={() => setWeekOffset(v => v - 1)} className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-[rgba(34,34,36,0.06)]">
-            <ChevronLeft size={17} strokeWidth={1.75} color="#222224" />
-          </button>
-          <button onClick={() => setWeekOffset(v => v + 1)} className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-[rgba(34,34,36,0.06)]">
-            <ChevronRight size={17} strokeWidth={1.75} color="#222224" />
-          </button>
-          <div>
-            <span style={{ fontFamily: M, fontSize: '11px', color: 'rgba(34,34,36,0.38)', letterSpacing: '0.06em', display: 'block' }}>{year}</span>
-            <span style={{ fontFamily: M, fontSize: '20px', color: '#222224', lineHeight: 1 }}>{month}</span>
+    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: 20 }}>
+      <div style={{ ...CC }}>
+        {/* Date & day */}
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-30)', letterSpacing: '0.04em', marginBottom: 6 }}>
+            {formatDateCard(now)}
+          </div>
+          <div style={{ fontFamily: F, fontSize: 34, color: 'var(--text-80)', lineHeight: 1 }}>
+            {DAY_NAMES_RU[now.getDay()]}
           </div>
         </div>
-        <button onClick={onAddTask} className="h-9 px-4 rounded-full flex items-center gap-2 transition-opacity hover:opacity-80" style={{ background: '#222224' }}>
-          <Plus size={15} strokeWidth={2} color="#ffffff" />
-          <span style={{ fontFamily: M, fontSize: '13px', color: '#ffffff' }}>Добавить задачу</span>
-        </button>
-      </div>
 
-      <div style={{ height: '1px', background: 'rgba(34,34,36,0.08)', margin: '0 32px' }} />
-
-      <div className="grid grid-cols-7 px-8 py-3 flex-shrink-0">
-        {weekDays.map((d, i) => {
-          const ds = d.toISOString().split('T')[0];
-          const isSelected = ds === selectedDate;
-          const isToday = ds === today;
-          return (
-            <button key={ds} onClick={() => setSelectedDate(ds)} className="flex flex-row items-center justify-center gap-2 py-2 rounded-[10px] transition-colors hover:bg-[rgba(34,34,36,0.04)]">
-              <span style={{ fontSize: '12px', color: 'rgba(34,34,36,0.38)', fontFamily: M }}>{DAYS[i]}</span>
-              <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: isSelected ? '#222224' : 'transparent' }}>
-                <span style={{ fontSize: '17px', fontFamily: M, color: isSelected ? '#ffffff' : isToday ? '#222224' : 'rgba(34,34,36,0.65)', fontWeight: isToday && !isSelected ? 700 : 400 }}>
-                  {d.getDate()}
-                </span>
-              </div>
+        {/* Card */}
+        <div style={{
+          background: 'var(--surface)', borderRadius: 20,
+          border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)',
+          overflow: 'hidden',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M2 9l5-5 5 5" stroke="var(--text-40)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-80)' }}>
+                {todayTasks.length > 0 ? `Ещё ${todayTasks.length} ${taskWord(todayTasks.length)}` : 'Нет дел на сегодня'}
+              </span>
+            </div>
+            <button onClick={onAddTask} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}>
+              <Plus size={18} strokeWidth={1.75} color="var(--text-40)" />
             </button>
-          );
-        })}
-      </div>
-
-      <div style={{ height: '1px', background: 'rgba(34,34,36,0.08)', margin: '0 32px' }} />
-
-      <div className="px-8 pt-4 pb-2 flex-shrink-0">
-        <span style={{ fontFamily: M, fontSize: '13px', color: 'rgba(34,34,36,0.38)', textTransform: 'capitalize' }}>{selLabel}</span>
-      </div>
-
-      <div className="px-8 pb-3 flex-shrink-0">
-        <div className="flex items-center gap-2 h-9 px-3 rounded-[10px]" style={{ background: '#ffffff', border: '1px solid rgba(34,34,36,0.09)' }}>
-          <Plus size={14} strokeWidth={1.75} color="rgba(34,34,36,0.3)" />
-          <input
-            className="flex-1 bg-transparent outline-none"
-            style={{ fontFamily: M, fontSize: '14px', color: '#222224' }}
-            placeholder="Добавить задачу..."
-            value={quickTask}
-            onChange={e => setQuickTask(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleQuickTask()}
-          />
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-8 pb-4 min-h-0">
-        {filteredTasks.length === 0 ? (
-          <div className="flex items-center justify-center h-24">
-            <span style={{ fontFamily: M, fontSize: '14px', color: 'rgba(34,34,36,0.25)' }}>Нет задач на этот день</span>
           </div>
-        ) : (
-          <AnimatePresence mode="popLayout">
-            {filteredTasks.map((t, idx) => (
-              <motion.div key={t.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ delay: idx * 0.03 }}>
-                <DesktopTaskItem task={t} onToggle={() => toggleTask(t.id)} onToggleSubtask={toggleSubtask} onClick={() => onEditTask(t)} />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        )}
-      </div>
 
-      <div className="px-8 pb-6 flex-shrink-0">
-        <div className="flex items-center gap-3 px-4 rounded-2xl" style={{ background: '#ffffff', border: '1px solid rgba(34,34,36,0.09)', height: '52px' }}>
-          <input
-            className="flex-1 bg-transparent outline-none"
-            style={{ fontFamily: M, fontSize: '15px', color: '#222224' }}
-            placeholder="Написать Мысли..."
-            value={quickChat}
-            onChange={e => setQuickChat(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleQuickChat()}
-          />
-          <button onClick={handleQuickChat} disabled={!quickChat.trim()} className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-colors" style={{ background: quickChat.trim() ? '#222224' : 'rgba(34,34,36,0.1)' }}>
-            <ArrowUp size={16} strokeWidth={2} color="#ffffff" />
-          </button>
+          {todayTasks.map((task, idx) => (
+            <div key={task.id} onClick={() => onEditTask(task)} style={{
+              display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px',
+              borderBottom: idx < todayTasks.length - 1 ? '1px solid var(--border)' : undefined,
+              cursor: 'pointer',
+            }}>
+              <button onClick={e => { e.stopPropagation(); toggleTask(task.id); }} style={{
+                width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                border: `1.5px solid ${task.done ? 'var(--text-primary)' : 'var(--text-30)'}`,
+                background: task.done ? 'var(--text-primary)' : 'transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}>
+                {task.done && <Check size={10} color="#fff" strokeWidth={2.5} />}
+              </button>
+              <span style={{
+                fontFamily: M, fontSize: 14, flex: 1,
+                color: task.done ? 'var(--text-30)' : 'var(--text-primary)',
+                textDecoration: task.done ? 'line-through' : 'none',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>{task.name}</span>
+              {task.time && <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', flexShrink: 0 }}>{task.time}</span>}
+            </div>
+          ))}
+
+          <div style={{ borderTop: '1px solid var(--border)', padding: '13px 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input value={chatInput} onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleChat()}
+                placeholder="Спрашивай о чём угодно"
+                style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 14, color: 'var(--text-primary)' }} />
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}
+                onClick={() => alert('Голосовой ввод — скоро')}>
+                <Mic size={17} strokeWidth={1.5} color="var(--text-30)" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-interface Message {
-  role: 'user' | 'assistant' | 'tool';
-  content: string;
-  time: string;
-  tool_calls?: any[];
-  tool_call_id?: string;
+// ─── Empty chat screen ──────────────────────────────────────────────────────────
+
+function EmptyChatScreen({ onSend }: { onSend: (msg: string) => void }) {
+  const [input, setInput] = useState('');
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0' }}>
+        <div style={{ ...CC, textAlign: 'center' }}>
+          <div style={{ fontFamily: F, fontSize: 36, color: 'var(--text-80)', marginBottom: 32 }}>
+            есть мысли?
+          </div>
+          <ChatInputBar
+            value={input}
+            onChange={setInput}
+            onSend={() => { if (input.trim()) { onSend(input.trim()); setInput(''); } }}
+            placeholder="Спрашивай о чём угодно"
+          />
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function DesktopChat({
-  threadId, threads, setThreads, tasks, setTasks, onClose, initialMessage, onInitialConsumed,
+// ─── Chat view ──────────────────────────────────────────────────────────────────
+
+function ChatView({
+  threadId, threads, setThreads, tasks, setTasks, initialMessage, onInitialConsumed,
 }: {
   key?: React.Key;
   threadId: string;
@@ -280,20 +380,13 @@ function DesktopChat({
   setThreads: (t: Thread[] | ((p: Thread[]) => Thread[])) => void;
   tasks: Task[];
   setTasks: (t: Task[] | ((p: Task[]) => Task[])) => void;
-  onClose: () => void;
   initialMessage?: string | null;
   onInitialConsumed?: () => void;
 }) {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const didAutoSend = useRef(false);
-
-  const { state: voiceState, error: voiceError, startRecording, stopRecording } = useVoiceInput(
-    (text) => {
-      setInput(prev => prev + (prev ? ' ' : '') + text);
-    }
-  );
 
   const thread = threads.find(t => t.id === threadId);
 
@@ -311,16 +404,11 @@ function DesktopChat({
 
   if (!thread) return null;
 
-  const ft = () => {
-    const n = new Date();
-    return n.getHours().toString().padStart(2, '0') + ':' + n.getMinutes().toString().padStart(2, '0');
-  };
-
   const sendMessage = async (text: string) => {
     if (!text.trim() || isTyping) return;
     setInput('');
 
-    const userMsg: Message = { role: 'user', content: text, time: ft() };
+    const userMsg = { role: 'user' as const, content: text, time: nowTime() };
     let updatedThread: Thread | undefined;
 
     setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
@@ -337,13 +425,13 @@ function DesktopChat({
       const current = threads.find(t => t.id === threadId);
       if (!current) return;
 
-      let history: Message[] = [...current.messages, userMsg];
-      const turnMsgs: Message[] = [];
+      let history = [...current.messages, userMsg];
+      const turnMsgs: typeof history = [];
       let response = await generateResponse(history);
 
       while (response.tool_calls) {
-        const toolResults: Message[] = [];
-        const assistantMsg: Message = { role: 'assistant', content: response.content || '', tool_calls: response.tool_calls, time: ft() };
+        const toolResults: typeof history = [];
+        const assistantMsg = { role: 'assistant' as const, content: response.content || '', tool_calls: response.tool_calls, time: nowTime() };
         turnMsgs.push(assistantMsg);
 
         for (const call of response.tool_calls) {
@@ -355,7 +443,7 @@ function DesktopChat({
             const filtered = args.date ? tasks.filter(t => t.date === args.date) : tasks;
             result = filtered.length > 0 ? filtered : 'Задач не найдено.';
           } else if (name === 'add_task') {
-            const newTask: Task = { id: uuid(), name: args.name, time: args.time || '', date: args.date || new Date().toISOString().split('T')[0], done: false, threadId };
+            const newTask: Task = { id: uuid(), name: args.name, time: args.time || '', date: args.date || todayStr(), done: false, threadId };
             setTasks(prev => [...(Array.isArray(prev) ? prev : []), newTask]);
             db.saveTask(newTask);
             result = { status: 'success', task: newTask };
@@ -369,31 +457,9 @@ function DesktopChat({
             setTasks(prev => (Array.isArray(prev) ? prev : []).filter(t => t.id !== args.id));
             db.deleteTask(args.id);
             result = { status: 'success' };
-          } else if (name === 'start_planning') {
-            const { questions } = args;
-            const planningMsg: Message = {
-              role: 'assistant',
-              content: 'Чтобы составить лучший план, мне нужно уточнить пару деталей:',
-              time: ft(),
-              planning_data: {
-                questions,
-                status: 'questionnaire'
-              }
-            };
-            setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
-              if (t.id === threadId) {
-                const u = { ...t, messages: [...t.messages, planningMsg] };
-                db.saveThread(u);
-                return u;
-              }
-              return t;
-            }));
-            setIsTyping(false);
-            return;
           }
 
-          // СТАЛО
-          toolResults.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result ?? null), time: ft() });
+          toolResults.push({ role: 'tool' as const, tool_call_id: call.id, content: JSON.stringify(result ?? { status: 'ok' }), time: nowTime() });
         }
 
         turnMsgs.push(...toolResults);
@@ -401,7 +467,7 @@ function DesktopChat({
         response = await generateResponse(history);
       }
 
-      const finalMsg: Message = { role: 'assistant', content: response.content || 'Готово!', time: ft() };
+      const finalMsg = { role: 'assistant' as const, content: response.content || 'Готово!', time: nowTime() };
       setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
         if (t.id === threadId) {
           const hasUser = t.messages.some(m => m.role === 'user' && m.content === userMsg.content && m.time === userMsg.time);
@@ -413,7 +479,7 @@ function DesktopChat({
         return t;
       }));
     } catch (err: any) {
-      const errMsg: Message = { role: 'assistant', content: `Ошибка: ${err.message || 'Не удалось связаться с ИИ.'}`, time: ft() };
+      const errMsg = { role: 'assistant' as const, content: `Ошибка: ${err.message || 'Не удалось связаться с ИИ.'}`, time: nowTime() };
       setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
         if (t.id === threadId) { const u = { ...t, messages: [...t.messages, errMsg] }; db.saveThread(u); return u; }
         return t;
@@ -423,490 +489,200 @@ function DesktopChat({
     }
   };
 
-  const handleSend = () => sendMessage(input);
-  const visibleMessages = thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls);
-
-  const handleDesktopAnswer = (msgIndex: number, questionId: string, answer: string) => {
-    setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
-      if (t.id !== threadId) return t;
-      const newMessages = [...t.messages];
-      const targetIndex = t.messages.findIndex(m =>
-        m.planning_data && m.planning_data.status === 'questionnaire'
-      );
-      if (targetIndex === -1) return t;
-      const msg = { ...newMessages[targetIndex] };
-      if (msg.planning_data) {
-        msg.planning_data = {
-          ...msg.planning_data,
-          answers: { ...msg.planning_data.answers, [questionId]: answer }
-        };
-
-        const allAnswered = msg.planning_data.questions.every(q =>
-          msg.planning_data?.answers?.[q.id]
-        );
-
-        if (allAnswered) {
-          msg.planning_data.status = 'plan_generated';
-          setTimeout(() => generatePlanFromAnswers(t, msg.planning_data!), 100);
-        }
-      }
-      newMessages[targetIndex] = msg;
-      const u = { ...t, messages: newMessages };
-      db.saveThread(u);
-      return u;
-    }));
-  };
-
-  const generatePlanFromAnswers = async (t: Thread, planningData: any) => {
-    setIsTyping(true);
-    try {
-      const answersText = Object.entries(planningData.answers)
-        .map(([id, ans]) => {
-          const q = planningData.questions.find((q: any) => q.id === id);
-          return `Вопрос: ${q?.question}\nОтвет: ${ans}`;
-        }).join('\n\n');
-
-      const prompt = `Пользователь ответил на уточняющие вопросы:\n\n${answersText}\n\nНа основе этих ответов составь пошаговый план действий (to-do list).\nОтвечай СТРОГО в формате JSON:\n{\n  "title": "Название плана",\n  "steps": ["шаг 1", "шаг 2", ...]\n}`;
-
-      const response = await generateResponse([
-        ...t.messages,
-        { role: 'user', content: prompt, time: ft() }
-      ], { tool_choice: 'none' });
-
-      if (!response || !response.content) {
-        throw new Error('AI вернул пустой ответ при генерации плана.');
-      }
-
-      let jsonContent = response.content.trim();
-      if (jsonContent.includes('```json')) {
-        jsonContent = jsonContent.split('```json')[1].split('```')[0].trim();
-      } else if (jsonContent.includes('```')) {
-        jsonContent = jsonContent.split('```')[1].split('```')[0].trim();
-      }
-
-      const plan = JSON.parse(jsonContent);
-
-      setThreads(prev => (Array.isArray(prev) ? prev : []).map(th => {
-        if (th.id === threadId) {
-          const newMessages = [...th.messages];
-          const lastMsg = { ...newMessages[newMessages.length - 1] };
-          if (lastMsg.planning_data) {
-            lastMsg.planning_data = {
-              ...lastMsg.planning_data,
-              plan,
-              status: 'plan_generated'
-            };
-          }
-          newMessages[newMessages.length - 1] = lastMsg;
-          const updated = { ...th, messages: newMessages };
-          db.saveThread(updated);
-          return updated;
-        }
-        return th;
-      }));
-    } catch (err) {
-      console.error('Plan generation error:', err);
-    } finally {
-      setIsTyping(false);
-    }
-  };
-
-  const updatePlanStep = (msgIndex: number, stepIndex: number, newName: string) => {
-    setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
-      if (t.id === threadId) {
-        const newMessages = [...t.messages];
-        const m = { ...newMessages[msgIndex] };
-        if (m.planning_data?.plan) {
-          const newSteps = [...m.planning_data.plan.steps];
-          newSteps[stepIndex] = newName;
-          m.planning_data.plan.steps = newSteps;
-        }
-        newMessages[msgIndex] = m;
-        const updated = { ...t, messages: newMessages };
-        db.saveThread(updated);
-        return updated;
-      }
-      return t;
-    }));
-  };
-
-  const handleAcceptPlan = async (msgIndex: number) => {
-    if (!threadId || !thread) return;
-    const msg = thread.messages[msgIndex];
-    if (!msg.planning_data?.plan) return;
-
-    const { title, steps } = msg.planning_data.plan;
-    const subtasks: any[] = steps.map((s: string) => ({
-      id: uuid(),
-      name: s,
-      done: false
-    }));
-
-    const newTask: Task = {
-      id: uuid(),
-      name: title,
-      time: '',
-      date: new Date().toISOString().split('T')[0],
-      done: false,
-      threadId: threadId,
-      type: 'thought',
-      subtasks
-    };
-
-    setTasks(prev => [...(Array.isArray(prev) ? prev : []), newTask]);
-    db.saveTask(newTask);
-
-    setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
-      if (t.id === threadId) {
-        const newMessages = [...t.messages];
-        const m = { ...newMessages[msgIndex] };
-        if (m.planning_data) {
-          m.planning_data.status = 'accepted';
-        }
-        newMessages[msgIndex] = m;
-        const updated = {
-          ...t,
-          messages: [...newMessages, {
-            role: 'assistant' as const,
-            content: 'Отлично! План добавлен в календарь. Ты найдешь его в списке задач со звездочкой.',
-            time: ft()
-          }]
-        };
-        db.saveThread(updated);
-        return updated;
-      }
-      return t;
-    }));
-  };
-
-  const handleRejectPlan = (msgIndex: number) => {
-    setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
-      if (t.id === threadId) {
-        const newMessages = [...t.messages];
-        const m = { ...newMessages[msgIndex] };
-        if (m.planning_data) {
-          m.planning_data.status = 'rejected';
-        }
-        newMessages[msgIndex] = m;
-        const updated = {
-          ...t,
-          messages: [...newMessages, {
-            role: 'assistant' as const,
-            content: 'Хорошо, давай попробуем по-другому или просто продолжим общение.',
-            time: ft()
-          }]
-        };
-        db.saveThread(updated);
-        return updated;
-      }
-      return t;
-    }));
-  };
+  const visible = thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls);
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center px-6 py-4 flex-shrink-0" style={{ borderBottom: '1px solid rgba(34,34,36,0.08)' }}>
-        <span style={{ fontFamily: M, fontSize: '15px', fontWeight: 600, color: '#222224', flex: 1 }}>{thread.title}</span>
-        <div className="flex items-center gap-1 rounded-full p-1" style={{ background: '#f0f0f0' }}>
-          <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: '#ffffff' }}>
-            <MessageCircle size={16} strokeWidth={1.75} color="#222224" />
-          </div>
-          <button className="w-8 h-8 rounded-full flex items-center justify-center" onClick={() => alert('Заметки будут в ближайших обновлениях')}>
-            <StickyNote size={16} strokeWidth={1.75} color="rgba(34,34,36,0.3)" />
-          </button>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Messages — правка №2: контейнер 720px */}
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', paddingTop: 32, paddingBottom: 16 }}>
+        <div style={{ ...CC, display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {visible.map((m, i) => (
+            <div key={i} style={{
+              display: 'flex', flexDirection: 'column',
+              alignItems: m.role === 'user' ? 'flex-end' : 'flex-start',
+              alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+              maxWidth: m.role === 'user' ? '80%' : '100%',
+              width: m.role === 'user' ? undefined : '100%',
+              gap: 5,
+            }}>
+              {m.role === 'user' ? (
+                <div style={{
+                  background: 'rgba(9,14,23,0.06)', borderRadius: 20,
+                  padding: '10px 16px', fontFamily: M, fontSize: 15,
+                  color: 'var(--text-80)', lineHeight: 1.6,
+                }}>
+                  {m.content}
+                </div>
+              ) : (
+                <div style={{ fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>
+                  {m.content}
+                </div>
+              )}
+              <span style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)' }}>{m.time}</span>
+            </div>
+          ))}
+          {isTyping && <div style={{ alignSelf: 'flex-start' }}><TypingDots /></div>}
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-3 min-h-0">
-        {visibleMessages.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center">
-            <span style={{ fontFamily: M, fontSize: '16px', color: 'rgba(34,34,36,0.22)', textAlign: 'center', lineHeight: 1.6 }}>
-              Есть мысли?<br />Напиши сюда
-            </span>
-          </div>
-        ) : (
-          visibleMessages.map((m, i) => (
-            <div key={i} className={`flex flex-col max-w-[72%] gap-1 ${m.role === 'user' ? 'self-end items-end' : 'self-start items-start'}`}>
-              <div className="px-4 py-2.5" style={{
-                fontSize: '14px', lineHeight: 1.6, fontFamily: M,
-                background: m.role === 'user' ? '#222224' : '#ffffff',
-                color: m.role === 'user' ? '#ffffff' : '#222224',
-                borderRadius: m.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-              }}>
-                {m.content}
-
-                {m.planning_data && m.planning_data.status === 'questionnaire' && (
-                  <div className="mt-3 flex flex-col gap-4">
-                    {m.planning_data.questions.map((q: any) => {
-                      const isAnswered = m.planning_data?.answers?.[q.id];
-                      if (isAnswered) return (
-                        <div key={q.id} style={{ background: 'rgba(34,34,36,0.06)', padding: '8px', borderRadius: '8px' }}>
-                          <div style={{ fontSize: '11px', color: 'rgba(34,34,36,0.4)', marginBottom: '2px' }}>{q.question}</div>
-                          <div style={{ fontSize: '13px', fontWeight: 600 }}>{isAnswered}</div>
-                        </div>
-                      );
-                      return (
-                        <div key={q.id} className="flex flex-col gap-2">
-                          <div style={{ fontSize: '13px', fontWeight: 600, color: '#222224' }}>{q.question}</div>
-                          <div className="flex flex-col gap-1">
-                            {q.options.map((opt: string) => (
-                              <button
-                                key={opt}
-                                onClick={() => handleDesktopAnswer(visibleMessages.indexOf(m), q.id, opt)}
-                                style={{
-                                  textAlign: 'left', padding: '8px 12px',
-                                  background: 'rgba(34,34,36,0.06)', borderRadius: '10px',
-                                  fontSize: '13px', color: '#222224', border: 'none', cursor: 'pointer',
-                                }}
-                              >
-                                {opt}
-                              </button>
-                            ))}
-                            <input
-                              placeholder="Свой вариант..."
-                              style={{
-                                padding: '8px 12px', borderRadius: '10px', border: '1px solid rgba(34,34,36,0.12)',
-                                fontSize: '13px', color: '#222224', background: 'rgba(34,34,36,0.03)', outline: 'none',
-                              }}
-                              onKeyDown={(e) => {
-                                const val = (e.target as HTMLInputElement).value.trim();
-                                if (e.key === 'Enter' && val) {
-                                  handleDesktopAnswer(visibleMessages.indexOf(m), q.id, val);
-                                }
-                              }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {m.planning_data?.status === 'plan_generated' && m.planning_data.plan && (
-                  <div className="mt-3 rounded-[16px] p-3" style={{ background: 'rgba(34,34,36,0.04)', border: '1px solid rgba(34,34,36,0.08)' }}>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#222224', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      ⭐ {m.planning_data.plan.title}
-                    </div>
-                    <div className="flex flex-col gap-3" style={{ marginBottom: '12px' }}>
-                      {m.planning_data.plan.steps.map((step: string, sIdx: number) => (
-                        <div key={sIdx} className="flex items-start gap-2">
-                          <div style={{
-                            width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(34,34,36,0.1)',
-                            color: '#222224', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '11px', fontWeight: 600, flexShrink: 0
-                          }}>
-                            {sIdx + 1}
-                          </div>
-                          <input
-                            value={step}
-                            onChange={(e) => updatePlanStep(visibleMessages.indexOf(m), sIdx, e.target.value)}
-                            style={{
-                              flex: 1, background: 'transparent', fontSize: '13px', color: '#222224',
-                              outline: 'none', borderBottom: '1px solid rgba(34,34,36,0.1)', paddingBottom: '4px'
-                            }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleAcceptPlan(visibleMessages.indexOf(m))}
-                        style={{
-                          flex: 1, height: '36px', background: '#222224', color: '#ffffff',
-                          borderRadius: '10px', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer'
-                        }}
-                      >
-                        Принять
-                      </button>
-                      <button
-                        onClick={() => handleRejectPlan(visibleMessages.indexOf(m))}
-                        style={{
-                          flex: 1, height: '36px', background: 'rgba(34,34,36,0.06)', color: '#222224',
-                          borderRadius: '10px', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer'
-                        }}
-                      >
-                        Отмена
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <span style={{ fontSize: '11px', color: 'rgba(34,34,36,0.3)', fontFamily: M }}>{m.time}</span>
-            </div>
-          ))
-        )}
-        {isTyping && (
-          <div className="self-start flex gap-1.5 px-4 py-3 rounded-[16px] rounded-bl-[4px]" style={{ background: '#ffffff' }}>
-            {[0, 0.15, 0.3].map((d, i) => (
-              <div key={i} className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'rgba(34,34,36,0.4)', animationDelay: `${d}s` }} />
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="px-6 pb-6 flex-shrink-0">
-        <div className="rounded-[18px] p-4" style={{ background: '#ffffff' }}>
-          <input
-            className="w-full bg-transparent outline-none"
-            style={{ fontFamily: M, fontSize: '15px', color: '#222224' }}
-            placeholder="Есть мысли?"
+      {/* Input — правка №2: фиксированная ширина = контейнер */}
+      <div style={{ padding: '0 0 32px', flexShrink: 0 }}>
+        <div style={{ ...CC }}>
+          <ChatInputBar
             value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
+            onChange={setInput}
+            onSend={() => sendMessage(input)}
+            disabled={isTyping}
+            placeholder="Задайте уточняющий вопрос"
           />
-          <div className="flex items-center justify-between mt-3">
-            <button className="w-8 h-8 flex items-center justify-center" onClick={() => alert('Вложения будут в ближайших обновлениях')}>
-              <Plus size={20} strokeWidth={1.75} color="rgba(34,34,36,0.32)" />
-            </button>
-            <div className="flex items-center gap-2">
-              <motion.button
-                onPointerDown={(event) => {
-                  event.preventDefault();
-                  startRecording();
-                }}
-                onPointerUp={(event) => {
-                  event.preventDefault();
-                  stopRecording();
-                }}
-                onPointerCancel={stopRecording}
-                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all border ${
-                  voiceState === 'recording'
-                    ? 'bg-red-500 border-red-600'
-                    : voiceState === 'processing'
-                    ? 'bg-[#222224] border-[#222224]'
-                    : 'bg-gray-200 border-gray-400 hover:bg-gray-300'
-                }`}
-                title={voiceState === 'recording' ? 'Отпустите для завершения' : 'Нажмите для записи'}
-              >
-                {voiceState === 'processing' ? (
-                  <Loader size={18} strokeWidth={2} color="#ffffff" className="animate-spin" />
-                ) : (
-                  <Mic
-                    size={18}
-                    strokeWidth={2}
-                    color={voiceState === 'recording' ? '#ffffff' : '#000000'}
-                  />
-                )}
-              </motion.button>
-              <button disabled={!input.trim() || isTyping} onClick={handleSend} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors" style={{ background: input.trim() && !isTyping ? '#222224' : 'rgba(34,34,36,0.12)' }}>
-                <ArrowUp size={18} strokeWidth={2} color="#ffffff" />
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function ThreadsPanel({
-  threads, setThreads, tasks, setTasks, curTh, setCurTh, startNewThread,
-  pendingMessage, onPendingConsumed,
+// ─── Threads view ──────────────────────────────────────────────────────────────
+
+function NoteTag({ label }: { label: string }) {
+  return (
+    <span style={{
+      fontFamily: M, fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
+      textTransform: 'uppercase' as const,
+      padding: '3px 8px', borderRadius: 40,
+      background: 'rgba(0,0,0,0.05)', color: 'var(--text-30)',
+      flexShrink: 0,
+    }}>{label}</span>
+  );
+}
+
+function ThreadsView({
+  threads, setThreads, startNewThread, onOpenThread, onOpenNote,
 }: {
   threads: Thread[];
   setThreads: (t: Thread[] | ((p: Thread[]) => Thread[])) => void;
-  tasks: Task[];
-  setTasks: (t: Task[] | ((p: Task[]) => Task[])) => void;
-  curTh: string | null;
-  setCurTh: (id: string | null) => void;
   startNewThread: () => void;
-  pendingMessage: string | null;
-  onPendingConsumed: () => void;
+  onOpenThread: (id: string) => void;
+  onOpenNote: (id: string) => void;
 }) {
   const [search, setSearch] = useState('');
+  const [tab, setTab] = useState<'thoughts' | 'notes'>('thoughts');
 
-  const filtered = threads.filter(t =>
+  const all = Array.isArray(threads) ? threads : [];
+  const thoughts = all.filter(t => t.source !== 'text');
+  const notes = all;
+
+  const applySearch = (list: Thread[]) => list.filter(t =>
     t.title.toLowerCase().includes(search.toLowerCase()) ||
     t.preview.toLowerCase().includes(search.toLowerCase())
   );
 
-  const deleteThread = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
+  const displayed = tab === 'thoughts' ? applySearch(thoughts) : applySearch(notes);
+
+  const deleteThread = async (id: string) => {
     setThreads(prev => (Array.isArray(prev) ? prev : []).filter(t => t.id !== id));
     await db.deleteThread(id);
-    if (curTh === id) setCurTh(null);
+  };
+
+  const handleRowClick = (th: Thread) => {
+    if (tab === 'notes') onOpenNote(th.id);
+    else onOpenThread(th.id);
   };
 
   return (
-    <div className="flex h-full">
-      <div className="flex flex-col flex-shrink-0" style={{ width: '280px', borderRight: '1px solid rgba(34,34,36,0.08)' }}>
-        <div className="px-5 py-4 flex-shrink-0" style={{ borderBottom: '1px solid rgba(34,34,36,0.08)' }}>
-          <div className="h-9 rounded-full flex items-center gap-2 px-3" style={{ background: '#ffffff', border: '1px solid rgba(34,34,36,0.1)' }}>
-            <Search size={14} strokeWidth={1.75} color="rgba(34,34,36,0.32)" />
-            <input
-              className="flex-1 bg-transparent outline-none"
-              style={{ fontFamily: M, fontSize: '13px', color: '#222224' }}
-              placeholder="Поиск мыслей..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+    <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ ...CC, paddingTop: 40, paddingBottom: 40 }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div style={{ display: 'flex', background: 'rgba(0,0,0,0.05)', borderRadius: 40, padding: 4, gap: 2 }}>
+            {([['thoughts', 'ТВОИ МЫСЛИ'], ['notes', 'ЗАМЕТКИ']] as const).map(([key, label]) => (
+              <button key={key} onClick={() => setTab(key)} style={{
+                fontFamily: M, fontSize: 11, fontWeight: 600, letterSpacing: '0.08em',
+                padding: '6px 14px', borderRadius: 40, border: 'none', cursor: 'pointer',
+                background: tab === key ? 'var(--surface)' : 'transparent',
+                color: tab === key ? 'var(--text-primary)' : 'var(--text-muted)',
+                transition: 'all 0.15s',
+                boxShadow: tab === key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+              }}>
+                {label}
+              </button>
+            ))}
           </div>
+          <button onClick={startNewThread} style={{
+            fontFamily: M, fontSize: 13, letterSpacing: '0.06em',
+            color: 'var(--text-primary)', background: 'none', border: 'none',
+            cursor: 'pointer', textTransform: 'uppercase' as const, padding: 0,
+          }}>
+            НОВАЯ МЫСЛЬ
+          </button>
         </div>
-        <div className="flex-1 overflow-y-auto">
-          {filtered.length === 0 ? (
-            <div className="text-center py-10" style={{ color: 'rgba(34,34,36,0.25)', fontFamily: M, fontSize: '13px' }}>
-              Нет мыслей.<br />Начни новую!
-            </div>
-          ) : (
-            filtered.map(th => (
-              <div
-                key={th.id}
-                onClick={() => setCurTh(th.id)}
-                className="px-5 py-3.5 cursor-pointer transition-colors"
-                style={{ background: curTh === th.id ? 'rgba(34,34,36,0.05)' : 'transparent', borderBottom: '1px solid rgba(34,34,36,0.06)' }}
-              >
-                <div style={{ fontFamily: M, fontSize: '14px', fontWeight: 600, color: '#222224', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {th.title}
+
+        {/* Search */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(0,0,0,0.04)', borderRadius: 40, padding: '10px 16px', marginBottom: 8 }}>
+          <Search size={15} strokeWidth={1.75} color="var(--text-30)" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder={tab === 'thoughts' ? 'Поиск по архиву мыслей' : 'Поиск по заметкам'}
+            style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 14, color: 'var(--text-primary)' }} />
+        </div>
+
+        {/* List */}
+        {displayed.length === 0 ? (
+          <div style={{ padding: '40px 0', fontFamily: M, fontSize: 14, color: 'var(--text-30)', textAlign: 'center' }}>
+            {search ? 'Ничего не найдено' : tab === 'thoughts' ? 'Мыслей пока нет' : 'Заметок пока нет'}
+          </div>
+        ) : (
+          displayed.map(th => (
+            <div key={th.id} onClick={() => handleRowClick(th)} style={{
+              padding: '16px 0',
+              borderTop: '1px solid var(--border)',
+              cursor: 'pointer',
+              display: 'flex', alignItems: 'flex-start', gap: 12,
+            }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                  <div style={{
+                    fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+                  }}>
+                    {th.title}
+                  </div>
+                  {tab === 'notes' && <NoteTag label={th.source === 'text' ? 'Текст' : 'Мысль'} />}
                 </div>
-                <div style={{ fontSize: '12px', color: 'rgba(34,34,36,0.42)', lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden', fontFamily: M }}>
-                  {th.preview || 'Нет сообщений'}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{
+                    fontFamily: M, fontSize: 13, color: 'var(--text-muted)', flex: 1,
+                    display: '-webkit-box', WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical' as const,
+                    overflow: 'hidden', lineHeight: 1.5,
+                  }}>
+                    {th.preview || 'Нет сообщений'}
+                  </div>
+                  <span style={{ fontFamily: M, fontSize: 12, color: 'var(--text-30)', flexShrink: 0 }}>
+                    {new Date(th.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                  </span>
                 </div>
               </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        {curTh ? (
-          <DesktopChat
-            key={curTh}
-            threadId={curTh}
-            threads={threads}
-            setThreads={setThreads}
-            tasks={tasks}
-            setTasks={setTasks}
-            onClose={() => setCurTh(null)}
-            initialMessage={pendingMessage}
-            onInitialConsumed={onPendingConsumed}
-          />
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center gap-5">
-            <span style={{ fontFamily: M, fontSize: '16px', color: 'rgba(34,34,36,0.22)', textAlign: 'center', lineHeight: 1.6 }}>
-              Выбери мысль слева<br />или начни новую
-            </span>
-            <button onClick={startNewThread} className="h-10 px-5 rounded-full flex items-center gap-2 transition-opacity hover:opacity-80" style={{ background: '#222224' }}>
-              <PenLine size={15} strokeWidth={1.75} color="#ffffff" />
-              <span style={{ fontFamily: M, fontSize: '13px', color: '#ffffff' }}>Новая мысль</span>
-            </button>
-          </div>
+              <ThreadMenu onDelete={() => deleteThread(th.id)} />
+            </div>
+          ))
         )}
       </div>
     </div>
   );
 }
 
-export default function DesktopApp({
-  tasks, setTasks, threads, setThreads, settings, setSettings,
-  screen, setScreen, curTh, setCurTh, startNewThread, handleLogout,
-}: DesktopAppProps) {
-  const [weekOffset, setWeekOffset] = useState(0);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+// ─── Calendar view ─────────────────────────────────────────────────────────────
 
-  const today = new Date().toISOString().split('T')[0];
+function CalendarView({
+  tasks, setTasks, onAddTask, onEditTask,
+}: {
+  tasks: Task[];
+  setTasks: (t: Task[] | ((p: Task[]) => Task[])) => void;
+  onAddTask: () => void;
+  onEditTask: (t: Task) => void;
+}) {
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [selectedDate, setSelectedDate] = useState(todayStr());
+  const today = todayStr();
 
   const weekDays = useMemo(() => {
     const now = new Date();
@@ -920,46 +696,323 @@ export default function DesktopApp({
     });
   }, [weekOffset]);
 
-  const filteredTasks = useMemo(() => {
-    return (Array.isArray(tasks) ? tasks : [])
+  const filteredTasks = useMemo(() =>
+    (Array.isArray(tasks) ? tasks : [])
       .filter(t => (t.date || today) === selectedDate)
       .sort((a, b) => {
         if (!a.time && !b.time) return 0;
         if (!a.time) return 1;
         if (!b.time) return -1;
         return a.time.localeCompare(b.time);
-      });
-  }, [tasks, selectedDate, today]);
+      }),
+    [tasks, selectedDate, today]
+  );
 
-  const toggleTask = (id: string) => {
-    setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
-      if (t.id === id) { const u = { ...t, done: !t.done }; db.saveTask(u); return u; }
-      return t;
-    }));
+  const month = MONTH_SHORT[weekDays[3].getMonth()];
+  const year = weekDays[3].getFullYear();
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ ...CC, paddingTop: 32, paddingBottom: 32 }}>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div>
+                <div style={{ fontFamily: F, fontSize: 13, color: 'var(--text-30)' }}>{year}</div>
+                <div style={{ fontFamily: F, fontSize: 30, color: 'var(--text-80)', lineHeight: 1.1 }}>{month}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 2 }}>
+                <button onClick={() => setWeekOffset(v => v - 1)} style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 11L5 7l4-4" stroke="var(--text-40)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </button>
+                <button onClick={() => setWeekOffset(v => v + 1)} style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="var(--text-40)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+            <button onClick={onAddTask} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--accent)', border: 'none', borderRadius: 40, padding: '8px 18px', cursor: 'pointer' }}>
+              <Plus size={14} strokeWidth={2} color="var(--accent-text)" />
+              <span style={{ fontFamily: M, fontSize: 13, color: 'var(--accent-text)' }}>Добавить</span>
+            </button>
+          </div>
+
+          <div style={{ height: 1, background: 'var(--border)', marginBottom: 4 }} />
+
+          {/* Week row */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 4 }}>
+            {weekDays.map((d, i) => {
+              const ds = d.toISOString().split('T')[0];
+              const isSelected = ds === selectedDate;
+              const isToday = ds === today;
+              return (
+                <button key={ds} onClick={() => setSelectedDate(ds)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '8px 4px', borderRadius: 12, border: 'none', background: 'transparent', cursor: 'pointer' }}>
+                  <span style={{ fontFamily: "'Russisch Sans', 'Muller', sans-serif", fontSize: 12, fontWeight: 600, color: 'var(--text-30)', letterSpacing: '0.02em' }}>{WEEK_DAYS[i]}</span>
+                  <div style={{ width: 34, height: 34, borderRadius: '50%', background: isSelected ? 'var(--accent)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: 16, fontFamily: "'Helvetica Neue', Helvetica, sans-serif", fontWeight: isToday && !isSelected ? 700 : 400, color: isSelected ? '#fff' : isToday ? 'var(--text-primary)' : 'var(--text-80)' }}>
+                      {d.getDate()}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ height: 1, background: 'var(--border)', marginBottom: 16 }} />
+
+          {/* Tasks */}
+          {filteredTasks.length === 0 ? (
+            <div style={{ padding: '32px 0', textAlign: 'center', fontFamily: M, fontSize: 14, color: 'var(--text-30)' }}>Нет задач на этот день</div>
+          ) : (
+            filteredTasks.map((task, idx) => (
+              <div key={task.id} onClick={() => onEditTask(task)} style={{
+                display: 'flex', alignItems: 'center', gap: 14, padding: '13px 0',
+                borderBottom: idx < filteredTasks.length - 1 ? '1px solid var(--border)' : undefined,
+                cursor: 'pointer',
+              }}>
+                <button onClick={e => {
+                  e.stopPropagation();
+                  setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
+                    if (t.id === task.id) { const u = { ...t, done: !t.done }; db.saveTask(u); return u; }
+                    return t;
+                  }));
+                }} style={{
+                  width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                  border: `1.5px solid ${task.done ? 'var(--text-primary)' : 'var(--text-30)'}`,
+                  background: task.done ? 'var(--text-primary)' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', transition: 'all 0.15s',
+                }}>
+                  {task.done && <Check size={10} color="#fff" strokeWidth={2.5} />}
+                </button>
+                <span style={{ fontFamily: M, fontSize: 14, fontWeight: 500, flex: 1, color: task.done ? 'var(--text-30)' : 'var(--text-primary)', textDecoration: task.done ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.name}</span>
+                {task.time && <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', flexShrink: 0 }}>{task.time}</span>}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Sidebar ───────────────────────────────────────────────────────────────────
+
+function Sidebar({
+  collapsed, onToggle, screen, setScreen, calActive, setCalActive, threads, startNewThread, onOpenNote, onDropText,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+  screen: Screen;
+  setScreen: (s: Screen) => void;
+  calActive: boolean;
+  setCalActive: (v: boolean) => void;
+  threads: Thread[];
+  startNewThread: () => void;
+  onOpenNote: (id: string) => void;
+  onDropText: (text: string) => void;
+}) {
+  const [notesOpen, setNotesOpen] = useState(true);
+
+  // Правка №5: серый active вместо чёрного
+  const NavBtn = ({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) => {
+    const [hovered, setHovered] = useState(false);
+    return (
+      <button
+        onClick={onClick}
+        title={collapsed ? label : undefined}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center',
+          gap: collapsed ? 0 : 10,
+          justifyContent: collapsed ? 'center' : 'flex-start',
+          padding: collapsed ? '7px 0' : '7px 14px',
+          borderRadius: 40, border: 'none', cursor: 'pointer',
+          background: active ? '#f0f0f0' : hovered ? '#f7f7f7' : 'transparent',
+          color: active ? '#111' : '#888',
+          fontWeight: active ? 500 : 400,
+          transition: 'background 0.12s, color 0.12s',
+          minHeight: 36, flexShrink: 0,
+        }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{icon}</span>
+        {!collapsed && (
+          <span style={{ fontFamily: M, fontSize: 15, color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden', fontWeight: 'inherit' }}>
+            {label}
+          </span>
+        )}
+      </button>
+    );
   };
 
-  const toggleSubtask = (taskId: string, subtaskId: string) => {
-    setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
-      if (t.id === taskId && t.subtasks) {
-        const u = { ...t, subtasks: t.subtasks.map(s => s.id === subtaskId ? { ...s, done: !s.done } : s) };
-        db.saveTask(u);
-        return u;
-      }
-      return t;
-    }));
-  };
+  const [dragOver, setDragOver] = useState(false);
+  const [dropHovered, setDropHovered] = useState(false);
+
+  const recentThreads = (Array.isArray(threads) ? threads : [])
+    .slice().sort((a, b) => b.createdAt - a.createdAt).slice(0, 8);
+
+  return (
+    <motion.div
+      animate={{ width: collapsed ? 52 : 190 }}
+      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+      style={{
+        background: 'var(--surface)',
+        borderRight: '1px solid var(--border)',
+        display: 'flex', flexDirection: 'column',
+        overflow: 'hidden', flexShrink: 0, height: '100%',
+      }}
+    >
+      {/* Правка №7: при свёрнутом — только кнопка разворачивания, без лого */}
+      <div style={{
+        display: 'flex', alignItems: 'center',
+        justifyContent: collapsed ? 'center' : 'space-between',
+        padding: collapsed ? '18px 0' : '18px 12px 18px 16px',
+        flexShrink: 0,
+      }}>
+        {collapsed ? (
+          <button onClick={onToggle} title="Развернуть" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', color: 'var(--text-40)' }}>
+            <PanelLeftOpen size={18} strokeWidth={1.5} />
+          </button>
+        ) : (
+          <>
+            <LogoIcon size={28} />
+            <button onClick={onToggle} title="Свернуть" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', color: 'var(--text-30)', flexShrink: 0 }}>
+              <PanelLeftClose size={18} strokeWidth={1.5} />
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Nav */}
+      <nav style={{ padding: collapsed ? '0 6px' : '0 8px', display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
+        <button
+          onClick={startNewThread}
+          title={collapsed ? 'Новый чат' : undefined}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center',
+            gap: collapsed ? 0 : 10,
+            justifyContent: collapsed ? 'center' : 'flex-start',
+            padding: collapsed ? '7px 0' : '7px 14px',
+            borderRadius: 40, border: 'none', cursor: 'pointer',
+            background: 'transparent', color: '#888', minHeight: 36, flexShrink: 0,
+          }}
+        >
+          <Plus size={17} strokeWidth={1.75} color="#888" />
+          {!collapsed && <span style={{ fontFamily: M, fontSize: 15, color: '#888' }}>Новый чат</span>}
+        </button>
+
+        <NavBtn
+          icon={<Sun size={17} strokeWidth={1.75} />} label="Сегодня"
+          active={screen === 'dash' && !calActive}
+          onClick={() => { setScreen('dash'); setCalActive(false); }}
+        />
+        {/* Правка №3: Календарь теперь реально переключает вид */}
+        <NavBtn
+          icon={<Calendar size={17} strokeWidth={1.75} />} label="Календарь"
+          active={screen === 'dash' && calActive}
+          onClick={() => { setScreen('dash'); setCalActive(true); }}
+        />
+        <NavBtn
+          icon={<MessageCircle size={17} strokeWidth={1.75} />} label="Твои мысли"
+          active={screen === 'threads' || screen === 'ai'}
+          onClick={() => setScreen('threads')}
+        />
+      </nav>
+
+      {/* Notes section */}
+      {!collapsed && recentThreads.length > 0 && (
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', marginTop: 10 }}>
+          <button onClick={() => setNotesOpen(v => !v)} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '4px 12px 4px 22px',
+            background: 'none', border: 'none', cursor: 'pointer', width: '100%', flexShrink: 0,
+          }}>
+            <span style={{ fontFamily: M, fontSize: 13, color: 'var(--text-30)' }}>Заметки</span>
+            <ChevronDown size={13} strokeWidth={1.75} color="var(--text-30)"
+              style={{ transform: notesOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+          </button>
+          {notesOpen && (
+            <div style={{ flex: 1, overflowY: 'auto', padding: '2px 8px' }}>
+              {recentThreads.map(th => (
+                <div key={th.id} onClick={() => onOpenNote(th.id)} style={{
+                  fontFamily: M, fontSize: 13, color: 'var(--text-muted)',
+                  padding: '4px 12px', overflow: 'hidden', textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap', cursor: 'pointer', borderRadius: 6,
+                  transition: 'background 0.1s',
+                }}
+                title={th.title}
+                onMouseEnter={e => (e.currentTarget.style.background = '#f7f7f7')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  {th.title}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Spacer — заполняет пространство когда notes-секция не рендерится */}
+      {(collapsed || recentThreads.length === 0) && <div style={{ flex: 1 }} />}
+
+      {/* Drag & drop catch zone */}
+      <div
+        onMouseEnter={() => setDropHovered(true)}
+        onMouseLeave={() => setDropHovered(false)}
+        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={e => {
+          e.preventDefault();
+          setDragOver(false);
+          const text = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text');
+          if (text.trim()) onDropText(text.trim());
+        }}
+        style={{
+          margin: collapsed ? '0 6px 10px' : '0 8px 10px',
+          borderRadius: 10,
+          border: `1.5px dashed ${dragOver ? 'var(--text-primary)' : dropHovered ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.12)'}`,
+          background: dragOver ? 'rgba(0,0,0,0.04)' : 'transparent',
+          transition: 'border-color 0.15s, background 0.15s',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: 4,
+          minHeight: 72, cursor: 'default',
+        }}
+      >
+        <span style={{ fontFamily: M, fontSize: 20, color: dragOver ? 'var(--text-primary)' : dropHovered ? 'var(--text-30)' : 'var(--text-ultra)', lineHeight: 1, transition: 'color 0.15s' }}>+</span>
+        {!collapsed && (dropHovered || dragOver) && (
+          <span style={{ fontFamily: M, fontSize: 11, color: dragOver ? 'var(--text-primary)' : 'var(--text-30)', textAlign: 'center', lineHeight: 1.4, padding: '0 6px', transition: 'color 0.15s' }}>
+            {dragOver ? 'Отпусти — создастся заметка' : 'Перетащи сюда любой текст'}
+          </span>
+        )}
+      </div>
+
+      {/* Settings */}
+      <div style={{ padding: collapsed ? '10px 6px 18px' : '10px 8px 18px' }}>
+        <NavBtn icon={<SettingsIcon size={17} strokeWidth={1.75} />} label="Настройки" active={screen === 'settings'} onClick={() => setScreen('settings')} />
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Root ──────────────────────────────────────────────────────────────────────
+
+export default function DesktopApp({
+  tasks, setTasks, threads, setThreads, settings, setSettings,
+  screen, setScreen, curTh, setCurTh, startNewThread, handleLogout,
+}: DesktopAppProps) {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [calActive, setCalActive] = useState(false);
+  const [noteMode, setNoteMode] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
 
   const addTask = async (name: string, time: string, date: string) => {
     const t: Task = { id: uuid(), name, time, date, done: false };
     setTasks(prev => [...(Array.isArray(prev) ? prev : []), t]);
     await db.saveTask(t);
     setIsAddModalOpen(false);
-  };
-
-  const quickAddTask = async (name: string) => {
-    const t: Task = { id: uuid(), name, time: '', date: selectedDate, done: false };
-    setTasks(prev => [...(Array.isArray(prev) ? prev : []), t]);
-    await db.saveTask(t);
   };
 
   const updateTask = async (id: string, name: string, time: string, date: string) => {
@@ -977,118 +1030,126 @@ export default function DesktopApp({
   };
 
   const startNewThreadWithMessage = async (message: string) => {
-    const newTh: Thread = {
-      id: uuid(), title: 'Новая мысль', preview: message.slice(0, 60),
-      messages: [], createdAt: Date.now(),
-    };
+    const newTh: Thread = { id: uuid(), title: 'Новая мысль', preview: message.slice(0, 60), messages: [], createdAt: Date.now() };
     setThreads(prev => [...(Array.isArray(prev) ? prev : []), newTh]);
     await db.saveThread(newTh);
     setCurTh(newTh.id);
     setPendingMessage(message);
-    setScreen('threads');
+    setScreen('ai');
   };
 
-  const isThreadsOrAI = screen === 'threads' || screen === 'ai';
+  const handleStartNewThread = () => {
+    startNewThread();
+    setScreen('ai');
+  };
+
+  const handleOpenThread = (id: string) => {
+    setCurTh(id);
+    setNoteMode(false);
+    setScreen('ai');
+  };
+
+  const handleOpenNote = (id: string) => {
+    setCurTh(id);
+    setNoteMode(true);
+    setScreen('ai');
+  };
+
+  const handleDropText = async (text: string) => {
+    const words = text.trim().split(/\s+/).slice(0, 6).join(' ');
+    const title = words.length < text.trim().length ? words + '…' : words;
+    const newTh: Thread = {
+      id: uuid(),
+      title,
+      preview: text.slice(0, 60),
+      messages: [{ role: 'user', content: text, time: nowTime() }],
+      createdAt: Date.now(),
+      source: 'text',
+    };
+    setThreads(prev => [newTh, ...(Array.isArray(prev) ? prev : [])]);
+    await db.saveThread(newTh);
+    handleOpenNote(newTh.id);
+  };
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: '#f0f0f0' }}>
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}>
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed(v => !v)}
+        screen={screen}
+        setScreen={setScreen}
+        calActive={calActive}
+        setCalActive={setCalActive}
+        threads={threads}
+        startNewThread={handleStartNewThread}
+        onOpenNote={handleOpenNote}
+        onDropText={handleDropText}
+      />
 
-      {/* ── Sidebar — новый дизайн ── */}
-      <div
-        className="flex flex-col flex-shrink-0 items-center"
-        style={{
-          width: '64px',
-          background: '#ffffff',
-          borderRight: '1px solid rgba(34,34,36,0.08)',
-          padding: '20px 0',
-        }}
-      >
-        {/* Logo */}
-        <div className="mb-7">
-          <LogoIcon size={26} />
-        </div>
-
-        {/* Primary nav */}
-        <nav className="flex flex-col gap-1 flex-1 w-full px-2">
-          <NavItem
-            icon={<CalendarDays size={18} strokeWidth={1.75} />}
-            label="Календарь"
-            active={screen === 'dash'}
-            onClick={() => setScreen('dash')}
-          />
-          <NavItem
-            icon={<MessageCircle size={18} strokeWidth={1.75} />}
-            label="Мысли"
-            active={isThreadsOrAI}
-            onClick={() => setScreen('threads')}
-          />
-        </nav>
-
-        {/* New thread button */}
-        <div className="mb-3 w-full px-2">
-          <button
-            onClick={startNewThread}
-            title="Новая мысль"
-            className="w-full h-10 rounded-[12px] flex items-center justify-center transition-opacity hover:opacity-75"
-            style={{ background: '#222224' }}
-          >
-            <PenLine size={16} strokeWidth={1.75} color="#ffffff" />
-          </button>
-        </div>
-
-        {/* Divider */}
-        <div style={{ height: '1px', background: 'rgba(34,34,36,0.08)', width: '40px', marginBottom: '12px' }} />
-
-        {/* Bottom nav */}
-        <div className="flex flex-col gap-1 w-full px-2">
-          <NavItem
-            icon={<Settings size={18} strokeWidth={1.75} />}
-            label="Настройки"
-            active={screen === 'settings'}
-            onClick={() => setScreen('settings')}
-          />
-          <button
-            onClick={handleLogout}
-            title="Выйти"
-            className="w-11 h-11 rounded-[12px] flex items-center justify-center transition-colors hover:bg-[rgba(34,34,36,0.05)] mx-auto"
-          >
-            <LogOut size={18} strokeWidth={1.75} color="rgba(34,34,36,0.4)" />
-          </button>
-        </div>
-      </div>
-
-      {/* ── Main content ── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
         <AnimatePresence mode="wait">
+
+          {screen === 'dash' && !calActive && (
+            <motion.div key="today" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+              <TodayScreen tasks={tasks} setTasks={setTasks} onQuickChat={startNewThreadWithMessage} onAddTask={() => setIsAddModalOpen(true)} onEditTask={setEditingTask} />
+            </motion.div>
+          )}
+
+          {screen === 'dash' && calActive && (
+            <motion.div key="cal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+              <CalendarView tasks={tasks} setTasks={setTasks} onAddTask={() => setIsAddModalOpen(true)} onEditTask={setEditingTask} />
+            </motion.div>
+          )}
+
+          {screen === 'ai' && (
+            <motion.div key="ai" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+              {curTh && noteMode ? (
+                <NoteView
+                  threadId={curTh}
+                  threads={threads}
+                  setThreads={setThreads}
+                  tasks={tasks}
+                  onSwitchToChat={() => handleOpenThread(curTh)}
+                />
+              ) : curTh ? (
+                <ChatView
+                  key={curTh}
+                  threadId={curTh}
+                  threads={threads}
+                  setThreads={setThreads}
+                  tasks={tasks}
+                  setTasks={setTasks}
+                  initialMessage={pendingMessage}
+                  onInitialConsumed={() => setPendingMessage(null)}
+                />
+              ) : (
+                <EmptyChatScreen onSend={startNewThreadWithMessage} />
+              )}
+            </motion.div>
+          )}
+
+          {screen === 'threads' && (
+            <motion.div key="threads" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+              <ThreadsView
+                threads={threads}
+                setThreads={setThreads}
+                startNewThread={handleStartNewThread}
+                onOpenThread={handleOpenThread}
+                onOpenNote={handleOpenNote}
+              />
+            </motion.div>
+          )}
+
           {screen === 'settings' && (
-            <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 overflow-hidden">
+            <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
               <SettingsScreen settings={settings} setSettings={setSettings} onBack={() => setScreen('dash')} onLogout={handleLogout} />
             </motion.div>
           )}
-          {screen === 'dash' && (
-            <motion.div key="dash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 overflow-hidden flex flex-col">
-              <DashboardPanel
-                weekDays={weekDays} weekOffset={weekOffset} setWeekOffset={setWeekOffset}
-                selectedDate={selectedDate} setSelectedDate={setSelectedDate} today={today}
-                filteredTasks={filteredTasks} toggleTask={toggleTask} toggleSubtask={toggleSubtask}
-                onAddTask={() => setIsAddModalOpen(true)} onEditTask={setEditingTask}
-                onQuickAddTask={quickAddTask} onQuickChat={startNewThreadWithMessage}
-              />
-            </motion.div>
-          )}
-          {isThreadsOrAI && (
-            <motion.div key="threads" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 overflow-hidden flex flex-col">
-              <ThreadsPanel
-                threads={threads} setThreads={setThreads} tasks={tasks} setTasks={setTasks}
-                curTh={curTh} setCurTh={setCurTh} startNewThread={startNewThread}
-                pendingMessage={pendingMessage} onPendingConsumed={() => setPendingMessage(null)}
-              />
-            </motion.div>
-          )}
+
         </AnimatePresence>
       </div>
 
-      <AddTaskModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onAdd={addTask} initialDate={selectedDate} />
+      <AddTaskModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onAdd={addTask} initialDate={todayStr()} />
       <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} onUpdate={updateTask} onDelete={deleteTask} onOpenThread={id => { setCurTh(id); setScreen('ai'); }} />
     </div>
   );

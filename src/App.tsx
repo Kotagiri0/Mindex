@@ -22,7 +22,7 @@ const defaultSettings = { agent: true, confirm: true, notifs: true };
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<LocalUser | null>(getCurrentUser());
-  const [screen, setScreen] = useState<Screen>('ob');
+  const [screen, setScreen] = useState<Screen>(() => getCurrentUser() ? 'dash' : 'ob');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [settings, setSettings] = useState<Settings>(defaultSettings);

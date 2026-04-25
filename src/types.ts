@@ -42,6 +42,8 @@ export interface Thread {
   preview: string;
   messages: Message[];
   createdAt: number;
+  source?: 'thread' | 'text';
+  summary?: string;
 }
 
 export interface Settings {
@@ -51,6 +53,7 @@ export interface Settings {
   name?: string;
   avatar?: string;
   email?: string;
+  instructions?: string;
 }
 
 export interface LocalUser {
@@ -69,4 +72,4 @@ export interface LocalProfile {
   updated_at: string;
 }
 
-export type Screen = 'ob' | 'dash' | 'ai' | 'threads' | 'settings';
+export type Screen = 'ob' | 'dash' | 'ai' | 'threads' | 'settings' | 'cal';
