@@ -835,6 +835,7 @@ function Sidebar({
   };
 
   const [dragOver, setDragOver] = useState(false);
+  const [dropHovered, setDropHovered] = useState(false);
 
   const recentThreads = (Array.isArray(threads) ? threads : [])
     .slice().sort((a, b) => b.createdAt - a.createdAt).slice(0, 8);
@@ -944,6 +945,8 @@ function Sidebar({
 
       {/* Drag & drop catch zone */}
       <div
+        onMouseEnter={() => setDropHovered(true)}
+        onMouseLeave={() => setDropHovered(false)}
         onDragOver={e => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={e => {
@@ -955,15 +958,20 @@ function Sidebar({
         style={{
           margin: collapsed ? '0 6px 10px' : '0 8px 10px',
           borderRadius: 10,
-          border: `1.5px dashed ${dragOver ? 'var(--text-primary)' : 'rgba(0,0,0,0.12)'}`,
+          border: `1.5px dashed ${dragOver ? 'var(--text-primary)' : dropHovered ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.12)'}`,
           background: dragOver ? 'rgba(0,0,0,0.04)' : 'transparent',
           transition: 'border-color 0.15s, background 0.15s',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          minHeight: 36, cursor: 'default',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: 4,
+          minHeight: 72, cursor: 'default',
         }}
-        title="Перетащи текст сюда — создастся заметка"
       >
-        <span style={{ fontFamily: M, fontSize: collapsed ? 18 : 20, color: dragOver ? 'var(--text-primary)' : 'var(--text-ultra)', lineHeight: 1 }}>+</span>
+        <span style={{ fontFamily: M, fontSize: 20, color: dragOver ? 'var(--text-primary)' : dropHovered ? 'var(--text-30)' : 'var(--text-ultra)', lineHeight: 1, transition: 'color 0.15s' }}>+</span>
+        {!collapsed && (dropHovered || dragOver) && (
+          <span style={{ fontFamily: M, fontSize: 11, color: dragOver ? 'var(--text-primary)' : 'var(--text-30)', textAlign: 'center', lineHeight: 1.4, padding: '0 6px', transition: 'color 0.15s' }}>
+            {dragOver ? 'Отпусти — создастся заметка' : 'Перетащи сюда любой текст'}
+          </span>
+        )}
       </div>
 
       {/* Settings */}
