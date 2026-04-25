@@ -941,7 +941,8 @@ function Sidebar({
         </div>
       )}
 
-      {collapsed && <div style={{ flex: 1 }} />}
+      {/* Spacer — заполняет пространство когда notes-секция не рендерится */}
+      {(collapsed || recentThreads.length === 0) && <div style={{ flex: 1 }} />}
 
       {/* Drag & drop catch zone */}
       <div
