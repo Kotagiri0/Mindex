@@ -18,7 +18,7 @@ import { useVoiceInput } from '../lib/useVoiceInput';
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
 
-const DAY_NAMES_RU = ['ВОСКРЕСЕНЬЕ','ПОНЕДЕЛЬНИК','ВТОРНИК','СРЕДА','ЧЕТВЕРГ','ПЯТНИЦА','СУББОТА'];
+const DAY_NAMES_RU = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
 const WEEK_DAYS = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 const MONTH_SHORT = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
 
@@ -353,6 +353,8 @@ function ThreadMenu({ onDelete }: { onDelete: () => void }) {
 
 // ─── Today screen ──────────────────────────────────────────────────────────────
 
+const PREVIEW_COUNT = 3;
+
 function TodayScreen({
   tasks, setTasks, onQuickChat, onAddTask, onEditTask,
 }: {
@@ -363,6 +365,7 @@ function TodayScreen({
   onEditTask: (t: Task) => void;
 }) {
   const [chatInput, setChatInput] = useState('');
+  const [expanded, setExpanded] = useState(true);
   const today = todayStr();
   const now = new Date();
 
@@ -406,62 +409,113 @@ function TodayScreen({
     return 'дел';
   };
 
+  const total = todayTasks.length;
+  const hiddenCount = Math.max(0, total - PREVIEW_COUNT);
+  const visibleTasks = expanded ? todayTasks : todayTasks.slice(0, PREVIEW_COUNT);
+
+  const headerText = total === 0
+    ? 'Нет дел на сегодня'
+    : !expanded && hiddenCount > 0
+      ? `Ещё ${hiddenCount} ${taskWord(hiddenCount)}`
+      : `${total} ${taskWord(total)}`;
+
+  const chevronUp = total === 0 || expanded || hiddenCount === 0;
+
   return (
-    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: 20 }}>
+    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0' }}>
       <div style={{ ...CC }}>
+
         {/* Date & day */}
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-30)', letterSpacing: '0.04em', marginBottom: 6 }}>
+        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+          <div style={{ fontFamily: F, fontSize: 13, color: '#aaa', marginBottom: 4 }}>
             {formatDateCard(now)}
           </div>
-          <div style={{ fontFamily: F, fontSize: 34, color: 'var(--text-80)', lineHeight: 1 }}>
+          <div style={{ fontFamily: F, fontSize: 34, color: '#111', lineHeight: 1 }}>
             {DAY_NAMES_RU[now.getDay()]}
           </div>
         </div>
 
-        {/* Card */}
+        {/* Unified card */}
         <div style={{
           background: 'var(--surface)', borderRadius: 20,
           border: '1px solid var(--border)', boxShadow: 'var(--shadow-card)',
           overflow: 'hidden',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+
+          {/* Header row: chevron + count + add button */}
+          <div
+            onClick={() => total > 0 && setExpanded(v => !v)}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '16px 20px',
+              borderBottom: expanded && total > 0 ? '1px solid #f5f5f5' : undefined,
+              cursor: total > 0 ? 'pointer' : 'default',
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M2 9l5-5 5 5" stroke="var(--text-40)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ transition: 'transform 0.2s', transform: chevronUp ? 'rotate(0deg)' : 'rotate(180deg)' }}>
+                <path d="M2 9l5-5 5 5" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-              <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-80)' }}>
-                {todayTasks.length > 0 ? `Ещё ${todayTasks.length} ${taskWord(todayTasks.length)}` : 'Нет дел на сегодня'}
+              <span style={{ fontFamily: M, fontSize: 14, color: total === 0 ? '#aaa' : '#333' }}>
+                {headerText}
               </span>
             </div>
-            <button onClick={onAddTask} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}>
-              <Plus size={18} strokeWidth={1.75} color="var(--text-40)" />
+            <button
+              onClick={e => { e.stopPropagation(); onAddTask(); }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', color: '#aaa' }}
+            >
+              <Plus size={18} strokeWidth={1.75} />
             </button>
           </div>
 
-          {todayTasks.map((task, idx) => (
-            <div key={task.id} style={{ borderBottom: idx < todayTasks.length - 1 ? '1px solid var(--border)' : undefined }}>
-              <TaskRow
-                task={task}
-                onToggle={() => toggleTask(task.id)}
-                onToggleSubtask={(subId) => toggleSubtask(task.id, subId)}
-                onClick={() => onEditTask(task)}
-              />
+          {/* Task list */}
+          {expanded && total > 0 && (
+            <div>
+              {visibleTasks.map((task, idx) => (
+                <div key={task.id} style={{ borderBottom: idx < visibleTasks.length - 1 ? '1px solid #f5f5f5' : undefined }}>
+                  <TaskRow
+                    task={task}
+                    onToggle={() => toggleTask(task.id)}
+                    onToggleSubtask={subId => toggleSubtask(task.id, subId)}
+                    onClick={() => onEditTask(task)}
+                  />
+                </div>
+              ))}
+              {hiddenCount > 0 && (
+                <button
+                  onClick={() => setExpanded(true)}
+                  style={{ width: '100%', padding: '11px 20px', background: 'none', border: 'none', borderTop: '1px solid #f5f5f5', cursor: 'pointer', fontFamily: M, fontSize: 13, color: '#aaa', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none" style={{ transform: 'rotate(180deg)' }}>
+                    <path d="M2 9l5-5 5 5" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Ещё {hiddenCount} {taskWord(hiddenCount)}
+                </button>
+              )}
             </div>
-          ))}
+          )}
 
-          <div style={{ borderTop: '1px solid var(--border)', padding: '13px 20px' }}>
+          {/* Input */}
+          <div style={{ borderTop: expanded && total > 0 ? '1px solid #f5f5f5' : undefined, padding: '13px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <input value={chatInput} onChange={e => setChatInput(e.target.value)}
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}
+                onClick={() => alert('Вложения — скоро')}>
+                <Plus size={17} strokeWidth={1.5} color="#bbb" />
+              </button>
+              <input
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleChat()}
-                placeholder="Спрашивай о чём угодно"
-                style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 14, color: 'var(--text-primary)' }} />
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}
+                placeholder="Спроси у мысли..."
+                style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 14, color: 'var(--text-primary)' }}
+              />
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}
                 onClick={() => alert('Голосовой ввод — скоро')}>
-                <Mic size={17} strokeWidth={1.5} color="var(--text-30)" />
+                <Mic size={17} strokeWidth={1.5} color="#bbb" />
               </button>
             </div>
           </div>
+
         </div>
       </div>
     </div>
