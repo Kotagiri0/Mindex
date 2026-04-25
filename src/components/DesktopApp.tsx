@@ -967,18 +967,82 @@ function ThreadsView({
   );
 }
 
+// ─── Calendar task row (with animated checkbox) ────────────────────────────────
+
+function CalendarTaskRow({ task, onToggle, onToggleSubtask, onClick }: {
+  task: Task;
+  onToggle: () => void;
+  onToggleSubtask?: (subId: string) => void;
+  onClick: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const hasSubs = Boolean(task.subtasks?.length);
+  return (
+    <div>
+      <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 0', cursor: 'pointer' }}>
+        <button onClick={e => { e.stopPropagation(); onToggle(); }} style={{
+          width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+          border: `1.5px solid ${task.done ? 'var(--text-primary)' : 'rgba(0,0,0,0.2)'}`,
+          background: 'transparent',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', transition: 'border-color 0.15s',
+          position: 'relative', overflow: 'hidden',
+        }}>
+          <AnimatePresence>
+            {task.done && (
+              <motion.div
+                initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
+                transition={{ duration: 0.2 }}
+                style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Check size={12} color="#fff" strokeWidth={2.5} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </button>
+        <span style={{ fontFamily: M, fontSize: 15, flex: 1, color: task.done ? 'var(--text-30)' : 'var(--text-primary)', textDecoration: task.done ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {task.name}
+        </span>
+        {task.time && <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', flexShrink: 0 }}>{task.time}</span>}
+        {hasSubs && (
+          <button onClick={e => { e.stopPropagation(); setExpanded(v => !v); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', color: 'var(--text-30)', flexShrink: 0 }}>
+            <ChevronDown size={14} strokeWidth={1.75} style={{ transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+          </button>
+        )}
+      </div>
+      {hasSubs && expanded && (
+        <div style={{ paddingLeft: 42, paddingBottom: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {task.subtasks!.map(sub => (
+            <div key={sub.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button onClick={() => onToggleSubtask?.(sub.id)} style={{ width: 16, height: 16, borderRadius: '50%', flexShrink: 0, border: `1.5px solid ${sub.done ? 'var(--text-primary)' : 'var(--text-30)'}`, background: sub.done ? 'var(--text-primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.15s' }}>
+                {sub.done && <Check size={8} color="#fff" strokeWidth={2.5} />}
+              </button>
+              <span style={{ fontFamily: M, fontSize: 13, color: sub.done ? 'var(--text-30)' : 'var(--text-muted)', textDecoration: sub.done ? 'line-through' : 'none' }}>{sub.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Calendar view ─────────────────────────────────────────────────────────────
 
-function CalendarView({
-  tasks, setTasks, onAddTask, onEditTask,
-}: {
+function CalendarView({ tasks, setTasks, onEditTask }: {
   tasks: Task[];
   setTasks: (t: Task[] | ((p: Task[]) => Task[])) => void;
-  onAddTask: () => void;
   onEditTask: (t: Task) => void;
 }) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState(todayStr());
+  const [slideDir, setSlideDir] = useState<1 | -1>(1);
+  const [miniCalOpen, setMiniCalOpen] = useState(false);
+  const [miniCalMonth, setMiniCalMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
+  const [addInput, setAddInput] = useState('');
+  const [addFocused, setAddFocused] = useState(false);
+  const [tooltipVisible, setTooltipVisible] = useState(false);
+  const tooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const miniCalRef = useRef<HTMLDivElement>(null);
   const today = todayStr();
 
   const weekDays = useMemo(() => {
@@ -987,38 +1051,57 @@ function CalendarView({
     const monday = new Date(now);
     monday.setDate(now.getDate() - ((dow + 6) % 7) + weekOffset * 7);
     return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      return d;
+      const d = new Date(monday); d.setDate(monday.getDate() + i); return d;
     });
   }, [weekOffset]);
 
   const filteredTasks = useMemo(() =>
     (Array.isArray(tasks) ? tasks : [])
       .filter(t => (t.date || today) === selectedDate)
-      .sort((a, b) => {
-        if (!a.time && !b.time) return 0;
-        if (!a.time) return 1;
-        if (!b.time) return -1;
-        return a.time.localeCompare(b.time);
-      }),
+      .sort((a, b) => { if (!a.time && !b.time) return 0; if (!a.time) return 1; if (!b.time) return -1; return a.time.localeCompare(b.time); }),
     [tasks, selectedDate, today]
   );
 
-  const toggleTask = (id: string) => {
-    setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
-      if (t.id === id) { const u = { ...t, done: !t.done }; db.saveTask(u); return u; }
-      return t;
-    }));
+  const miniCalDays = useMemo(() => {
+    const { year, month } = miniCalMonth;
+    const startDow = (new Date(year, month, 1).getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells: (number | null)[] = [];
+    for (let i = 0; i < startDow; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+    return cells;
+  }, [miniCalMonth]);
+
+  useEffect(() => {
+    if (!miniCalOpen) return;
+    const h = (e: MouseEvent) => { if (miniCalRef.current && !miniCalRef.current.contains(e.target as Node)) setMiniCalOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [miniCalOpen]);
+
+  const goWeek = (dir: 1 | -1) => { setSlideDir(dir); setWeekOffset(v => v + dir); };
+
+  const jumpToDate = (ds: string) => {
+    const target = new Date(ds);
+    const now = new Date();
+    const baseMon = new Date(now); baseMon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    const diff = Math.floor((target.getTime() - baseMon.getTime()) / 86400000);
+    const newOffset = Math.floor(diff / 7);
+    setSlideDir(newOffset >= weekOffset ? 1 : -1);
+    setWeekOffset(newOffset);
+    setSelectedDate(ds);
+    setMiniCalOpen(false);
   };
 
-  const toggleSubtask = (taskId: string, subId: string) => {
-    setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
-      if (t.id !== taskId) return t;
-      const u = { ...t, subtasks: t.subtasks?.map(s => s.id === subId ? { ...s, done: !s.done } : s) };
-      db.saveTask(u);
-      return u;
-    }));
+  const toggleTask = (id: string) => setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => { if (t.id === id) { const u = { ...t, done: !t.done }; db.saveTask(u); return u; } return t; }));
+  const toggleSubtask = (taskId: string, subId: string) => setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => { if (t.id !== taskId) return t; const u = { ...t, subtasks: t.subtasks?.map(s => s.id === subId ? { ...s, done: !s.done } : s) }; db.saveTask(u); return u; }));
+
+  const handleAddTask = async () => {
+    if (!addInput.trim()) return;
+    const t: Task = { id: uuid(), name: addInput.trim(), time: '', date: selectedDate, done: false };
+    setTasks(prev => [...(Array.isArray(prev) ? prev : []), t]);
+    await db.saveTask(t);
+    setAddInput('');
   };
 
   const month = MONTH_SHORT[weekDays[3].getMonth()];
@@ -1028,66 +1111,139 @@ function CalendarView({
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div style={{ ...CC, paddingTop: 32, paddingBottom: 32 }}>
-          {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div>
-                <div style={{ fontFamily: F, fontSize: 13, color: 'var(--text-30)' }}>{year}</div>
-                <div style={{ fontFamily: F, fontSize: 30, color: 'var(--text-80)', lineHeight: 1.1 }}>{month}</div>
-              </div>
-              <div style={{ display: 'flex', gap: 2 }}>
-                <button onClick={() => setWeekOffset(v => v - 1)} style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 11L5 7l4-4" stroke="var(--text-40)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </button>
-                <button onClick={() => setWeekOffset(v => v + 1)} style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="var(--text-40)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </button>
-              </div>
+
+          {/* Header: arrows + month title */}
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, marginBottom: 20 }}>
+            <div style={{ display: 'flex', gap: 0, paddingBottom: 3 }}>
+              <button onClick={() => goWeek(-1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: M, fontSize: 22, color: 'var(--text-40)', padding: '0 6px', lineHeight: 1 }}>‹</button>
+              <button onClick={() => goWeek(1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: M, fontSize: 22, color: 'var(--text-40)', padding: '0 6px', lineHeight: 1 }}>›</button>
             </div>
-            <button onClick={onAddTask} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--accent)', border: 'none', borderRadius: 40, padding: '8px 18px', cursor: 'pointer' }}>
-              <Plus size={14} strokeWidth={2} color="var(--accent-text)" />
-              <span style={{ fontFamily: M, fontSize: 13, color: 'var(--accent-text)' }}>Добавить</span>
-            </button>
+            <div ref={miniCalRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => { const d = new Date(selectedDate); setMiniCalMonth({ year: d.getFullYear(), month: d.getMonth() }); setMiniCalOpen(v => !v); }}
+                onMouseEnter={() => { tooltipTimer.current = setTimeout(() => setTooltipVisible(true), 800); }}
+                onMouseLeave={() => { if (tooltipTimer.current) clearTimeout(tooltipTimer.current); setTooltipVisible(false); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}
+              >
+                <div style={{ fontFamily: M, fontSize: 12, color: 'var(--text-30)', lineHeight: 1.4 }}>{year}</div>
+                <div style={{ fontFamily: F, fontSize: 30, color: 'var(--text-80)', lineHeight: 1.1 }}>{month}</div>
+              </button>
+
+              {tooltipVisible && !miniCalOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, background: 'rgba(0,0,0,0.72)', color: '#fff', fontFamily: M, fontSize: 12, borderRadius: 6, padding: '4px 10px', whiteSpace: 'nowrap', zIndex: 100, pointerEvents: 'none' }}>
+                  Выбрать дату
+                </div>
+              )}
+
+              <AnimatePresence>
+                {miniCalOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                    transition={{ duration: 0.15 }}
+                    style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 200, background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--border)', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', padding: 16, width: 248 }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <button onClick={() => setMiniCalMonth(v => { const d = new Date(v.year, v.month - 1); return { year: d.getFullYear(), month: d.getMonth() }; })} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-40)', padding: '0 4px' }}>‹</button>
+                      <span style={{ fontFamily: M, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{MONTH_SHORT[miniCalMonth.month]} {miniCalMonth.year}</span>
+                      <button onClick={() => setMiniCalMonth(v => { const d = new Date(v.year, v.month + 1); return { year: d.getFullYear(), month: d.getMonth() }; })} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-40)', padding: '0 4px' }}>›</button>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 4 }}>
+                      {['пн','вт','ср','чт','пт','сб','вс'].map(d => <div key={d} style={{ textAlign: 'center', fontFamily: M, fontSize: 11, color: 'var(--text-30)', padding: '2px 0' }}>{d}</div>)}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+                      {miniCalDays.map((day, idx) => {
+                        if (!day) return <div key={idx} />;
+                        const ds = `${miniCalMonth.year}-${String(miniCalMonth.month + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                        const isSel = ds === selectedDate;
+                        const isTod = ds === today;
+                        const isWknd = idx % 7 >= 5;
+                        return (
+                          <button key={idx} onClick={() => jumpToDate(ds)} style={{ width: '100%', aspectRatio: '1', borderRadius: '50%', background: isSel ? 'var(--text-primary)' : 'transparent', border: isTod && !isSel ? '1px solid var(--text-30)' : 'none', cursor: 'pointer', fontFamily: M, fontSize: 12, color: isSel ? '#fff' : isWknd ? 'var(--text-30)' : 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {day}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
 
-          <div style={{ height: 1, background: 'var(--border)', marginBottom: 4 }} />
-
-          {/* Week row */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 4 }}>
-            {weekDays.map((d, i) => {
-              const ds = d.toISOString().split('T')[0];
-              const isSelected = ds === selectedDate;
-              const isToday = ds === today;
-              return (
-                <button key={ds} onClick={() => setSelectedDate(ds)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '8px 4px', borderRadius: 12, border: 'none', background: 'transparent', cursor: 'pointer' }}>
-                  <span style={{ fontFamily: "'Russisch Sans', 'Muller', sans-serif", fontSize: 12, fontWeight: 600, color: 'var(--text-30)', letterSpacing: '0.02em' }}>{WEEK_DAYS[i]}</span>
-                  <div style={{ width: 34, height: 34, borderRadius: '50%', background: isSelected ? 'var(--accent)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ fontSize: 16, fontFamily: "'Helvetica Neue', Helvetica, sans-serif", fontWeight: isToday && !isSelected ? 700 : 400, color: isSelected ? '#fff' : isToday ? 'var(--text-primary)' : 'var(--text-80)' }}>
-                      {d.getDate()}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
+          {/* Day strip with slide animation */}
+          <div style={{ height: 1, background: 'var(--border)' }} />
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={weekOffset}
+              initial={{ opacity: 0, x: slideDir * 28 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: slideDir * -28 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+            >
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', paddingTop: 4, paddingBottom: 4 }}>
+                {weekDays.map((d, i) => {
+                  const ds = d.toISOString().split('T')[0];
+                  const isSelected = ds === selectedDate;
+                  const isToday = ds === today;
+                  const isWeekend = i >= 5;
+                  return (
+                    <button key={ds} onClick={() => setSelectedDate(ds)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '8px 4px', border: 'none', background: 'transparent', cursor: 'pointer' }}>
+                      <span style={{ fontFamily: M, fontSize: 11, fontWeight: 500, color: isWeekend ? 'rgba(0,0,0,0.22)' : 'var(--text-30)', letterSpacing: '0.02em' }}>{WEEK_DAYS[i].toLowerCase()}</span>
+                      <div style={{ width: 38, height: 38, borderRadius: '50%', background: isSelected ? 'var(--text-primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ fontSize: 18, fontFamily: "'Helvetica Neue', Helvetica, sans-serif", fontWeight: isToday && !isSelected ? 700 : 400, color: isSelected ? '#fff' : isWeekend ? 'rgba(0,0,0,0.3)' : isToday ? 'var(--text-primary)' : 'var(--text-80)' }}>
+                          {d.getDate()}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </AnimatePresence>
           <div style={{ height: 1, background: 'var(--border)', marginBottom: 16 }} />
 
-          {/* Tasks */}
-          {filteredTasks.length === 0 ? (
-            <div style={{ padding: '32px 0', textAlign: 'center', fontFamily: M, fontSize: 14, color: 'var(--text-30)' }}>Нет задач на этот день</div>
-          ) : (
-            filteredTasks.map((task, idx) => (
-              <div key={task.id} style={{ borderBottom: idx < filteredTasks.length - 1 ? '1px solid var(--border)' : undefined }}>
-                <TaskRow
-                  task={task}
-                  onToggle={() => toggleTask(task.id)}
-                  onToggleSubtask={(subId) => toggleSubtask(task.id, subId)}
-                  onClick={() => onEditTask(task)}
-                />
-              </div>
-            ))
-          )}
+          {/* Add task inline field */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, border: `1px solid ${addFocused ? 'rgba(0,0,0,0.3)' : 'var(--border)'}`, borderRadius: 10, padding: '12px 16px', marginBottom: 20, transition: 'border-color 0.15s' }}>
+            <Plus size={15} strokeWidth={1.75} color="var(--text-30)" />
+            <input
+              value={addInput}
+              onChange={e => setAddInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAddTask()}
+              onFocus={() => setAddFocused(true)}
+              onBlur={() => setAddFocused(false)}
+              placeholder="Добавить задачу"
+              style={{ flex: 1, border: 'none', outline: 'none', fontFamily: M, fontSize: 14, color: 'var(--text-primary)', background: 'transparent' }}
+            />
+          </div>
+
+          {/* Tasks with stagger animation on day change */}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div key={selectedDate}>
+              {filteredTasks.length === 0 ? (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ padding: '32px 0', textAlign: 'center', fontFamily: M, fontSize: 14, color: 'var(--text-30)' }}>
+                  Нет задач на этот день
+                </motion.div>
+              ) : filteredTasks.map((task, idx) => (
+                <motion.div
+                  key={task.id}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.18, delay: idx * 0.04, ease: 'easeOut' }}
+                  style={{ borderBottom: idx < filteredTasks.length - 1 ? '1px solid var(--border)' : undefined }}
+                >
+                  <CalendarTaskRow
+                    task={task}
+                    onToggle={() => toggleTask(task.id)}
+                    onToggleSubtask={subId => toggleSubtask(task.id, subId)}
+                    onClick={() => onEditTask(task)}
+                  />
+                </motion.div>
+              ))}
+            </motion.div>
+          </AnimatePresence>
+
         </div>
       </div>
     </div>
@@ -1395,7 +1551,7 @@ export default function DesktopApp({
 
           {screen === 'dash' && calActive && (
             <motion.div key="cal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-              <CalendarView tasks={tasks} setTasks={setTasks} onAddTask={() => setIsAddModalOpen(true)} onEditTask={setEditingTask} />
+              <CalendarView tasks={tasks} setTasks={setTasks} onEditTask={setEditingTask} />
             </motion.div>
           )}
 
