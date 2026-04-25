@@ -43,7 +43,7 @@ const CC: React.CSSProperties = {
 
 function LogoIcon({ size = 28 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="130 4 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width={size} height={size} viewBox="123 -2 172 172" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect x="131.436" y="5.883" width="156.324" height="156.324" rx="78.162" stroke="#222224" strokeWidth="11.766"/>
       <path d="M260.026 84.047H159.172" stroke="#222224" strokeWidth="11.766"/>
       <path d="M233.37 60.273L185.827 107.816" stroke="#222224" strokeWidth="11.766"/>
