@@ -1307,7 +1307,7 @@ function CalendarView({ tasks, setTasks, onEditTask }: {
 // ─── Sidebar ───────────────────────────────────────────────────────────────────
 
 function Sidebar({
-  collapsed, onToggle, screen, setScreen, calActive, setCalActive, threads, startNewThread, onOpenNote, onDropText,
+  collapsed, onToggle, screen, setScreen, calActive, setCalActive, threads, startNewThread, newChatActive, onOpenNote, onDropText,
 }: {
   collapsed: boolean;
   onToggle: () => void;
@@ -1317,6 +1317,7 @@ function Sidebar({
   setCalActive: (v: boolean) => void;
   threads: Thread[];
   startNewThread: () => void;
+  newChatActive: boolean;
   onOpenNote: (id: string) => void;
   onDropText: (text: string) => void;
 }) {
@@ -1392,20 +1393,7 @@ function Sidebar({
 
       {/* Nav */}
       <nav style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
-        <button
-          onClick={startNewThread}
-          title={collapsed ? 'Новый чат' : undefined}
-          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-start', padding: '7px 12px', borderRadius: 40, border: 'none', cursor: 'pointer', background: 'transparent', color: '#888', minHeight: 36, flexShrink: 0 }}
-        >
-          <span style={{ display: 'flex', flexShrink: 0 }}><Plus size={17} strokeWidth={1.75} color="#888" /></span>
-          <motion.span
-            animate={{ opacity: collapsed ? 0 : 1 }}
-            transition={collapsed ? { duration: 0.1 } : { duration: 0.18, delay: 0.13 }}
-            style={{ fontFamily: M, fontSize: 15, color: '#888', whiteSpace: 'nowrap' }}
-          >
-            Новый чат
-          </motion.span>
-        </button>
+        <NavBtn icon={<Plus size={17} strokeWidth={1.75} />} label="Новый чат" active={newChatActive} onClick={startNewThread} />
 
         <NavBtn icon={<Sun size={17} strokeWidth={1.75} />} label="Сегодня" active={screen === 'dash' && !calActive} onClick={() => { setScreen('dash'); setCalActive(false); }} />
         <NavBtn icon={<Calendar size={17} strokeWidth={1.75} />} label="Календарь" active={screen === 'dash' && calActive} onClick={() => { setScreen('dash'); setCalActive(true); }} />
@@ -1527,7 +1515,8 @@ export default function DesktopApp({
   };
 
   const handleStartNewThread = () => {
-    startNewThread();
+    setCurTh(null);
+    setNoteMode(false);
     setScreen('ai');
   };
 
@@ -1570,6 +1559,7 @@ export default function DesktopApp({
         setCalActive={setCalActive}
         threads={threads}
         startNewThread={handleStartNewThread}
+        newChatActive={screen === 'ai' && !curTh && !noteMode}
         onOpenNote={handleOpenNote}
         onDropText={handleDropText}
       />
