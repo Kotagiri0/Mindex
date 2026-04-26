@@ -22,7 +22,8 @@ const DAY_NAMES_RU = ['воскресенье','понедельник','вто�
 const WEEK_DAYS = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 const MONTH_SHORT = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
 
-function todayStr() { return new Date().toISOString().split('T')[0]; }
+function dateToStr(d: Date) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function todayStr() { return dateToStr(new Date()); }
 function fmt2(n: number) { return n.toString().padStart(2, '0'); }
 function formatDateCard(d: Date) {
   return `${fmt2(d.getDate())}.${fmt2(d.getMonth() + 1)}.${d.getFullYear().toString().slice(2)}`;
@@ -1042,17 +1043,11 @@ function CalendarTaskRow({ task, onToggle, onToggleSubtask, onClick }: {
           cursor: 'pointer', transition: 'border-color 0.15s',
           position: 'relative', overflow: 'hidden',
         }}>
-          <AnimatePresence>
-            {task.done && (
-              <motion.div
-                initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
-                transition={{ duration: 0.2 }}
-                style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >
-                <Check size={12} color="#fff" strokeWidth={2.5} />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {task.done && (
+            <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Check size={12} color="#fff" strokeWidth={2.5} />
+            </div>
+          )}
         </button>
         <span style={{ fontFamily: M, fontSize: 15, flex: 1, color: task.done ? 'var(--text-30)' : 'var(--text-primary)', textDecoration: task.done ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {task.name}
@@ -1166,12 +1161,8 @@ function CalendarView({ tasks, setTasks, onEditTask }: {
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div style={{ ...CC, paddingTop: 32, paddingBottom: 32 }}>
 
-          {/* Header: arrows + month title */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, marginBottom: 20 }}>
-            <div style={{ display: 'flex', gap: 0, paddingBottom: 3 }}>
-              <button onClick={() => goWeek(-1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: M, fontSize: 22, color: 'var(--text-40)', padding: '0 6px', lineHeight: 1 }}>‹</button>
-              <button onClick={() => goWeek(1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: M, fontSize: 22, color: 'var(--text-40)', padding: '0 6px', lineHeight: 1 }}>›</button>
-            </div>
+          {/* Header: month title (left) + arrows capsule (right) */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
             <div ref={miniCalRef} style={{ position: 'relative' }}>
               <button
                 onClick={() => { const d = new Date(selectedDate); setMiniCalMonth({ year: d.getFullYear(), month: d.getMonth() }); setMiniCalOpen(v => !v); }}
@@ -1179,7 +1170,7 @@ function CalendarView({ tasks, setTasks, onEditTask }: {
                 onMouseLeave={() => { if (tooltipTimer.current) clearTimeout(tooltipTimer.current); setTooltipVisible(false); }}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}
               >
-                <div style={{ fontFamily: M, fontSize: 12, color: 'var(--text-30)', lineHeight: 1.4 }}>{year}</div>
+                <div style={{ fontFamily: M, fontSize: 16, color: 'var(--text-30)', lineHeight: 1.4, textAlign: 'center' }}>{year}</div>
                 <div style={{ fontFamily: F, fontSize: 30, color: 'var(--text-80)', lineHeight: 1.1 }}>{month}</div>
               </button>
 
@@ -1224,29 +1215,54 @@ function CalendarView({ tasks, setTasks, onEditTask }: {
                 )}
               </AnimatePresence>
             </div>
+
+            {/* Right-side controls */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AnimatePresence>
+                {(selectedDate !== today || weekOffset !== 0) && (
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    transition={{ duration: 0.15 }}
+                    onClick={() => { setWeekOffset(0); setSelectedDate(today); setSlideDir(1); }}
+                    style={{ background: 'none', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 40, cursor: 'pointer', fontFamily: M, fontSize: 13, color: 'var(--text-40)', padding: '6px 14px', lineHeight: 1 }}
+                  >
+                    Сегодня
+                  </motion.button>
+                )}
+              </AnimatePresence>
+              {/* Arrows capsule */}
+              <div style={{ display: 'flex', alignItems: 'center', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 40, overflow: 'hidden' }}>
+                <button onClick={() => goWeek(-1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: M, fontSize: 22, color: 'var(--text-40)', padding: '6px 14px', lineHeight: 1 }}>‹</button>
+                <div style={{ width: 1, height: 20, background: 'rgba(0,0,0,0.1)' }} />
+                <button onClick={() => goWeek(1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: M, fontSize: 22, color: 'var(--text-40)', padding: '6px 14px', lineHeight: 1 }}>›</button>
+              </div>
+            </div>
           </div>
 
           {/* Day strip with slide animation */}
           <div style={{ height: 1, background: 'var(--border)' }} />
-          <AnimatePresence mode="wait" initial={false}>
+          <div style={{ position: 'relative', overflow: 'hidden' }}>
+          <AnimatePresence mode="popLayout" initial={false}>
             <motion.div
               key={weekOffset}
-              initial={{ opacity: 0, x: slideDir * 28 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: slideDir * -28 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
+              initial={{ x: slideDir * 60 }}
+              animate={{ x: 0 }}
+              exit={{ x: slideDir * -60 }}
+              transition={{ duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
             >
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', paddingTop: 4, paddingBottom: 4 }}>
                 {weekDays.map((d, i) => {
-                  const ds = d.toISOString().split('T')[0];
+                  const ds = dateToStr(d);
                   const isSelected = ds === selectedDate;
                   const isToday = ds === today;
                   const isWeekend = i >= 5;
                   return (
                     <button key={ds} onClick={() => setSelectedDate(ds)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '8px 4px', border: 'none', background: 'transparent', cursor: 'pointer' }}>
-                      <span style={{ fontFamily: M, fontSize: 11, fontWeight: 500, color: isWeekend ? 'rgba(0,0,0,0.22)' : 'var(--text-30)', letterSpacing: '0.02em' }}>{WEEK_DAYS[i].toLowerCase()}</span>
-                      <div style={{ width: 38, height: 38, borderRadius: '50%', background: isSelected ? 'var(--text-primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontSize: 18, fontFamily: "'Helvetica Neue', Helvetica, sans-serif", fontWeight: isToday && !isSelected ? 700 : 400, color: isSelected ? '#fff' : isWeekend ? 'rgba(0,0,0,0.3)' : isToday ? 'var(--text-primary)' : 'var(--text-80)' }}>
+                      <span style={{ fontFamily: M, fontSize: 16, fontWeight: 500, color: isWeekend ? 'rgba(0,0,0,0.22)' : 'var(--text-30)', letterSpacing: '0.02em' }}>{WEEK_DAYS[i].toLowerCase()}</span>
+                      <div style={{ width: 38, height: 38, borderRadius: '50%', background: isSelected ? '#0B0D10' : isToday ? 'rgba(11,13,16,0.3)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ fontSize: 18, fontFamily: "'Helvetica Neue', Helvetica, sans-serif", fontWeight: isSelected || isToday ? 700 : 400, color: isSelected ? '#fff' : isToday ? '#0B0D10' : isWeekend ? 'rgba(0,0,0,0.28)' : '#999B9E' }}>
                           {d.getDate()}
                         </span>
                       </div>
@@ -1256,10 +1272,11 @@ function CalendarView({ tasks, setTasks, onEditTask }: {
               </div>
             </motion.div>
           </AnimatePresence>
+          </div>
           <div style={{ height: 1, background: 'var(--border)', marginBottom: 16 }} />
 
           {/* Add task inline field */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, border: `1px solid ${addFocused ? 'rgba(0,0,0,0.3)' : 'var(--border)'}`, borderRadius: 10, padding: '12px 16px', marginBottom: 20, transition: 'border-color 0.15s' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, border: `1px solid ${addFocused ? 'rgba(0,0,0,0.3)' : 'var(--border)'}`, borderRadius: 40, padding: '12px 16px', marginBottom: 20, transition: 'border-color 0.15s', background: '#fff' }}>
             <Plus size={15} strokeWidth={1.75} color="var(--text-30)" />
             <input
               value={addInput}
@@ -1307,7 +1324,7 @@ function CalendarView({ tasks, setTasks, onEditTask }: {
 // ─── Sidebar ───────────────────────────────────────────────────────────────────
 
 function Sidebar({
-  collapsed, onToggle, screen, setScreen, calActive, setCalActive, threads, startNewThread, newChatActive, onOpenNote, onDropText,
+  collapsed, onToggle, screen, setScreen, calActive, setCalActive, threads, startNewThread, newChatActive, onOpenThread, onDropText,
 }: {
   collapsed: boolean;
   onToggle: () => void;
@@ -1318,10 +1335,9 @@ function Sidebar({
   threads: Thread[];
   startNewThread: () => void;
   newChatActive: boolean;
-  onOpenNote: (id: string) => void;
+  onOpenThread: (id: string) => void;
   onDropText: (text: string) => void;
 }) {
-  const [notesOpen, setNotesOpen] = useState(true);
 
   const NavBtn = ({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) => {
     const [hovered, setHovered] = useState(false);
@@ -1333,8 +1349,9 @@ function Sidebar({
         onMouseLeave={() => setHovered(false)}
         style={{
           width: '100%', display: 'flex', alignItems: 'center',
-          gap: 10, justifyContent: 'flex-start',
-          padding: '7px 12px',
+          gap: collapsed ? 0 : 10,
+          justifyContent: collapsed ? 'center' : 'flex-start',
+          padding: collapsed ? '7px' : '7px 12px',
           borderRadius: 40, border: 'none', cursor: 'pointer',
           background: active ? '#f0f0f0' : hovered ? '#f7f7f7' : 'transparent',
           color: active ? '#111' : '#888',
@@ -1345,9 +1362,9 @@ function Sidebar({
       >
         <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{icon}</span>
         <motion.span
-          animate={{ opacity: collapsed ? 0 : 1 }}
+          animate={{ opacity: collapsed ? 0 : 1, maxWidth: collapsed ? 0 : 200 }}
           transition={collapsed ? { duration: 0.1 } : { duration: 0.18, delay: 0.13 }}
-          style={{ fontFamily: M, fontSize: 15, whiteSpace: 'nowrap', fontWeight: 'inherit', color: 'inherit' }}
+          style={{ fontFamily: M, fontSize: 15, whiteSpace: 'nowrap', fontWeight: 'inherit', color: 'inherit', overflow: 'hidden', display: 'block' }}
         >
           {label}
         </motion.span>
@@ -1363,7 +1380,7 @@ function Sidebar({
 
   return (
     <motion.div
-      animate={{ width: collapsed ? 52 : 190 }}
+      animate={{ width: collapsed ? 64 : 190 }}
       transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
       style={{
         background: 'var(--surface)',
@@ -1373,7 +1390,7 @@ function Sidebar({
       }}
     >
       {/* Header: logo fades, toggle button always visible */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: '18px 12px 18px 14px', flexShrink: 0, gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', padding: collapsed ? '18px' : '18px 12px 18px 14px', flexShrink: 0 }}>
         <motion.div
           animate={{ opacity: collapsed ? 0 : 1, width: collapsed ? 0 : 28 }}
           transition={collapsed ? { duration: 0.12 } : { duration: 0.2, delay: 0.14 }}
@@ -1397,10 +1414,10 @@ function Sidebar({
 
         <NavBtn icon={<Sun size={17} strokeWidth={1.75} />} label="Сегодня" active={screen === 'dash' && !calActive} onClick={() => { setScreen('dash'); setCalActive(false); }} />
         <NavBtn icon={<Calendar size={17} strokeWidth={1.75} />} label="Календарь" active={screen === 'dash' && calActive} onClick={() => { setScreen('dash'); setCalActive(true); }} />
-        <NavBtn icon={<MessageCircle size={17} strokeWidth={1.75} />} label="Твои мысли" active={screen === 'threads' || screen === 'ai'} onClick={() => setScreen('threads')} />
+        <NavBtn icon={<MessageCircle size={17} strokeWidth={1.75} />} label="Твои мысли" active={screen === 'threads' || (screen === 'ai' && !newChatActive)} onClick={() => setScreen('threads')} />
       </nav>
 
-      {/* Notes section */}
+      {/* Chats section */}
       <AnimatePresence>
         {!collapsed && recentThreads.length > 0 && (
           <motion.div
@@ -1410,29 +1427,26 @@ function Sidebar({
             transition={{ duration: 0.15, delay: 0.12 }}
             style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', marginTop: 10 }}
           >
-            <button onClick={() => setNotesOpen(v => !v)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 12px 4px 22px', background: 'none', border: 'none', cursor: 'pointer', width: '100%', flexShrink: 0 }}>
-              <span style={{ fontFamily: M, fontSize: 13, color: 'var(--text-30)' }}>Заметки</span>
-              <ChevronDown size={13} strokeWidth={1.75} color="var(--text-30)" style={{ transform: notesOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
-            </button>
-            {notesOpen && (
-              <div style={{ flex: 1, overflowY: 'auto', padding: '2px 8px' }}>
-                {recentThreads.map(th => (
-                  <div key={th.id} onClick={() => onOpenNote(th.id)}
-                    title={th.title}
-                    onMouseEnter={e => (e.currentTarget.style.background = '#f7f7f7')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                    style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)', padding: '4px 12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer', borderRadius: 6, transition: 'background 0.1s' }}
-                  >
-                    {th.title}
-                  </div>
-                ))}
-              </div>
-            )}
+            <div style={{ padding: '4px 12px 4px 22px', flexShrink: 0 }}>
+              <span style={{ fontFamily: M, fontSize: 12, fontWeight: 500, letterSpacing: '0.04em', color: 'var(--text-30)', textTransform: 'uppercase' }}>Чаты</span>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '2px 8px' }}>
+              {recentThreads.map(th => (
+                <div key={th.id} onClick={() => onOpenThread(th.id)}
+                  title={th.title}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#f7f7f7')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)', padding: '5px 12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer', borderRadius: 6, transition: 'background 0.1s' }}
+                >
+                  {th.title}
+                </div>
+              ))}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Spacer */}
+      {/* Spacer when collapsed or no threads */}
       {(collapsed || recentThreads.length === 0) && <div style={{ flex: 1 }} />}
 
       {/* Drag & drop zone */}
@@ -1505,13 +1519,13 @@ export default function DesktopApp({
     setEditingTask(null);
   };
 
-  const startNewThreadWithMessage = async (message: string) => {
+  const startNewThreadWithMessage = (message: string) => {
     const newTh: Thread = { id: uuid(), title: 'Новая мысль', preview: message.slice(0, 60), messages: [], createdAt: Date.now() };
     setThreads(prev => [...(Array.isArray(prev) ? prev : []), newTh]);
-    await db.saveThread(newTh);
     setCurTh(newTh.id);
     setPendingMessage(message);
     setScreen('ai');
+    db.saveThread(newTh);
   };
 
   const handleStartNewThread = () => {
@@ -1544,8 +1558,8 @@ export default function DesktopApp({
       source: 'text',
     };
     setThreads(prev => [newTh, ...(Array.isArray(prev) ? prev : [])]);
-    await db.saveThread(newTh);
-    handleOpenNote(newTh.id);
+    handleOpenThread(newTh.id);
+    db.saveThread(newTh);
   };
 
   return (
@@ -1560,7 +1574,7 @@ export default function DesktopApp({
         threads={threads}
         startNewThread={handleStartNewThread}
         newChatActive={screen === 'ai' && !curTh && !noteMode}
-        onOpenNote={handleOpenNote}
+        onOpenThread={handleOpenThread}
         onDropText={handleDropText}
       />
 
