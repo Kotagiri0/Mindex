@@ -715,38 +715,67 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
   }
 });
 
+async function callRouterAI(apiKey: string, body: object, attempt = 0): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  try {
+    const response = await fetch("https://routerai.ru/api/v1/chat/completions", {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+      body: JSON.stringify(body),
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (e: any) {
+    clearTimeout(timeoutId);
+    if (attempt === 0 && e?.name !== "AbortError") {
+      await new Promise(r => setTimeout(r, 600));
+      return callRouterAI(apiKey, body, 1);
+    }
+    throw e;
+  }
+}
+
 app.post("/api/chat", async (req, res) => {
   try {
     const { messages, systemInstruction, tools, tool_choice } = req.body;
 
-    const apiKey = process.env.GROQ_API_KEY;
+    const apiKey = process.env.ROUTERAI_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ 
-        error: "GROQ_API_KEY не найден в .env" 
-      });
+      return res.status(500).json({ error: "ROUTERAI_API_KEY не найден в .env" });
     }
 
-    const groq = new Groq({ apiKey });
-
-    const chatCompletion = await groq.chat.completions.create({
-      messages: [
-        { role: "system", content: systemInstruction },
-        ...messages
-      ],
-      model: "llama-3.3-70b-versatile",
+    const response = await callRouterAI(apiKey, {
+      model: "deepseek/deepseek-v4-flash",
+      messages: [{ role: "system", content: systemInstruction }, ...messages],
       tools,
       tool_choice: tool_choice || "auto",
       temperature: 0.7,
       max_tokens: 1024,
+      thinking: false,
     });
 
-    if (!chatCompletion.choices || chatCompletion.choices.length === 0) {
-      throw new Error("Groq вернул пустой список вариантов (choices).");
+    if (!response.ok) {
+      const text = await response.text();
+      console.error("[CHAT] RouterAI error:", response.status, text);
+      return res.status(500).json({ error: `RouterAI вернул ошибку ${response.status}: ${text}` });
     }
 
-    res.json(chatCompletion.choices[0].message);
+    const data = await response.json();
+
+    if (!data.choices?.length) {
+      throw new Error("RouterAI вернул пустой список вариантов (choices).");
+    }
+
+    res.json(data.choices[0].message);
   } catch (error: any) {
-    res.status(500).json({ error: error.message || "Ошибка сервера" });
+    const isTimeout = error?.name === "AbortError";
+    const msg = isTimeout
+      ? "RouterAI не ответил за 30 секунд — попробуй ещё раз"
+      : error.message || "Ошибка сервера";
+    console.error("[CHAT] error:", msg);
+    res.status(500).json({ error: msg });
   }
 });
 

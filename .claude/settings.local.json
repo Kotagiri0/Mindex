@@ -9,7 +9,31 @@
       "Bash(npx tsc *)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' -X POST https://api.groq.com/openai/v1/chat/completions -H 'Authorization: Bearer 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' -H 'Content-Type: application/json' -d '{\"model\":\"llama-3.3-70b-versatile\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"max_tokens\":5}')",
+      "Bash(netstat -ano)",
+      "Bash(cmd /c \"netstat -ano | findstr :3000\")",
+      "Bash(cmd /c \"netstat -ano\")",
+      "Bash(npm run *)",
+      "Bash(curl -s -X POST http://localhost:3000/api/chat -H 'Content-Type: application/json' -d '{\"messages\":[{\"role\":\"user\",\"content\":\"привет\"}],\"systemInstruction\":\"Ты Мысль\",\"tools\":[],\"tool_choice\":\"none\"}')",
+      "Bash(git pull *)",
+      "Bash(git stash *)",
+      "Bash(docker compose *)",
+      "Bash(git commit *)",
+      "Bash(docker exec *)",
+      "Bash(curl -s -X POST http://localhost:3000/api/chat -H \"Content-Type: application/json\" -d '{\"messages\":[{\"role\":\"user\",\"content\":\"привет\"}],\"systemInstruction\":\"Ты Мысль\",\"tools\":[],\"tool_choice\":\"none\"}')",
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "Bash(git checkout *)",
+      "WebFetch(domain:api.figma.com)",
+      "mcp__claude_ai_Figma__get_design_context",
+      "mcp__claude_ai_Figma__get_variable_defs",
+      "Bash(claude mcp *)",
+      "Bash(curl -s -H \"X-Figma-Token: figd_p5doxUhdRuKVKjsYfDe_VwCdJ2XRBrka8RdqrJH1\" \"https://api.figma.com/v1/files/rTEFs00Wt76PnvoxFj1WuY/nodes?ids=361-1462\")",
+      "Bash(python -m json.tool)",
+      "Bash(git fetch *)",
+      "Bash(npm install *)"
     ]
   }
 }

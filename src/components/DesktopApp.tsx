@@ -368,6 +368,7 @@ function TodayScreen({
   const [chatInput, setChatInput] = useState('');
   const [expanded, setExpanded] = useState(true);
   const today = todayStr();
+  const { state: voiceStateTd, startRecording: startRecTd, stopRecording: stopRecTd } = useVoiceInput(text => setChatInput(v => v ? v + ' ' + text : text));
   const now = new Date();
 
   const todayTasks = useMemo(() =>
@@ -510,9 +511,12 @@ function TodayScreen({
                 placeholder="Спроси у мысли..."
                 style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 14, color: 'var(--text-primary)' }}
               />
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}
-                onClick={() => alert('Голосовой ввод — скоро')}>
-                <Mic size={17} strokeWidth={1.5} color="#bbb" />
+              <button
+                onPointerDown={e => { e.preventDefault(); startRecTd(); }}
+                onPointerUp={e => { e.preventDefault(); stopRecTd(); }}
+                onPointerCancel={stopRecTd}
+                style={{ background: voiceStateTd === 'recording' ? '#c0392b' : 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: '50%', display: 'flex', flexShrink: 0, transition: 'background 0.15s' }}>
+                <Mic size={17} strokeWidth={1.5} color={voiceStateTd === 'recording' ? '#fff' : '#bbb'} />
               </button>
             </div>
           </div>
@@ -549,7 +553,7 @@ function EmptyChatScreen({ onSend }: { onSend: (msg: string) => void }) {
 // ─── Chat view ──────────────────────────────────────────────────────────────────
 
 function ChatView({
-  threadId, threads, setThreads, tasks, setTasks, initialMessage, onInitialConsumed,
+  threadId, threads, setThreads, tasks, setTasks, initialMessage, onInitialConsumed, onNetworkError,
 }: {
   key?: React.Key;
   threadId: string;
@@ -559,6 +563,7 @@ function ChatView({
   setTasks: (t: Task[] | ((p: Task[]) => Task[])) => void;
   initialMessage?: string | null;
   onInitialConsumed?: () => void;
+  onNetworkError?: () => void;
 }) {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -581,11 +586,29 @@ function ChatView({
 
   if (!thread) return null;
 
+  const generateTitle = async (userText: string, assistantText: string) => {
+    try {
+      const resp = await generateResponse(
+        [{ role: 'user', content: `Придумай короткое название (3-5 слов, без кавычек) для чата, где пользователь написал:\n«${userText}»\nИИ ответил:\n«${assistantText.slice(0, 200)}»\nТолько название, без пояснений`, time: '' }],
+        { tools: [], tool_choice: 'none' } as any
+      );
+      const title = resp?.content?.trim().replace(/^["«]|["»]$/g, '').slice(0, 60);
+      if (!title) return;
+      setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
+        if (t.id !== threadId) return t;
+        const u = { ...t, title };
+        db.saveThread(u);
+        return u;
+      }));
+    } catch { /* не критично */ }
+  };
+
   const sendMessage = async (text: string) => {
     if (!text.trim() || isTyping) return;
     setInput('');
 
     const userMsg = { role: 'user' as const, content: text, time: nowTime() };
+    const isFirstMessage = thread.messages.length === 0;
     let updatedThread: Thread | undefined;
 
     setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
@@ -608,7 +631,7 @@ function ChatView({
 
       while (response.tool_calls) {
         const toolResults: typeof history = [];
-        const assistantMsg = { role: 'assistant' as const, content: response.content || '', tool_calls: response.tool_calls, time: nowTime() };
+        const assistantMsg = { role: 'assistant' as const, content: response.content || '', tool_calls: response.tool_calls, reasoning_content: response.reasoning_content, time: nowTime() };
         turnMsgs.push(assistantMsg);
 
         for (const call of response.tool_calls) {
@@ -657,7 +680,7 @@ function ChatView({
         response = await generateResponse(history);
       }
 
-      const finalMsg = { role: 'assistant' as const, content: response.content || 'Готово!', time: nowTime() };
+      const finalMsg = { role: 'assistant' as const, content: response.content || 'Готово!', reasoning_content: response.reasoning_content, time: nowTime() };
       setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
         if (t.id === threadId) {
           const hasUser = t.messages.some(m => m.role === 'user' && m.content === userMsg.content && m.time === userMsg.time);
@@ -668,8 +691,11 @@ function ChatView({
         }
         return t;
       }));
+      if (isFirstMessage) generateTitle(text, finalMsg.content);
     } catch (err: any) {
-      const errMsg = { role: 'assistant' as const, content: `Ошибка: ${err.message || 'Не удалось связаться с ИИ.'}`, time: nowTime() };
+      const isNetworkErr = !err.message || err.message === 'fetch failed' || err.message.includes('Failed to fetch') || err.message.includes('Ошибка сети');
+      if (isNetworkErr) { onNetworkError?.(); return; }
+      const errMsg = { role: 'assistant' as const, content: `Ошибка: ${err.message}`, time: nowTime() };
       setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
         if (t.id === threadId) { const u = { ...t, messages: [...t.messages, errMsg] }; db.saveThread(u); return u; }
         return t;
@@ -945,19 +971,35 @@ function ThreadsView({
       <div style={{ ...CC, paddingTop: 40, paddingBottom: 40 }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <div style={{ display: 'flex', background: 'rgba(0,0,0,0.05)', borderRadius: 40, padding: 4, gap: 2 }}>
-            {([['thoughts', 'ТВОИ МЫСЛИ'], ['notes', 'ЗАМЕТКИ']] as const).map(([key, label]) => (
-              <button key={key} onClick={() => setTab(key)} style={{
-                fontFamily: M, fontSize: 11, fontWeight: 600, letterSpacing: '0.08em',
-                padding: '6px 14px', borderRadius: 40, border: 'none', cursor: 'pointer',
-                background: tab === key ? 'var(--surface)' : 'transparent',
-                color: tab === key ? 'var(--text-primary)' : 'var(--text-muted)',
-                transition: 'all 0.15s',
-                boxShadow: tab === key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-              }}>
-                {label}
-              </button>
-            ))}
+          <div style={{ display: 'flex', justifyContent: 'center', flex: 1 }}>
+            <div style={{ position: 'relative', display: 'flex', background: 'rgba(0,0,0,0.05)', borderRadius: 40, padding: 4, gap: 0 }}>
+              <motion.div
+                layout
+                transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+                style={{
+                  position: 'absolute', top: 4, bottom: 4,
+                  width: 'calc(50% - 4px)',
+                  left: tab === 'thoughts' ? 4 : 'calc(50%)',
+                  background: 'var(--surface)',
+                  borderRadius: 40,
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+                  zIndex: 0,
+                }}
+              />
+              {([['thoughts', 'ТВОИ МЫСЛИ'], ['notes', 'ЗАМЕТКИ']] as const).map(([key, label]) => (
+                <button key={key} onClick={() => setTab(key)} style={{
+                  fontFamily: F, fontSize: 11, fontWeight: 400, letterSpacing: '0.08em',
+                  padding: '7px 22px', borderRadius: 40, border: 'none', cursor: 'pointer',
+                  background: 'transparent',
+                  color: 'var(--text)',
+                  opacity: tab === key ? 0.8 : 0.5,
+                  transition: 'opacity 0.2s',
+                  position: 'relative', zIndex: 1,
+                }}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
           <button onClick={startNewThread} style={{
             fontFamily: M, fontSize: 13, letterSpacing: '0.06em',
@@ -1077,10 +1119,11 @@ function CalendarTaskRow({ task, onToggle, onToggleSubtask, onClick }: {
 
 // ─── Calendar view ─────────────────────────────────────────────────────────────
 
-function CalendarView({ tasks, setTasks, onEditTask }: {
+function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
   tasks: Task[];
   setTasks: (t: Task[] | ((p: Task[]) => Task[])) => void;
   onEditTask: (t: Task) => void;
+  onQuickChat: (msg: string) => void;
 }) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState(todayStr());
@@ -1089,6 +1132,8 @@ function CalendarView({ tasks, setTasks, onEditTask }: {
   const [miniCalMonth, setMiniCalMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
   const [addInput, setAddInput] = useState('');
   const [addFocused, setAddFocused] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const { state: voiceStateCal, startRecording: startRecCal, stopRecording: stopRecCal } = useVoiceInput(text => setChatInput(v => v ? v + ' ' + text : text));
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const tooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const miniCalRef = useRef<HTMLDivElement>(null);
@@ -1243,15 +1288,9 @@ function CalendarView({ tasks, setTasks, onEditTask }: {
 
           {/* Day strip with slide animation */}
           <div style={{ height: 1, background: 'var(--border)' }} />
-          <div style={{ position: 'relative', overflow: 'hidden' }}>
-          <AnimatePresence mode="popLayout" initial={false}>
-            <motion.div
-              key={weekOffset}
-              initial={{ x: slideDir * 60 }}
-              animate={{ x: 0 }}
-              exit={{ x: slideDir * -60 }}
-              transition={{ duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
-            >
+          <div>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div key={weekOffset}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', paddingTop: 4, paddingBottom: 4 }}>
                 {weekDays.map((d, i) => {
                   const ds = dateToStr(d);
@@ -1262,7 +1301,7 @@ function CalendarView({ tasks, setTasks, onEditTask }: {
                     <button key={ds} onClick={() => setSelectedDate(ds)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '8px 4px', border: 'none', background: 'transparent', cursor: 'pointer' }}>
                       <span style={{ fontFamily: M, fontSize: 16, fontWeight: 500, color: isWeekend ? 'rgba(0,0,0,0.22)' : 'var(--text-30)', letterSpacing: '0.02em' }}>{WEEK_DAYS[i].toLowerCase()}</span>
                       <div style={{ width: 38, height: 38, borderRadius: '50%', background: isSelected ? '#0B0D10' : isToday ? 'rgba(11,13,16,0.3)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontSize: 18, fontFamily: "'Helvetica Neue', Helvetica, sans-serif", fontWeight: isSelected || isToday ? 700 : 400, color: isSelected ? '#fff' : isToday ? '#0B0D10' : isWeekend ? 'rgba(0,0,0,0.28)' : '#999B9E' }}>
+                        <span style={{ fontSize: 18, fontFamily: "'Helvetica Neue', Helvetica, sans-serif", fontWeight: isSelected || isToday ? 700 : 400, color: isSelected || isToday ? '#fff' : isWeekend ? 'rgba(0,0,0,0.28)' : '#999B9E' }}>
                           {d.getDate()}
                         </span>
                       </div>
@@ -1317,6 +1356,27 @@ function CalendarView({ tasks, setTasks, onEditTask }: {
 
         </div>
       </div>
+
+      {/* Quick chat — висячее поле внизу */}
+      <div style={{ flexShrink: 0, padding: '12px 24px 20px' }}>
+        <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: '1px solid var(--border)', borderRadius: 40, padding: '10px 16px', boxShadow: '0 2px 12px rgba(0,0,0,0.07)' }}>
+          <Plus size={17} strokeWidth={1.5} color="#bbb" />
+          <input
+            value={chatInput}
+            onChange={e => setChatInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && chatInput.trim()) { onQuickChat(chatInput.trim()); setChatInput(''); } }}
+            placeholder="Спроси у мысли..."
+            style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 14, color: 'var(--text-primary)' }}
+          />
+          <button
+            onPointerDown={e => { e.preventDefault(); startRecCal(); }}
+            onPointerUp={e => { e.preventDefault(); stopRecCal(); }}
+            onPointerCancel={stopRecCal}
+            style={{ background: voiceStateCal === 'recording' ? '#c0392b' : 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: '50%', display: 'flex', transition: 'background 0.15s' }}>
+            <Mic size={17} strokeWidth={1.5} color={voiceStateCal === 'recording' ? '#fff' : '#bbb'} />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1351,12 +1411,12 @@ function Sidebar({
           width: '100%', display: 'flex', alignItems: 'center',
           gap: collapsed ? 0 : 10,
           justifyContent: collapsed ? 'center' : 'flex-start',
-          padding: collapsed ? '7px' : '7px 12px',
+          padding: collapsed ? '7px' : '7px 12px 7px 8px',
           borderRadius: 40, border: 'none', cursor: 'pointer',
           background: active ? '#f0f0f0' : hovered ? '#f7f7f7' : 'transparent',
           color: active ? '#111' : '#888',
           fontWeight: active ? 500 : 400,
-          transition: 'background 0.12s, color 0.12s',
+          transition: 'background 0.12s, color 0.12s, gap 0.28s cubic-bezier(0.4,0,0.2,1), padding 0.28s cubic-bezier(0.4,0,0.2,1)',
           minHeight: 36, flexShrink: 0,
         }}
       >
@@ -1494,9 +1554,14 @@ export default function DesktopApp({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [calActive, setCalActive] = useState(false);
   const [noteMode, setNoteMode] = useState(false);
+
+  useEffect(() => {
+    if (screen === 'ob') setScreen('dash');
+  }, [screen]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const [noInternet, setNoInternet] = useState(false);
 
   const addTask = async (name: string, time: string, date: string) => {
     const t: Task = { id: uuid(), name, time, date, done: false };
@@ -1523,6 +1588,7 @@ export default function DesktopApp({
     const newTh: Thread = { id: uuid(), title: 'Новая мысль', preview: message.slice(0, 60), messages: [], createdAt: Date.now() };
     setThreads(prev => [...(Array.isArray(prev) ? prev : []), newTh]);
     setCurTh(newTh.id);
+    setNoteMode(false);
     setPendingMessage(message);
     setScreen('ai');
     db.saveThread(newTh);
@@ -1582,19 +1648,19 @@ export default function DesktopApp({
         <AnimatePresence mode="wait">
 
           {screen === 'dash' && !calActive && (
-            <motion.div key="today" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+            <motion.div key="today" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.13 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
               <TodayScreen tasks={tasks} setTasks={setTasks} onQuickChat={startNewThreadWithMessage} onAddTask={() => setIsAddModalOpen(true)} onEditTask={setEditingTask} />
             </motion.div>
           )}
 
           {screen === 'dash' && calActive && (
-            <motion.div key="cal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-              <CalendarView tasks={tasks} setTasks={setTasks} onEditTask={setEditingTask} />
+            <motion.div key="cal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.13 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+              <CalendarView tasks={tasks} setTasks={setTasks} onEditTask={setEditingTask} onQuickChat={startNewThreadWithMessage} />
             </motion.div>
           )}
 
           {screen === 'ai' && (
-            <motion.div key="ai" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+            <motion.div key="ai" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.13 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
               {curTh && noteMode ? (
                 <NoteView
                   threadId={curTh}
@@ -1613,6 +1679,7 @@ export default function DesktopApp({
                   setTasks={setTasks}
                   initialMessage={pendingMessage}
                   onInitialConsumed={() => setPendingMessage(null)}
+                  onNetworkError={() => setNoInternet(true)}
                 />
               ) : (
                 <EmptyChatScreen onSend={startNewThreadWithMessage} />
@@ -1643,6 +1710,34 @@ export default function DesktopApp({
 
       <AddTaskModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onAdd={addTask} initialDate={todayStr()} />
       <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} onUpdate={updateTask} onDelete={deleteTask} onOpenThread={id => { setCurTh(id); setScreen('ai'); }} />
+
+      <AnimatePresence>
+        {noInternet && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'var(--bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}
+          >
+            <LogoIcon size={40} />
+            <div style={{ marginTop: 12, textAlign: 'center' }}>
+              <div style={{ fontFamily: M, fontSize: 22, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>
+                Со интернетом что-то не то...
+              </div>
+              <div style={{ fontFamily: M, fontSize: 15, color: 'var(--text-30)', lineHeight: 1.5 }}>
+                Попробуй немного подождать и обновить страницу
+              </div>
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              style={{ marginTop: 8, padding: '11px 28px', background: '#0B0D10', color: '#fff', border: 'none', borderRadius: 40, fontFamily: M, fontSize: 15, fontWeight: 500, cursor: 'pointer' }}
+            >
+              Обновить
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
