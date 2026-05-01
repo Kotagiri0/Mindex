@@ -127,32 +127,17 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
       suppressClickRef.current = false;
     }, 0);
 
-    const direction = deltaX < 0 ? 1 : -1;
-    const currentIndex = weekDays.findIndex((day) => day.toISOString().split('T')[0] === selectedDate);
-
-    if (direction === 1) {
-      if (currentIndex >= 0 && currentIndex < 6) {
-        const nextDay = weekDays[currentIndex + 1];
-        setSelectedDate(nextDay.toISOString().split('T')[0]);
-      } else {
-        setWeekOffset((value) => value + 1);
-        const nextWeekStart = new Date(weekDays[0]);
-        nextWeekStart.setDate(nextWeekStart.getDate() + 7);
-        setSelectedDate(nextWeekStart.toISOString().split('T')[0]);
-      }
-      return;
+    if (deltaX < 0) {
+      setWeekOffset((value) => value + 1);
+      const next = new Date(weekDays[0]);
+      next.setDate(next.getDate() + 7);
+      setSelectedDate(next.toISOString().split('T')[0]);
+    } else {
+      setWeekOffset((value) => value - 1);
+      const prev = new Date(weekDays[0]);
+      prev.setDate(prev.getDate() - 7);
+      setSelectedDate(prev.toISOString().split('T')[0]);
     }
-
-    if (currentIndex > 0) {
-      const prevDay = weekDays[currentIndex - 1];
-      setSelectedDate(prevDay.toISOString().split('T')[0]);
-      return;
-    }
-
-    setWeekOffset((value) => value - 1);
-    const prevWeekStart = new Date(weekDays[0]);
-    prevWeekStart.setDate(prevWeekStart.getDate() - 1);
-    setSelectedDate(prevWeekStart.toISOString().split('T')[0]);
   };
 
   const handleDaySwipeEnd = (x: number, y: number) => {
