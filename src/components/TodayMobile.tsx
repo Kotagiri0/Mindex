@@ -81,7 +81,7 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
           <ChevronLeft size={22} strokeWidth={1.75} color="rgba(34,34,36,0.5)" />
         </motion.button>
 
-        <span style={{ fontFamily: F, fontSize: 18, color: 'rgba(34,34,36,0.5)', letterSpacing: '0em' }}>
+        <span style={{ fontFamily: F, fontSize: 18, color: 'rgba(34,34,36,0.75)', letterSpacing: '0em' }}>
           {dayName}
         </span>
 
@@ -94,8 +94,8 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
         </motion.button>
       </div>
 
-      {/* Spacer */}
-      <div style={{ flex: 1 }} />
+      {/* Spacer — чуть меньше вверху, чтобы заголовок казался ниже */}
+      <div style={{ flex: 1, minHeight: 40 }} />
 
       {hasTasks ? (
         /* ── Tasks mode: full-bleed rounded-top cards ── */
@@ -161,7 +161,7 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
         </>
       ) : (
         /* ── Empty mode: desktop-style floating cards at the bottom ── */
-        <div style={{ padding: '0 16px', paddingBottom: 'max(100px, calc(env(safe-area-inset-bottom, 0px) + 100px))', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ padding: '0 16px', paddingBottom: 'max(120px, calc(env(safe-area-inset-bottom, 0px) + 120px))', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {/* Tasks card */}
           <motion.div
             whileTap={{ scale: 0.98 }}

@@ -22,15 +22,15 @@ export default function BottomNav({ activeScreen, onNavigate, onNewThread }: Bot
       zIndex: 100,
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'flex-end',
       gap: 10,
     }}>
       <div style={{
+        flex: 1,
         display: 'flex',
         alignItems: 'center',
         background: '#e8e8e8',
         borderRadius: 999,
-        padding: 4,
+        padding: 6,
         boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
       }}>
         {(['dash', 'threads'] as const).map(tab => {
@@ -42,9 +42,9 @@ export default function BottomNav({ activeScreen, onNavigate, onNewThread }: Bot
               whileTap={{ scale: 0.9 }}
               style={{
                 position: 'relative',
-                width: 54,
-                height: 54,
+                flex: 1,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '12px 12px',
                 borderRadius: 999,
                 border: 'none',
                 cursor: 'pointer',

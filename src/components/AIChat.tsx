@@ -427,6 +427,54 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     }));
   };
 
+  const parseInline = (line: string, key: number): React.ReactNode => {
+    const parts: React.ReactNode[] = [];
+    const re = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
+    let last = 0, match: RegExpExecArray | null;
+    while ((match = re.exec(line)) !== null) {
+      if (match.index > last) parts.push(line.slice(last, match.index));
+      if (match[2]) parts.push(<strong key={match.index}>{match[2]}</strong>);
+      else if (match[3]) parts.push(<em key={match.index}>{match[3]}</em>);
+      else if (match[4]) parts.push(<code key={match.index} style={{ fontFamily: 'monospace', background: 'rgba(0,0,0,0.07)', borderRadius: 4, padding: '1px 5px', fontSize: '0.9em' }}>{match[4]}</code>);
+      last = match.index + match[0].length;
+    }
+    if (last < line.length) parts.push(line.slice(last));
+    return <React.Fragment key={key}>{parts}</React.Fragment>;
+  };
+
+  const renderMarkdown = (text: string) => {
+    const lines = text.split('\n');
+    const nodes: React.ReactNode[] = [];
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      const numMatch = line.match(/^(\d+)\.\s+(.*)$/);
+      const bulletMatch = line.match(/^[-•]\s+(.*)$/);
+      if (numMatch || bulletMatch) {
+        const items: React.ReactNode[] = [];
+        while (i < lines.length) {
+          const l = lines[i];
+          const nm = l.match(/^(\d+)\.\s+(.*)$/);
+          const bm = l.match(/^[-•]\s+(.*)$/);
+          if (nm) { items.push(<li key={i}>{parseInline(nm[2], i)}</li>); i++; }
+          else if (bm) { items.push(<li key={i}>{parseInline(bm[1], i)}</li>); i++; }
+          else break;
+        }
+        nodes.push(numMatch
+          ? <ol key={`ol-${i}`} style={{ paddingLeft: 20, margin: '6px 0', display: 'flex', flexDirection: 'column', gap: 3 }}>{items}</ol>
+          : <ul key={`ul-${i}`} style={{ paddingLeft: 20, margin: '6px 0', listStyleType: 'disc', display: 'flex', flexDirection: 'column', gap: 3 }}>{items}</ul>
+        );
+      } else if (line === '') {
+        nodes.push(<br key={i} />);
+        i++;
+      } else {
+        nodes.push(<span key={i} style={{ display: 'block' }}>{parseInline(line, i)}</span>);
+        i++;
+      }
+    }
+    return <div>{nodes}</div>;
+  };
+
   return (
     <div className="flex flex-col h-full" style={{ background: '#f0f0f0' }}>
       <div
@@ -486,10 +534,11 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         ) : (
           thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls).map((m, i) => (
             <div key={i} className={`flex flex-col max-w-[85%] gap-[3px] ${m.role === 'user' ? 'self-end items-end' : 'self-start items-start'}`}>
-              <div className={`p-[10px_14px] rounded-[18px] text-[15px] leading-[1.5] ${
-                m.role === 'user' ? 'bg-accent text-white rounded-br-[4px]' : 'bg-surface2 text-text-primary rounded-bl-[4px]'
-              }`}>
-                {m.content}
+              <div style={m.role === 'user'
+                ? { background: 'rgba(9,14,23,0.07)', borderRadius: 18, borderBottomRightRadius: 4, padding: '10px 14px', fontSize: 15, lineHeight: 1.5, color: '#222224', fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif" }
+                : { borderRadius: 18, borderBottomLeftRadius: 4, padding: '10px 14px', fontSize: 15, lineHeight: 1.5, color: '#222224', background: 'rgba(34,34,36,0.06)' }
+              }>
+                {m.role === 'user' ? m.content : renderMarkdown(m.content)}
 
                 {m.planning_data && (
                   <div className="mt-3 flex flex-col gap-3">
