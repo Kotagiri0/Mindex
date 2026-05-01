@@ -155,6 +155,46 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
     setSelectedDate(prevWeekStart.toISOString().split('T')[0]);
   };
 
+  const handleDaySwipeEnd = (x: number, y: number) => {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (!start) return;
+
+    const deltaX = x - start.x;
+    const deltaY = y - start.y;
+    if (Math.abs(deltaX) < 40 || Math.abs(deltaX) < Math.abs(deltaY)) return;
+
+    suppressClickRef.current = true;
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 0);
+
+    const direction = deltaX < 0 ? 1 : -1;
+    const currentIndex = weekDays.findIndex(
+      (day) => day.toISOString().split('T')[0] === selectedDate,
+    );
+
+    if (direction === 1) {
+      if (currentIndex < 6) {
+        setSelectedDate(weekDays[currentIndex + 1].toISOString().split('T')[0]);
+      } else {
+        setWeekOffset((value) => value + 1);
+        const next = new Date(weekDays[0]);
+        next.setDate(next.getDate() + 7);
+        setSelectedDate(next.toISOString().split('T')[0]);
+      }
+    } else {
+      if (currentIndex > 0) {
+        setSelectedDate(weekDays[currentIndex - 1].toISOString().split('T')[0]);
+      } else {
+        setWeekOffset((value) => value - 1);
+        const prev = new Date(weekDays[0]);
+        prev.setDate(prev.getDate() - 1);
+        setSelectedDate(prev.toISOString().split('T')[0]);
+      }
+    }
+  };
+
   return (
     <div className="flex flex-col h-full" style={{ background: '#f0f0f0' }}>
       <div style={{ height: 'env(safe-area-inset-top, 0px)' }} />
@@ -248,7 +288,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
         className="flex-1 flex flex-col min-h-0 overflow-hidden"
         style={{ background: '#ffffff', borderRadius: '24px 24px 0 0', touchAction: 'none' }}
         onTouchStart={(event) => handleWeekSwipeStart(event.touches[0].clientX, event.touches[0].clientY)}
-        onTouchEnd={(event) => handleWeekSwipeEnd(event.changedTouches[0].clientX, event.changedTouches[0].clientY)}
+        onTouchEnd={(event) => handleDaySwipeEnd(event.changedTouches[0].clientX, event.changedTouches[0].clientY)}
         onTouchCancel={() => {
           swipeStartRef.current = null;
         }}
