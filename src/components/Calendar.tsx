@@ -118,12 +118,7 @@ export default function Calendar({ initialDate, onSelectDate, onBack, className 
     commitSelection(todayDate);
   };
 
-  const swipeSupported = typeof window !== 'undefined'
-    ? window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 1024 || navigator.maxTouchPoints > 0
-    : false;
-
   const handleDragStart = (x: number, y: number) => {
-    if (!swipeSupported) return;
     dragStart.current = { x, y };
     dragging.current = true;
   };
@@ -208,16 +203,22 @@ export default function Calendar({ initialDate, onSelectDate, onBack, className 
 
       <div
         className="relative overflow-hidden rounded-[24px] bg-white px-3 pb-4 pt-3 shadow-[0_1px_0_rgba(34,34,36,0.04)] min-h-[316px]"
-        style={{ touchAction: 'pan-y' }}
+        style={{ touchAction: 'none' }}
         onTouchStart={(event) => handleDragStart(event.touches[0].clientX, event.touches[0].clientY)}
         onTouchEnd={(event) => handleDragEnd(event.changedTouches[0].clientX, event.changedTouches[0].clientY)}
-        onMouseDown={(event) => {
-          if (!swipeSupported) return;
-          handleDragStart(event.clientX, event.clientY);
+        onTouchCancel={() => {
+          dragging.current = false;
+          dragStart.current = null;
         }}
-        onMouseUp={(event) => {
-          if (!swipeSupported) return;
-          handleDragEnd(event.clientX, event.clientY);
+        onPointerDown={(event) => {
+          if (event.pointerType === 'mouse' || event.pointerType === 'pen') {
+            handleDragStart(event.clientX, event.clientY);
+          }
+        }}
+        onPointerUp={(event) => {
+          if (event.pointerType === 'mouse' || event.pointerType === 'pen') {
+            handleDragEnd(event.clientX, event.clientY);
+          }
         }}
       >
         <div className="grid grid-cols-7 gap-y-2 text-center text-[11px] uppercase tracking-[0.08em] text-[rgba(34,34,36,0.38)]">

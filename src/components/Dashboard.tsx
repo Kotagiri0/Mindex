@@ -1,5 +1,4 @@
-import React, { useState, useMemo } from 'react';
-import { ChevronLeft, Plus, Settings, Menu } from 'lucide-react';
+import React, { useMemo, useRef, useState } from 'react';
 import { CalendarDays, ChevronLeft, Plus, Settings, Menu } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Task, Screen } from '../types';
@@ -28,6 +27,8 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const suppressClickRef = useRef(false);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -108,6 +109,52 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
     setEditingTask(null);
   };
 
+  const handleWeekSwipeStart = (x: number, y: number) => {
+    swipeStartRef.current = { x, y };
+  };
+
+  const handleWeekSwipeEnd = (x: number, y: number) => {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (!start) return;
+
+    const deltaX = x - start.x;
+    const deltaY = y - start.y;
+    if (Math.abs(deltaX) < 40 || Math.abs(deltaX) < Math.abs(deltaY)) return;
+
+    suppressClickRef.current = true;
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 0);
+
+    const direction = deltaX < 0 ? 1 : -1;
+    const currentIndex = weekDays.findIndex((day) => day.toISOString().split('T')[0] === selectedDate);
+
+    if (direction === 1) {
+      if (currentIndex >= 0 && currentIndex < 6) {
+        const nextDay = weekDays[currentIndex + 1];
+        setSelectedDate(nextDay.toISOString().split('T')[0]);
+      } else {
+        setWeekOffset((value) => value + 1);
+        const nextWeekStart = new Date(weekDays[0]);
+        nextWeekStart.setDate(nextWeekStart.getDate() + 7);
+        setSelectedDate(nextWeekStart.toISOString().split('T')[0]);
+      }
+      return;
+    }
+
+    if (currentIndex > 0) {
+      const prevDay = weekDays[currentIndex - 1];
+      setSelectedDate(prevDay.toISOString().split('T')[0]);
+      return;
+    }
+
+    setWeekOffset((value) => value - 1);
+    const prevWeekStart = new Date(weekDays[0]);
+    prevWeekStart.setDate(prevWeekStart.getDate() - 1);
+    setSelectedDate(prevWeekStart.toISOString().split('T')[0]);
+  };
+
   return (
     <div className="flex flex-col h-full" style={{ background: '#f0f0f0' }}>
       <div style={{ height: 'env(safe-area-inset-top, 0px)' }} />
@@ -152,7 +199,15 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
         </motion.button>
       </div>
 
-      <div className="grid grid-cols-7 px-4 pb-3 pt-1">
+      <div
+        className="grid grid-cols-7 px-4 pb-3 pt-1"
+        style={{ touchAction: 'none' }}
+        onTouchStart={(event) => handleWeekSwipeStart(event.touches[0].clientX, event.touches[0].clientY)}
+        onTouchEnd={(event) => handleWeekSwipeEnd(event.changedTouches[0].clientX, event.changedTouches[0].clientY)}
+        onTouchCancel={() => {
+          swipeStartRef.current = null;
+        }}
+      >
         {weekDays.map((d, i) => {
           const ds = d.toISOString().split('T')[0];
           const isSelected = ds === selectedDate;
@@ -162,7 +217,10 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
             <motion.button
               key={ds}
               whileTap={{ scale: 0.9 }}
-              onClick={() => setSelectedDate(ds)}
+              onClick={() => {
+                if (suppressClickRef.current) return;
+                setSelectedDate(ds);
+              }}
               className="flex flex-col items-center gap-1 py-1"
             >
               <span style={{ fontSize: '11px', color: 'rgba(34,34,36,0.4)', fontFamily: F, letterSpacing: '0.04em' }}>
