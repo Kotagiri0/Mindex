@@ -244,7 +244,15 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
         })}
       </div>
 
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden" style={{ background: '#ffffff', borderRadius: '24px 24px 0 0' }}>
+      <div
+        className="flex-1 flex flex-col min-h-0 overflow-hidden"
+        style={{ background: '#ffffff', borderRadius: '24px 24px 0 0', touchAction: 'none' }}
+        onTouchStart={(event) => handleWeekSwipeStart(event.touches[0].clientX, event.touches[0].clientY)}
+        onTouchEnd={(event) => handleWeekSwipeEnd(event.changedTouches[0].clientX, event.changedTouches[0].clientY)}
+        onTouchCancel={() => {
+          swipeStartRef.current = null;
+        }}
+      >
         <div className="flex items-center justify-between px-5 pt-4 pb-3">
           <motion.button
             whileTap={{ scale: 0.88 }}
@@ -264,7 +272,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
 
         <div style={{ height: '1px', background: 'rgba(34,34,36,0.08)', margin: '0 20px' }} />
 
-        <div className="flex-1 overflow-y-auto px-5 pb-20">
+        <div className="flex-1 overflow-y-auto px-5 pb-20" style={{ touchAction: 'pan-y' }}>
           {filteredTasks.length === 0 ? (
             <motion.div
               initial={{ opacity: 0 }}
