@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { ChevronLeft, Plus, Settings, Menu } from 'lucide-react';
+import { CalendarDays, ChevronLeft, Plus, Settings, Menu } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Task, Screen } from '../types';
 import TaskItem from './TaskItem';
@@ -139,6 +140,15 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
           className="w-11 h-11 flex items-center justify-center"
         >
           <Settings size={22} strokeWidth={1.75} color="rgba(34,34,36,0.6)" />
+        </motion.button>
+
+        <motion.button
+          whileTap={{ scale: 0.88 }}
+          onClick={() => onNavigate('cal')}
+          className="w-11 h-11 flex items-center justify-center"
+          aria-label="Open calendar"
+        >
+          <CalendarDays size={22} strokeWidth={1.75} color="rgba(34,34,36,0.6)" />
         </motion.button>
       </div>
 

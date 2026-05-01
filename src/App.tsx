@@ -15,6 +15,7 @@ import Dashboard from './components/Dashboard';
 import AIChat from './components/AIChat';
 import Threads from './components/Threads';
 import SettingsScreen from './components/Settings';
+import Calendar from './components/Calendar';
 import BottomNav from './components/BottomNav';
 import DesktopApp from './components/DesktopApp';
 
@@ -278,6 +279,20 @@ export default function App() {
               onBack={() => setScreen('dash')}
               onLogout={handleLogout}
             />
+          </motion.div>
+        )}
+
+        {screen === 'cal' && (
+          <motion.div
+            key="cal"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            className="absolute inset-0"
+          >
+            <div className="w-full h-full bg-bg px-4 pt-3 pb-6 overflow-hidden">
+              <Calendar onBack={() => setScreen('dash')} />
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
