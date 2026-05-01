@@ -533,10 +533,16 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           </div>
         ) : (
           thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls).map((m, i) => (
-            <div key={i} className={`flex flex-col max-w-[85%] gap-[3px] ${m.role === 'user' ? 'self-end items-end' : 'self-start items-start'}`}>
+            <div key={i} style={{
+              display: 'flex', flexDirection: 'column', gap: 3,
+              alignItems: m.role === 'user' ? 'flex-end' : 'flex-start',
+              alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+              maxWidth: m.role === 'user' ? '85%' : '100%',
+              width: m.role === 'user' ? undefined : '100%',
+            }}>
               <div style={m.role === 'user'
                 ? { background: 'rgba(9,14,23,0.07)', borderRadius: 18, borderBottomRightRadius: 4, padding: '10px 14px', fontSize: 15, lineHeight: 1.5, color: '#222224', fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif" }
-                : { borderRadius: 18, borderBottomLeftRadius: 4, padding: '10px 14px', fontSize: 15, lineHeight: 1.5, color: '#222224', background: 'rgba(34,34,36,0.06)' }
+                : { fontSize: 15, lineHeight: 1.75, color: '#222224', fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", width: '100%' }
               }>
                 {m.role === 'user' ? m.content : renderMarkdown(m.content)}
 

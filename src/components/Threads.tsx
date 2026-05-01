@@ -19,6 +19,7 @@ export default function Threads({ threads, setThreads, onNavigate, onOpenThread 
   const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'thoughts' | 'notes'>('thoughts');
 
   const filtered = threads.filter(t =>
     t.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -45,9 +46,28 @@ export default function Threads({ threads, setThreads, onNavigate, onOpenThread 
           <Search size={24} strokeWidth={1.75} color="#111" />
         </motion.button>
 
-        <span style={{ fontFamily: M, fontSize: 15, fontWeight: 500, letterSpacing: '0.1em', color: '#111', textTransform: 'uppercase' as const }}>
-          МЫСЛИ
-        </span>
+        {/* Tab slider */}
+        <div style={{ display: 'flex', background: '#e8e8e8', borderRadius: 999, padding: 4, gap: 2 }}>
+          {(['thoughts', 'notes'] as const).map(tab => (
+            <motion.button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              whileTap={{ scale: 0.94 }}
+              style={{ position: 'relative', padding: '6px 16px', borderRadius: 999, border: 'none', cursor: 'pointer', background: 'transparent' }}
+            >
+              {activeTab === tab && (
+                <motion.div
+                  layoutId="threads-tab-indicator"
+                  style={{ position: 'absolute', inset: 0, background: '#ffffff', borderRadius: 999 }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 36 }}
+                />
+              )}
+              <span style={{ position: 'relative', zIndex: 1, fontFamily: F, fontSize: 14, color: activeTab === tab ? '#111' : 'rgba(34,34,36,0.45)', fontWeight: 400 }}>
+                {tab === 'thoughts' ? 'Мысли' : 'Заметки'}
+              </span>
+            </motion.button>
+          ))}
+        </div>
 
         <motion.button
           whileTap={{ scale: 0.88 }}
@@ -92,8 +112,31 @@ export default function Threads({ threads, setThreads, onNavigate, onOpenThread 
         />
       )}
 
-      {/* List */}
-      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 80 }}>
+      {/* Notes tab */}
+      {activeTab === 'notes' && (
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 80px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {[1, 2, 3].length === 0 ? (
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                style={{ gridColumn: '1/-1', textAlign: 'center', padding: '48px 20px', color: 'rgba(34,34,36,0.3)', fontFamily: F, fontSize: 15 }}
+              >
+                Нет заметок. Создай первую!
+              </motion.div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                style={{ gridColumn: '1/-1', textAlign: 'center', padding: '48px 20px', color: 'rgba(34,34,36,0.3)', fontFamily: F, fontSize: 15 }}
+              >
+                Нет заметок. Создай первую!
+              </motion.div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Thoughts list */}
+      {activeTab === 'thoughts' && <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 80 }}>
         {filtered.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
@@ -176,7 +219,7 @@ export default function Threads({ threads, setThreads, onNavigate, onOpenThread 
             ))}
           </AnimatePresence>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
