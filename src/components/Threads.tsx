@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { Search, Settings, MoreVertical } from 'lucide-react';
+import { Search, Settings, MoreVertical, ChevronLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Thread, Screen } from '../types';
+import { Thread, Screen, Task } from '../types';
 import { db } from '../lib/db';
+import NoteView from './NoteView';
 
 interface ThreadsProps {
   threads: Thread[];
   setThreads: (threads: Thread[] | ((prev: Thread[]) => Thread[])) => void;
+  tasks: Task[];
   onNavigate: (screen: Screen) => void;
   onOpenThread: (id: string) => void;
   onNewThread: () => void;
@@ -15,11 +17,12 @@ interface ThreadsProps {
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
 
-export default function Threads({ threads, setThreads, onNavigate, onOpenThread }: ThreadsProps) {
+export default function Threads({ threads, setThreads, tasks, onNavigate, onOpenThread }: ThreadsProps) {
   const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'thoughts' | 'notes'>('thoughts');
+  const [openNoteId, setOpenNoteId] = useState<string | null>(null);
 
   const filtered = threads.filter(t =>
     t.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -31,6 +34,35 @@ export default function Threads({ threads, setThreads, onNavigate, onOpenThread 
     setThreads(prev => prev.filter(t => t.id !== id));
     await db.deleteThread(id);
   };
+
+  // ── Note detail view ─────────────────────────────────────────────────────────
+  if (activeTab === 'notes' && openNoteId) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f0f0f0' }}>
+        <div style={{ height: 'env(safe-area-inset-top, 0px)' }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', flexShrink: 0 }}>
+          <motion.button
+            whileTap={{ scale: 0.88 }}
+            onClick={() => setOpenNoteId(null)}
+            style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            <ChevronLeft size={22} strokeWidth={1.75} color="#222224" />
+          </motion.button>
+          <span style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: '#111' }}>Заметка</span>
+          <div style={{ width: 44 }} />
+        </div>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', background: '#fff', borderRadius: '20px 20px 0 0' }}>
+          <NoteView
+            threadId={openNoteId}
+            threads={threads}
+            setThreads={setThreads}
+            tasks={tasks}
+            onSwitchToChat={() => { onOpenThread(openNoteId); setOpenNoteId(null); }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f0f0f0' }}>
@@ -93,7 +125,7 @@ export default function Threads({ threads, setThreads, onNavigate, onOpenThread 
               <input
                 autoFocus
                 style={{ flex: 1, background: 'transparent', outline: 'none', border: 'none', fontFamily: M, fontSize: 15, color: '#222224' }}
-                placeholder="Поиск по мыслям..."
+                placeholder={activeTab === 'thoughts' ? 'Поиск по мыслям...' : 'Поиск по заметкам...'}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
@@ -102,124 +134,135 @@ export default function Threads({ threads, setThreads, onNavigate, onOpenThread 
         )}
       </AnimatePresence>
 
-      <div style={{ height: 1, background: 'rgba(34,34,36,0.08)', margin: '0 20px' }} />
+      <div style={{ height: 1, background: 'rgba(0,0,0,0.05)', margin: '0 20px' }} />
 
       {/* Backdrop for dropdown */}
       {openDropdown && (
-        <div
-          style={{ position: 'fixed', inset: 0, zIndex: 10 }}
-          onClick={() => setOpenDropdown(null)}
-        />
+        <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => setOpenDropdown(null)} />
       )}
 
-      {/* Notes tab */}
+      {/* ── Notes grid ─────────────────────────────────────────────────────────── */}
       {activeTab === 'notes' && (
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 80px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {[1, 2, 3].length === 0 ? (
-              <motion.div
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                style={{ gridColumn: '1/-1', textAlign: 'center', padding: '48px 20px', color: 'rgba(34,34,36,0.3)', fontFamily: F, fontSize: 15 }}
-              >
-                Нет заметок. Создай первую!
-              </motion.div>
-            ) : (
-              <motion.div
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                style={{ gridColumn: '1/-1', textAlign: 'center', padding: '48px 20px', color: 'rgba(34,34,36,0.3)', fontFamily: F, fontSize: 15 }}
-              >
-                Нет заметок. Создай первую!
-              </motion.div>
-            )}
-          </div>
+          {threads.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              style={{ textAlign: 'center', padding: '48px 20px', color: 'rgba(34,34,36,0.3)', fontFamily: F, fontSize: 15 }}
+            >
+              Нет заметок. Начни мысль — она станет заметкой!
+            </motion.div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {filtered.map(th => {
+                const dateStr = new Date(th.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+                return (
+                  <motion.div
+                    key={th.id}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setOpenNoteId(th.id)}
+                    style={{
+                      background: '#ffffff', borderRadius: 16, padding: '14px 14px 12px',
+                      cursor: 'pointer', minHeight: 100,
+                      display: 'flex', flexDirection: 'column', gap: 6,
+                    }}
+                  >
+                    <div style={{ fontFamily: M, fontSize: 13, fontWeight: 500, color: '#111', lineHeight: 1.35,
+                      overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>
+                      {th.title}
+                    </div>
+                    {th.preview && (
+                      <div style={{ fontFamily: M, fontSize: 12, color: 'rgba(34,34,36,0.4)', lineHeight: 1.4, flex: 1,
+                        overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as const }}>
+                        {th.preview}
+                      </div>
+                    )}
+                    <div style={{ fontFamily: M, fontSize: 11, color: 'rgba(34,34,36,0.3)', marginTop: 'auto' }}>
+                      {dateStr}
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Thoughts list */}
-      {activeTab === 'thoughts' && <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 80 }}>
-        {filtered.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            style={{ textAlign: 'center', padding: '48px 20px', color: 'rgba(34,34,36,0.3)', fontFamily: F, fontSize: 15 }}
-          >
-            Нет мыслей. Начни новую!
-          </motion.div>
-        ) : (
-          <AnimatePresence mode="popLayout">
-            {filtered.map((th, idx) => (
-              <motion.div
-                key={th.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ delay: idx * 0.04 }}
-                onClick={() => { if (!openDropdown) onOpenThread(th.id); }}
-                style={{
-                  display: 'flex', alignItems: 'center',
-                  padding: '16px 20px',
-                  borderBottom: '1px solid #f0f0f0',
-                  cursor: 'pointer',
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
-                  <div style={{ fontFamily: M, fontSize: 17, fontWeight: 500, color: '#111', marginBottom: 3 }}>
-                    {th.title}
+      {/* ── Thoughts list ───────────────────────────────────────────────────────── */}
+      {activeTab === 'thoughts' && (
+        <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 80 }}>
+          {filtered.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              style={{ textAlign: 'center', padding: '48px 20px', color: 'rgba(34,34,36,0.3)', fontFamily: F, fontSize: 15 }}
+            >
+              Нет мыслей. Начни новую!
+            </motion.div>
+          ) : (
+            <AnimatePresence mode="popLayout">
+              {filtered.map((th, idx) => (
+                <motion.div
+                  key={th.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ delay: idx * 0.04 }}
+                  onClick={() => { if (!openDropdown) onOpenThread(th.id); }}
+                  style={{ display: 'flex', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid rgba(0,0,0,0.05)', cursor: 'pointer' }}
+                >
+                  <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                    <div style={{ fontFamily: M, fontSize: 16, fontWeight: 500, color: '#111', marginBottom: 3 }}>
+                      {th.title}
+                    </div>
+                    <div style={{
+                      fontSize: 13, color: '#aaa', fontWeight: 400, fontFamily: M,
+                      lineHeight: 1.45, overflow: 'hidden',
+                      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
+                    }}>
+                      {th.preview || 'Нет сообщений'}
+                    </div>
                   </div>
-                  <div style={{
-                    fontSize: 14, color: '#aaa', fontWeight: 400, fontFamily: M,
-                    lineHeight: 1.45, overflow: 'hidden',
-                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
-                  }}>
-                    {th.preview || 'Нет сообщений'}
-                  </div>
-                </div>
 
-                {/* ⋮ button + dropdown */}
-                <div style={{ position: 'relative', flexShrink: 0 }}>
-                  <button
-                    onClick={e => { e.stopPropagation(); setOpenDropdown(openDropdown === th.id ? null : th.id); }}
-                    style={{
-                      background: 'none', border: 'none', cursor: 'pointer',
-                      padding: '4px 6px', display: 'flex', alignItems: 'center',
-                    }}
-                  >
-                    <MoreVertical size={18} strokeWidth={1.75} color="rgba(34,34,36,0.35)" />
-                  </button>
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <button
+                      onClick={e => { e.stopPropagation(); setOpenDropdown(openDropdown === th.id ? null : th.id); }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', display: 'flex', alignItems: 'center' }}
+                    >
+                      <MoreVertical size={18} strokeWidth={1.75} color="rgba(34,34,36,0.35)" />
+                    </button>
 
-                  <AnimatePresence>
-                    {openDropdown === th.id && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.95, y: -4 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                        transition={{ duration: 0.12 }}
-                        style={{
-                          position: 'absolute', right: 0, top: '100%', zIndex: 20,
-                          background: '#fff', borderRadius: 10, padding: '4px 0',
-                          boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-                          minWidth: 120,
-                        }}
-                      >
-                        <button
-                          onClick={e => { e.stopPropagation(); deleteThread(th.id); }}
+                    <AnimatePresence>
+                      {openDropdown === th.id && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                          transition={{ duration: 0.12 }}
                           style={{
-                            display: 'block', width: '100%', textAlign: 'left',
-                            padding: '10px 16px', background: 'none', border: 'none',
-                            cursor: 'pointer', fontFamily: M, fontSize: 14, color: '#e53e3e',
+                            position: 'absolute', right: 0, top: '100%', zIndex: 20,
+                            background: '#fff', borderRadius: 10, padding: '4px 0',
+                            boxShadow: '0 4px 20px rgba(0,0,0,0.12)', minWidth: 120,
                           }}
                         >
-                          Удалить
-                        </button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        )}
-      </div>}
+                          <button
+                            onClick={e => { e.stopPropagation(); deleteThread(th.id); }}
+                            style={{
+                              display: 'block', width: '100%', textAlign: 'left',
+                              padding: '10px 16px', background: 'none', border: 'none',
+                              cursor: 'pointer', fontFamily: M, fontSize: 14, color: '#e53e3e',
+                            }}
+                          >
+                            Удалить
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          )}
+        </div>
+      )}
     </div>
   );
 }

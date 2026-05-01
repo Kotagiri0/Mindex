@@ -110,24 +110,26 @@ function MiniCalendar({ selected, onSelect, onClose }: {
             const isToday = ds === today;
             const isWeekend = idx % 7 >= 5;
             return (
-              <button
-                key={ds}
-                onClick={() => { onSelect(ds); onClose(); }}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  height: 38, border: 'none', cursor: 'pointer', borderRadius: '50%',
-                  background: isSel ? '#0B0D10' : isToday ? 'rgba(11,13,16,0.12)' : 'transparent',
-                }}
-              >
-                <span style={{
-                  fontFamily: isSel || isToday ? "'Helvetica Neue', Helvetica, sans-serif" : M,
-                  fontSize: 15,
-                  fontWeight: isSel || isToday ? 700 : 400,
-                  color: isSel ? '#fff' : isWeekend ? 'rgba(34,34,36,0.3)' : '#999B9E',
-                }}>
-                  {day}
-                </span>
-              </button>
+              <div key={ds} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <button
+                  onClick={() => { onSelect(ds); onClose(); }}
+                  style={{
+                    width: 36, height: 36, flexShrink: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    border: 'none', cursor: 'pointer', borderRadius: '50%',
+                    background: isSel ? '#0B0D10' : isToday ? 'rgba(11,13,16,0.14)' : 'transparent',
+                  }}
+                >
+                  <span style={{
+                    fontFamily: isSel || isToday ? "'Helvetica Neue', Helvetica, sans-serif" : M,
+                    fontSize: 15,
+                    fontWeight: isSel || isToday ? 700 : 400,
+                    color: isSel ? '#fff' : isToday ? '#fff' : isWeekend ? 'rgba(34,34,36,0.3)' : '#999B9E',
+                  }}>
+                    {day}
+                  </span>
+                </button>
+              </div>
             );
           })}
         </div>
@@ -431,6 +433,51 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
           )}
         </div>
       </div>
+
+      {/* "Сегодня" button — появляется когда не на текущей неделе */}
+      <AnimatePresence>
+        {(weekOffset !== 0 || selectedDate !== todayStr()) && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={{ duration: 0.2 }}
+            style={{
+              position: 'fixed',
+              bottom: 'max(88px, calc(env(safe-area-inset-bottom, 0px) + 88px))',
+              left: 0, right: 0,
+              display: 'flex', justifyContent: 'center',
+              zIndex: 50,
+              pointerEvents: 'none',
+            }}
+          >
+            <div style={{ pointerEvents: 'auto' }}>
+            <motion.button
+              whileTap={{ scale: 0.93 }}
+              onClick={() => {
+                setWeekOffset(0);
+                setSelectedDate(todayStr());
+              }}
+              style={{
+                background: 'rgba(34,34,36,0.1)',
+                color: '#222224',
+                border: 'none',
+                borderRadius: 999,
+                padding: '9px 20px',
+                fontFamily: M,
+                fontSize: 14,
+                fontWeight: 500,
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Сегодня
+            </motion.button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <EditTaskModal
         task={editingTask}

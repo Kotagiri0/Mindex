@@ -22,18 +22,9 @@ interface TodayMobileProps {
   onOpenThread: (id: string) => void;
 }
 
-export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWithMessage, onOpenThread }: TodayMobileProps) {
+export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWithMessage }: TodayMobileProps) {
   const [input, setInput] = useState('');
   const touchStartX = useRef(0);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const dx = touchStartX.current - e.changedTouches[0].clientX;
-    if (dx > 60) onNavigate('dash');
-  };
 
   const today = todayStr();
   const dayName = DAY_NAMES[new Date().getDay()];
@@ -46,6 +37,12 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
       if (!b.time) return -1;
       return a.time.localeCompare(b.time);
     });
+
+  const handleTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const dx = touchStartX.current - e.changedTouches[0].clientX;
+    if (dx > 60) onNavigate('dash');
+  };
 
   const toggleTask = async (id: string) => {
     setTasks(tasks.map(t => {
@@ -62,6 +59,7 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
   };
 
   const hasTasks = todayTasks.length > 0;
+  const taskWord = todayTasks.length === 1 ? 'дело' : todayTasks.length < 5 ? 'дела' : 'дел';
 
   return (
     <div
@@ -94,34 +92,31 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
         </motion.button>
       </div>
 
-      {/* Spacer — чуть меньше вверху, чтобы заголовок казался ниже */}
-      <div style={{ flex: 1, minHeight: 40 }} />
+      {/* Spacer */}
+      <div style={{ flex: 1 }} />
 
-      {hasTasks ? (
-        /* ── Tasks mode: full-bleed rounded-top cards ── */
-        <>
-          <div style={{
-            background: '#ffffff',
-            borderRadius: '24px 24px 0 0',
-            maxHeight: '48vh',
-            overflowY: 'auto',
-            flexShrink: 0,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      {/* Bottom card — unified tasks + input */}
+      <div style={{ flexShrink: 0, background: '#ffffff', borderRadius: '20px 20px 0 0' }}>
+
+        {/* Tasks section */}
+        {hasTasks && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <ChevronUp size={14} strokeWidth={1.75} color="rgba(34,34,36,0.4)" />
-                <span style={{ fontFamily: M, fontSize: 14, color: 'rgba(34,34,36,0.5)' }}>
-                  Ещё {todayTasks.length} {todayTasks.length === 1 ? 'дело' : todayTasks.length < 5 ? 'дела' : 'дел'}
+                <span style={{ fontFamily: M, fontSize: 14, color: 'rgba(34,34,36,0.45)' }}>
+                  Ещё {todayTasks.length} {taskWord}
                 </span>
               </div>
               <button
                 onClick={() => onNavigate('dash')}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
               >
-                <Plus size={20} strokeWidth={1.75} color="rgba(34,34,36,0.4)" />
+                <Plus size={18} strokeWidth={1.75} color="rgba(34,34,36,0.4)" />
               </button>
             </div>
-            <div style={{ padding: '0 20px 8px' }}>
+
+            <div style={{ maxHeight: '40vh', overflowY: 'auto', padding: '0 20px' }}>
               {todayTasks.map(t => (
                 <TaskItem
                   key={t.id}
@@ -141,72 +136,51 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
                 />
               ))}
             </div>
-          </div>
-          <div style={{ background: '#f5f5f5', borderRadius: '20px 20px 0 0', padding: '16px 20px', flexShrink: 0, marginTop: 3 }}>
-            <input
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-              placeholder="Спроси у мысли..."
-              style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontFamily: M, fontSize: 15, color: '#222224', marginBottom: 12, display: 'block' }}
-            />
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Plus size={18} strokeWidth={1.75} color="rgba(34,34,36,0.35)" />
-              <motion.button whileTap={{ scale: 0.9 }} onClick={handleSubmit} style={{ width: 38, height: 38, borderRadius: '50%', background: input.trim() ? '#111' : 'rgba(34,34,36,0.15)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }}>
-                <ArrowUp size={17} color="#fff" strokeWidth={2} />
-              </motion.button>
-            </div>
-          </div>
-          <div style={{ height: 'env(safe-area-inset-bottom, 0px)', background: '#f5f5f5', flexShrink: 0 }} />
-        </>
-      ) : (
-        /* ── Empty mode: desktop-style floating cards at the bottom ── */
-        <div style={{ padding: '0 16px', paddingBottom: 'max(120px, calc(env(safe-area-inset-bottom, 0px) + 120px))', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {/* Tasks card */}
-          <motion.div
-            whileTap={{ scale: 0.98 }}
-            onClick={() => onNavigate('dash')}
-            style={{
-              background: '#ffffff',
-              borderRadius: 18,
-              padding: '16px 20px',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              cursor: 'pointer',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <ChevronUp size={15} strokeWidth={1.75} color="rgba(34,34,36,0.35)" />
-              <span style={{ fontFamily: M, fontSize: 15, color: 'rgba(34,34,36,0.4)' }}>
-                Нет дел на сегодня
-              </span>
-            </div>
-            <Plus size={18} strokeWidth={1.75} color="rgba(34,34,36,0.35)" />
-          </motion.div>
 
-          {/* Chat input card */}
-          <div style={{ background: '#ffffff', borderRadius: 18, padding: '16px 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <Plus size={18} strokeWidth={1.75} color="rgba(34,34,36,0.35)" style={{ flexShrink: 0 }} />
-              <input
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                placeholder="Спроси у мысли..."
-                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontFamily: M, fontSize: 15, color: '#222224' }}
-              />
-              {input.trim() ? (
-                <motion.button whileTap={{ scale: 0.9 }} onClick={handleSubmit} style={{ width: 34, height: 34, borderRadius: '50%', background: '#111', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background 0.2s' }}>
-                  <ArrowUp size={16} color="#fff" strokeWidth={2} />
-                </motion.button>
-              ) : (
-                <button style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0 }}>
-                  <Mic size={18} strokeWidth={1.75} color="rgba(34,34,36,0.35)" />
-                </button>
-              )}
-            </div>
+            {/* Divider */}
+            <div style={{ height: 1, background: 'rgba(0,0,0,0.05)', margin: '0' }} />
+          </>
+        )}
+
+        {/* Chat input area */}
+        <div style={{ padding: '14px 20px', background: hasTasks ? 'rgba(0,0,0,0.02)' : 'transparent' }}>
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+            placeholder="Есть мысли?"
+            style={{
+              width: '100%', background: 'transparent', border: 'none', outline: 'none',
+              fontFamily: M, fontSize: 15, color: '#222224',
+              marginBottom: 10, display: 'block',
+            }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}>
+              <Plus size={18} strokeWidth={1.75} color="rgba(34,34,36,0.35)" />
+            </button>
+            {input.trim() ? (
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                onClick={handleSubmit}
+                style={{
+                  width: 36, height: 36, borderRadius: '50%', background: '#111',
+                  border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <ArrowUp size={16} color="#fff" strokeWidth={2} />
+              </motion.button>
+            ) : (
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(34,34,36,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Mic size={15} strokeWidth={1.75} color="rgba(34,34,36,0.35)" />
+              </div>
+            )}
           </div>
         </div>
-      )}
+
+      </div>
+
+      <div style={{ height: 'env(safe-area-inset-bottom, 0px)', background: '#ffffff', flexShrink: 0 }} />
     </div>
   );
 }
