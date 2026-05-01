@@ -11,7 +11,7 @@ interface TaskItemProps {
   onToggleSubtask?: (taskId: string, subtaskId: string) => void | Promise<void>;
 }
 
-const F = "'Random Grotesque', sans-serif";
+const F = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 
 export default function TaskItem({ task, onToggle, onClick, onToggleSubtask }: TaskItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -28,17 +28,17 @@ export default function TaskItem({ task, onToggle, onClick, onToggleSubtask }: T
           onClick={e => { e.stopPropagation(); onToggle(); }}
           className="flex-shrink-0 flex items-center justify-center"
           style={{
-            width: '28px',
-            height: '28px',
+            width: '38px',
+            height: '38px',
             borderRadius: '50%',
-            border: `2px solid ${task.done ? '#222224' : 'rgba(34,34,36,0.28)'}`,
+            border: `1.5px solid ${task.done ? '#222224' : 'rgba(34,34,36,0.22)'}`,
             background: task.done ? '#222224' : 'transparent',
             transition: 'all 0.15s',
           }}
         >
           {task.done && (
             <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ duration: 0.15 }}>
-              <Check size={13} color="#ffffff" strokeWidth={2.5} />
+              <Check size={16} color="#ffffff" strokeWidth={2.5} />
             </motion.div>
           )}
         </motion.button>
@@ -48,7 +48,8 @@ export default function TaskItem({ task, onToggle, onClick, onToggleSubtask }: T
           style={{
             fontFamily: F,
             fontSize: '17px',
-            color: task.done ? 'rgba(34,34,36,0.35)' : '#222224',
+            fontWeight: 500,
+            color: task.done ? 'rgba(34,34,36,0.35)' : '#1a1a1c',
             textDecoration: task.done ? 'line-through' : 'none',
             transition: 'color 0.15s',
           }}
@@ -57,7 +58,7 @@ export default function TaskItem({ task, onToggle, onClick, onToggleSubtask }: T
         </span>
 
         {task.time && (
-          <span style={{ fontFamily: F, fontSize: '14px', color: 'rgba(34,34,36,0.4)', flexShrink: 0 }}>
+          <span style={{ fontFamily: F, fontSize: '14px', color: 'rgba(34,34,36,0.45)', flexShrink: 0 }}>
             {task.time}
           </span>
         )}

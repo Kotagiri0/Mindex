@@ -1701,7 +1701,7 @@ export default function DesktopApp({
 
           {screen === 'settings' && (
             <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-              <SettingsScreen settings={settings} setSettings={setSettings} onBack={() => setScreen('dash')} onLogout={handleLogout} />
+              <SettingsScreen settings={settings} setSettings={setSettings} onBack={() => setScreen('dash')} onLogout={handleLogout} isDesktop />
             </motion.div>
           )}
 

@@ -1,9 +1,8 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { CalendarDays, ChevronLeft, Plus, Settings, Menu } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { CalendarDays, Settings, ChevronLeft, ChevronRight, X, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Task, Screen } from '../types';
 import TaskItem from './TaskItem';
-import AddTaskModal from './AddTaskModal';
 import EditTaskModal from './EditTaskModal';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
@@ -17,94 +16,217 @@ interface DashboardProps {
   onLogout: () => void;
 }
 
+const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const F = "'Random Grotesque', sans-serif";
 const MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+const MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const DAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
 
-const F = "'Random Grotesque', sans-serif";
+function dateToStr(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function todayStr() { return dateToStr(new Date()); }
 
-export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, onLogout }: DashboardProps) {
+function getWeekDays(weekOffset: number) {
+  const now = new Date();
+  const dow = now.getDay();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((dow + 6) % 7) + weekOffset * 7);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return d;
+  });
+}
+
+// ─── Mini calendar popup ────────────────────────────────────────────────────
+
+function MiniCalendar({ selected, onSelect, onClose }: {
+  selected: string;
+  onSelect: (ds: string) => void;
+  onClose: () => void;
+}) {
+  const today = todayStr();
+  const selDate = new Date(selected + 'T00:00:00');
+  const [year, setYear] = useState(selDate.getFullYear());
+  const [month, setMonth] = useState(selDate.getMonth());
+
+  const firstDay = new Date(year, month, 1);
+  const startDow = (firstDay.getDay() + 6) % 7; // monday=0
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const cells: (number | null)[] = [
+    ...Array(startDow).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const prevMonth = () => { if (month === 0) { setMonth(11); setYear(y => y - 1); } else setMonth(m => m - 1); };
+  const nextMonth = () => { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'flex-end' }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ y: 80, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 80, opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 380, damping: 36 }}
+        onClick={e => e.stopPropagation()}
+        style={{ width: '100%', background: '#fff', borderRadius: '24px 24px 0 0', padding: '20px 20px 36px' }}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <button onClick={prevMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 8 }}>
+            <ChevronLeft size={20} strokeWidth={1.75} color="#222224" />
+          </button>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontFamily: F, fontSize: 11, color: 'rgba(34,34,36,0.4)', letterSpacing: '0.06em' }}>{year}</div>
+            <div style={{ fontFamily: F, fontSize: 20, color: '#222224' }}>{MONTHS[month]}</div>
+          </div>
+          <button onClick={nextMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 8 }}>
+            <ChevronRight size={20} strokeWidth={1.75} color="#222224" />
+          </button>
+        </div>
+
+        {/* Day names */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 4 }}>
+          {DAYS.map(d => (
+            <div key={d} style={{ textAlign: 'center', fontFamily: F, fontSize: 11, color: 'rgba(34,34,36,0.4)', letterSpacing: '0.04em', padding: '4px 0' }}>{d}</div>
+          ))}
+        </div>
+
+        {/* Days grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px 0' }}>
+          {cells.map((day, idx) => {
+            if (!day) return <div key={idx} />;
+            const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+            const isSel = ds === selected;
+            const isToday = ds === today;
+            const isWeekend = idx % 7 >= 5;
+            return (
+              <button
+                key={ds}
+                onClick={() => { onSelect(ds); onClose(); }}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  height: 38, border: 'none', cursor: 'pointer', borderRadius: '50%',
+                  background: isSel ? '#0B0D10' : isToday ? 'rgba(11,13,16,0.12)' : 'transparent',
+                }}
+              >
+                <span style={{
+                  fontFamily: isSel || isToday ? "'Helvetica Neue', Helvetica, sans-serif" : M,
+                  fontSize: 15,
+                  fontWeight: isSel || isToday ? 700 : 400,
+                  color: isSel ? '#fff' : isWeekend ? 'rgba(34,34,36,0.3)' : '#999B9E',
+                }}>
+                  {day}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Dashboard ──────────────────────────────────────────────────────────────
+
+export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }: DashboardProps) {
   const [weekOffset, setWeekOffset] = useState(0);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(todayStr);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const suppressClickRef = useRef(false);
+  const [miniCalOpen, setMiniCalOpen] = useState(false);
+  const [addInput, setAddInput] = useState('');
+  const today = todayStr();
 
-  const today = new Date().toISOString().split('T')[0];
+  const weekDays = useMemo(() => getWeekDays(weekOffset), [weekOffset]);
 
-  const weekDays = useMemo(() => {
-    const now = new Date();
-    const dow = now.getDay();
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - ((dow + 6) % 7) + weekOffset * 7);
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      return d;
-    });
-  }, [weekOffset]);
-
-  const filteredTasks = useMemo(() => {
-    return tasks
+  const filteredTasks = useMemo(() =>
+    tasks
       .filter(t => (t.date || today) === selectedDate)
       .sort((a, b) => {
         if (!a.time && !b.time) return 0;
         if (!a.time) return 1;
         if (!b.time) return -1;
         return a.time.localeCompare(b.time);
-      });
-  }, [tasks, selectedDate, today]);
+      }),
+    [tasks, selectedDate, today]
+  );
+
+  const goWeek = (dir: number) => {
+    setWeekOffset(v => v + dir);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const delta = e.changedTouches[0].clientX - touchStartX.current;
+    if (Math.abs(delta) > 50) goWeek(delta > 0 ? -1 : 1);
+  };
+
+  const handleSelectDate = (ds: string) => {
+    setSelectedDate(ds);
+    // sync week offset if needed
+    const d = new Date(ds + 'T00:00:00');
+    const now = new Date();
+    const todayMonday = new Date(now);
+    const dow = now.getDay();
+    todayMonday.setDate(now.getDate() - ((dow + 6) % 7));
+    const targetMonday = new Date(d);
+    const tdow = d.getDay();
+    targetMonday.setDate(d.getDate() - ((tdow + 6) % 7));
+    const diff = Math.round((targetMonday.getTime() - todayMonday.getTime()) / (7 * 86400000));
+    setWeekOffset(diff);
+  };
+
+  const addTask = async () => {
+    const name = addInput.trim();
+    if (!name) return;
+    const newTask: Task = { id: uuid(), name, time: '', date: selectedDate, done: false };
+    setTasks(prev => (Array.isArray(prev) ? [...prev, newTask] : [newTask]));
+    await db.saveTask(newTask);
+    setAddInput('');
+  };
 
   const toggleTask = async (id: string) => {
-    const updated = tasks.map(t => {
-      if (t.id === id) {
-        const newTask = { ...t, done: !t.done };
-        db.saveTask(newTask);
-        return newTask;
-      }
+    setTasks(tasks.map(t => {
+      if (t.id === id) { const u = { ...t, done: !t.done }; db.saveTask(u); return u; }
       return t;
-    });
-    setTasks(updated);
+    }));
   };
 
   const toggleSubtask = async (taskId: string, subtaskId: string) => {
-    const updated = tasks.map(t => {
+    setTasks(tasks.map(t => {
       if (t.id === taskId && t.subtasks) {
-        const newSubtasks = t.subtasks.map(st =>
-          st.id === subtaskId ? { ...st, done: !st.done } : st
-        );
-        const newTask = { ...t, subtasks: newSubtasks };
-        db.saveTask(newTask);
-        return newTask;
+        const u = { ...t, subtasks: t.subtasks.map(st => st.id === subtaskId ? { ...st, done: !st.done } : st) };
+        db.saveTask(u);
+        return u;
       }
       return t;
-    });
-    setTasks(updated);
-  };
-
-  const addTask = async (name: string, time: string, date: string) => {
-    const newTask: Task = { id: uuid(), name, time, date, done: false };
-    setTasks(prev => (Array.isArray(prev) ? [...prev, newTask] : [newTask]));
-    await db.saveTask(newTask);
-    setIsAddModalOpen(false);
+    }));
   };
 
   const updateTask = async (id: string, name: string, time: string, date: string) => {
-    const updated = tasks.map(t => {
-      if (t.id === id) {
-        const newTask = { ...t, name, time, date };
-        db.saveTask(newTask);
-        return newTask;
-      }
+    setTasks(tasks.map(t => {
+      if (t.id === id) { const u = { ...t, name, time, date }; db.saveTask(u); return u; }
       return t;
-    });
-    setTasks(updated);
+    }));
     setEditingTask(null);
   };
 
   const deleteTask = async (id: string) => {
-    const updated = tasks.filter(t => t.id !== id);
-    setTasks(updated);
+    setTasks(tasks.filter(t => t.id !== id));
     await db.deleteTask(id);
     setEditingTask(null);
   };
@@ -181,35 +303,32 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
   };
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#f0f0f0' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f0f0f0' }}>
       <div style={{ height: 'env(safe-area-inset-top, 0px)' }} />
 
-      <div className="flex items-center justify-between px-5 pt-4 pb-2">
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px 8px' }}>
         <motion.button
           whileTap={{ scale: 0.88 }}
-          onClick={() => setWeekOffset(v => v - 1)}
-          className="w-11 h-11 flex items-center justify-center"
+          onClick={() => setMiniCalOpen(true)}
+          style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
         >
-          <ChevronLeft size={24} strokeWidth={1.75} color="#222224" />
+          <CalendarDays size={22} strokeWidth={1.75} color="rgba(34,34,36,0.6)" />
         </motion.button>
 
-        <motion.button
-          whileTap={{ scale: 0.95 }}
-          onClick={() => { setSelectedDate(today); setWeekOffset(0); }}
-          className="flex flex-col items-center"
-        >
-          <span style={{ fontFamily: F, fontSize: '11px', color: 'rgba(34,34,36,0.4)', letterSpacing: '0.06em' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontFamily: F, fontSize: 11, color: 'rgba(34,34,36,0.4)', letterSpacing: '0.06em' }}>
             {weekDays[3].getFullYear()}
-          </span>
-          <span style={{ fontFamily: F, fontSize: '22px', color: '#222224', lineHeight: 1.1 }}>
+          </div>
+          <div style={{ fontFamily: F, fontSize: 22, color: '#222224', lineHeight: 1.1 }}>
             {MONTHS[weekDays[3].getMonth()]}
-          </span>
-        </motion.button>
+          </div>
+        </div>
 
         <motion.button
           whileTap={{ scale: 0.88 }}
           onClick={() => onNavigate('settings')}
-          className="w-11 h-11 flex items-center justify-center"
+          style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
         >
           <Settings size={22} strokeWidth={1.75} color="rgba(34,34,36,0.6)" />
         </motion.button>
@@ -224,42 +343,40 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
         </motion.button>
       </div>
 
+      {/* Week strip — swipeable */}
       <div
-        className="grid grid-cols-7 px-4 pb-3 pt-1"
-        style={{ touchAction: 'none' }}
-        onTouchStart={(event) => handleWeekSwipeStart(event.touches[0].clientX, event.touches[0].clientY)}
-        onTouchEnd={(event) => handleWeekSwipeEnd(event.changedTouches[0].clientX, event.changedTouches[0].clientY)}
-        onTouchCancel={() => {
-          swipeStartRef.current = null;
-        }}
+        style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', padding: '20px 20px 8px', touchAction: 'none' }}
+        onTouchStart={(e) => handleWeekSwipeStart(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchEnd={(e) => handleWeekSwipeEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY)}
+        onTouchCancel={() => { swipeStartRef.current = null; }}
       >
         {weekDays.map((d, i) => {
-          const ds = d.toISOString().split('T')[0];
-          const isSelected = ds === selectedDate;
+          const ds = dateToStr(d);
+          const isSel = ds === selectedDate;
           const isToday = ds === today;
-
+          const isWeekend = i >= 5;
           return (
             <motion.button
               key={ds}
               whileTap={{ scale: 0.9 }}
-              onClick={() => {
-                if (suppressClickRef.current) return;
-                setSelectedDate(ds);
-              }}
-              className="flex flex-col items-center gap-1 py-1"
+              onClick={() => { if (!suppressClickRef.current) setSelectedDate(ds); }}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '4px 0', background: 'none', border: 'none', cursor: 'pointer' }}
             >
-              <span style={{ fontSize: '11px', color: 'rgba(34,34,36,0.4)', fontFamily: F, letterSpacing: '0.04em' }}>
+              <span style={{
+                fontSize: 11, fontFamily: F, letterSpacing: '0.04em',
+                color: isWeekend ? 'rgba(34,34,36,0.22)' : 'rgba(34,34,36,0.4)',
+              }}>
                 {DAYS[i]}
               </span>
-              <div
-                className="w-10 h-10 rounded-full flex items-center justify-center transition-colors"
-                style={{ background: isSelected ? '#222224' : 'transparent' }}
-              >
+              <div style={{
+                width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: isSel ? '#0B0D10' : isToday ? 'rgba(11,13,16,0.18)' : 'transparent',
+              }}>
                 <span style={{
-                  fontSize: '18px',
-                  fontFamily: F,
-                  color: isSelected ? '#ffffff' : '#222224',
-                  fontWeight: isToday && !isSelected ? 700 : 400,
+                  fontFamily: isSel || isToday ? "'Helvetica Neue', Helvetica, sans-serif" : M,
+                  fontSize: 16,
+                  fontWeight: isSel || isToday ? 700 : 400,
+                  color: isSel || isToday ? '#fff' : isWeekend ? 'rgba(34,34,36,0.28)' : '#999B9E',
                 }}>
                   {d.getDate()}
                 </span>
@@ -269,41 +386,36 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
         })}
       </div>
 
+      {/* Tasks panel */}
       <div
-        className="flex-1 flex flex-col min-h-0 overflow-hidden"
-        style={{ background: '#ffffff', borderRadius: '24px 24px 0 0', touchAction: 'none' }}
-        onTouchStart={(event) => handleWeekSwipeStart(event.touches[0].clientX, event.touches[0].clientY)}
-        onTouchEnd={(event) => handleDaySwipeEnd(event.changedTouches[0].clientX, event.changedTouches[0].clientY)}
-        onTouchCancel={() => {
-          swipeStartRef.current = null;
-        }}
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: '#ffffff', borderRadius: '24px 24px 0 0', overflow: 'hidden', touchAction: 'none' }}
+        onTouchStart={(e) => handleWeekSwipeStart(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchEnd={(e) => handleDaySwipeEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY)}
+        onTouchCancel={() => { swipeStartRef.current = null; }}
       >
-        <div className="flex items-center justify-between px-5 pt-4 pb-3">
-          <motion.button
-            whileTap={{ scale: 0.88 }}
-            onClick={() => alert('Сортировка и фильтры будут в ближайших обновлениях')}
-            className="w-10 h-10 flex items-center justify-center"
-          >
-            <Menu size={20} strokeWidth={1.75} color="rgba(34,34,36,0.45)" />
-          </motion.button>
-          <motion.button
-            whileTap={{ scale: 0.88 }}
-            onClick={() => setIsAddModalOpen(true)}
-            className="w-10 h-10 flex items-center justify-center"
-          >
-            <Plus size={22} strokeWidth={1.75} color="#222224" />
-          </motion.button>
+        {/* Inline add-task input */}
+        <div style={{ padding: '20px 20px 0', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#f5f5f5', borderRadius: 40, padding: '10px 16px' }}>
+            <Plus size={18} strokeWidth={1.75} color="rgba(34,34,36,0.3)" style={{ flexShrink: 0 }} />
+            <input
+              value={addInput}
+              onChange={e => setAddInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addTask()}
+              onBlur={addTask}
+              placeholder="Добавить задачу"
+              style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 15, color: '#222224' }}
+            />
+          </div>
         </div>
 
-        <div style={{ height: '1px', background: 'rgba(34,34,36,0.08)', margin: '0 20px' }} />
+        <div style={{ height: 1, background: 'rgba(34,34,36,0.07)', margin: '12px 20px 0' }} />
 
-        <div className="flex-1 overflow-y-auto px-5 pb-20" style={{ touchAction: 'pan-y' }}>
+        {/* Task list */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 120px', touchAction: 'pan-y' }}>
           {filteredTasks.length === 0 ? (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-center py-12"
-              style={{ color: 'rgba(34,34,36,0.3)', fontFamily: F, fontSize: '15px' }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              style={{ textAlign: 'center', marginTop: 40, color: '#bbb', fontFamily: M, fontSize: 15 }}
             >
               Нет задач на этот день
             </motion.div>
@@ -312,9 +424,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
               {filteredTasks.map((t, idx) => (
                 <motion.div
                   key={t.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                   transition={{ delay: idx * 0.04 }}
                 >
                   <TaskItem
@@ -330,13 +440,6 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
         </div>
       </div>
 
-      <AddTaskModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onAdd={addTask}
-        initialDate={selectedDate}
-      />
-
       <EditTaskModal
         task={editingTask}
         onClose={() => setEditingTask(null)}
@@ -344,6 +447,16 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread, o
         onDelete={deleteTask}
         onOpenThread={onOpenThread}
       />
+
+      <AnimatePresence>
+        {miniCalOpen && (
+          <MiniCalendar
+            selected={selectedDate}
+            onSelect={handleSelectDate}
+            onClose={() => setMiniCalOpen(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

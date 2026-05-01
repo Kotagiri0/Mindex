@@ -73,4 +73,4 @@ export interface LocalProfile {
   updated_at: string;
 }
 
-export type Screen = 'ob' | 'dash' | 'ai' | 'threads' | 'settings' | 'cal';
+export type Screen = 'ob' | 'dash' | 'ai' | 'threads' | 'settings' | 'cal' | 'today';

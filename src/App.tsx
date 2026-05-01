@@ -18,6 +18,7 @@ import SettingsScreen from './components/Settings';
 import Calendar from './components/Calendar';
 import BottomNav from './components/BottomNav';
 import DesktopApp from './components/DesktopApp';
+import TodayMobile from './components/TodayMobile';
 
 const defaultSettings = { agent: true, confirm: true, notifs: true };
 
@@ -29,6 +30,9 @@ export default function App() {
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [curTh, setCurTh] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(getCurrentUser()));
+  const [pendingMsg, setPendingMsg] = useState('');
+
+  const navigateMobile = (next: Screen) => setScreen(next);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [isDesktopViewport, setIsDesktopViewport] = useState(
     typeof window !== 'undefined' ? window.innerWidth >= 1024 : false,
@@ -82,7 +86,7 @@ export default function App() {
         const profileSettings = profile?.settings || defaultSettings;
         setSettings(profileSettings);
         setOnboardingComplete(Boolean(profile?.onboarding_complete));
-        setScreen(profile?.onboarding_complete ? 'dash' : 'ob');
+        setScreen(profile?.onboarding_complete ? 'today' : 'ob');
         setTasks(fetchedTasks);
         setThreads(fetchedThreads);
       } catch (error) {
@@ -138,7 +142,7 @@ export default function App() {
   const handleOnboardingComplete = async () => {
     setOnboardingComplete(true);
     await db.upsertProfile(true, settings);
-    setScreen('dash');
+    setScreen('today');
   };
 
   const startNewThread = async () => {
@@ -153,6 +157,21 @@ export default function App() {
     setThreads(updated);
     await db.saveThread(newTh);
     setCurTh(newTh.id);
+    setScreen('ai');
+  };
+
+  const startNewThreadWithMessage = async (msg: string) => {
+    const newTh: Thread = {
+      id: uuid(),
+      title: 'Новая мысль',
+      preview: msg.length > 60 ? msg.slice(0, 60) + '…' : msg,
+      messages: [],
+      createdAt: Date.now(),
+    };
+    setThreads(prev => [newTh, ...prev]);
+    await db.saveThread(newTh);
+    setCurTh(newTh.id);
+    setPendingMsg(msg);
     setScreen('ai');
   };
 
@@ -190,6 +209,24 @@ export default function App() {
   return (
     <div className="relative w-full h-screen overflow-hidden bg-bg">
       <AnimatePresence mode="wait">
+        {screen === 'today' && (
+          <motion.div
+            key="today"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0"
+          >
+            <TodayMobile
+              tasks={tasks}
+              setTasks={updateTasks}
+              onNavigate={navigateMobile}
+              onNewThreadWithMessage={startNewThreadWithMessage}
+              onOpenThread={(id) => { setCurTh(id); setScreen('ai'); }}
+            />
+          </motion.div>
+        )}
+
         {screen === 'ob' && (
           <motion.div
             key="ob"
@@ -213,7 +250,7 @@ export default function App() {
             <Dashboard
               tasks={tasks}
               setTasks={updateTasks}
-              onNavigate={setScreen}
+              onNavigate={navigateMobile}
               onNewThread={startNewThread}
               onLogout={handleLogout}
               onOpenThread={(id) => {
@@ -238,8 +275,10 @@ export default function App() {
               setThreads={updateThreads}
               tasks={tasks}
               setTasks={updateTasks}
-              onClose={() => setScreen('threads')}
-              onNavigate={setScreen}
+              onClose={() => navigateMobile('threads')}
+              onNavigate={navigateMobile}
+              autoSend={pendingMsg}
+              onAutoSentClear={() => setPendingMsg('')}
             />
           </motion.div>
         )}
@@ -255,7 +294,7 @@ export default function App() {
             <Threads
               threads={threads}
               setThreads={updateThreads}
-              onNavigate={setScreen}
+              onNavigate={navigateMobile}
               onOpenThread={(id) => {
                 setCurTh(id);
                 setScreen('ai');
@@ -276,7 +315,7 @@ export default function App() {
             <SettingsScreen
               settings={settings}
               setSettings={updateSettings}
-              onBack={() => setScreen('dash')}
+              onBack={() => navigateMobile('dash')}
               onLogout={handleLogout}
             />
           </motion.div>
@@ -299,7 +338,7 @@ export default function App() {
 
       <BottomNav
         activeScreen={screen}
-        onNavigate={setScreen}
+        onNavigate={navigateMobile}
         onNewThread={startNewThread}
       />
     </div>

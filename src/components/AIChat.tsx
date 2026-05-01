@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, Settings, Star, Plus, ArrowUp, MessageCircle, StickyNote, Mic, Loader } from 'lucide-react';
+import NoteView from './NoteView';
 import { Thread, Screen, Message, Task, SubTask } from '../types';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
@@ -15,12 +16,17 @@ interface AIChatProps {
   setTasks: (tasks: Task[] | ((prev: Task[]) => Task[])) => void;
   onClose: () => void;
   onNavigate: (screen: Screen) => void;
+  autoSend?: string;
+  onAutoSentClear?: () => void;
 }
 
-export default function AIChat({ threadId, threads, setThreads, tasks, setTasks, onClose, onNavigate }: AIChatProps) {
+export default function AIChat({ threadId, threads, setThreads, tasks, setTasks, onClose, onNavigate, autoSend, onAutoSentClear }: AIChatProps) {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [noteMode, setNoteMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const autoSentRef = useRef(false);
 
   const { state: voiceState, error: voiceError, startRecording, stopRecording } = useVoiceInput(
     (text) => {
@@ -43,11 +49,8 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     return n.getHours().toString().padStart(2, '0') + ':' + n.getMinutes().toString().padStart(2, '0');
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || !threadId) return;
-
-    const text = input.trim();
-    setInput('');
+  const sendText = async (text: string) => {
+    if (!text || !threadId) return;
 
     const userMsg: Message = { role: 'user', content: text, time: ft() };
 
@@ -224,6 +227,28 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       setIsTyping(false);
     }
   };
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      inputRef.current.style.height = inputRef.current.scrollHeight + 'px';
+    }
+  }, [input]);
+
+  const handleSend = () => {
+    const text = input.trim();
+    if (!text) return;
+    setInput('');
+    sendText(text);
+  };
+
+  useEffect(() => {
+    if (autoSend && !autoSentRef.current && threadId) {
+      autoSentRef.current = true;
+      onAutoSentClear?.();
+      sendText(autoSend);
+    }
+  }, [threadId]);
 
   const handleAnswer = async (msgIndex: number, questionId: string, answer: string) => {
     if (!threadId) return;
@@ -417,14 +442,19 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         </motion.button>
 
         <div className="flex items-center gap-0.5 rounded-full p-1" style={{ background: '#ffffff' }}>
-          <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: '#ffffff' }}>
-            <MessageCircle size={20} strokeWidth={1.75} color="#222224" />
-          </div>
           <button
             className="w-10 h-10 rounded-full flex items-center justify-center"
-            onClick={() => alert('Заметки будут в ближайших обновлениях')}
+            onClick={() => setNoteMode(false)}
+            style={{ background: !noteMode ? 'rgba(34,34,36,0.08)' : 'transparent' }}
           >
-            <StickyNote size={20} strokeWidth={1.75} color="rgba(34,34,36,0.3)" />
+            <MessageCircle size={20} strokeWidth={1.75} color="#222224" />
+          </button>
+          <button
+            className="w-10 h-10 rounded-full flex items-center justify-center"
+            onClick={() => setNoteMode(true)}
+            style={{ background: noteMode ? 'rgba(34,34,36,0.08)' : 'transparent' }}
+          >
+            <StickyNote size={20} strokeWidth={1.75} color={noteMode ? '#222224' : 'rgba(34,34,36,0.3)'} />
           </button>
         </div>
 
@@ -437,7 +467,13 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         </motion.button>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-[20px_16px_8px] flex flex-col gap-3 scrollbar-hide min-h-0">
+      {noteMode && threadId ? (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <NoteView threadId={threadId} threads={threads} setThreads={setThreads} tasks={tasks} onSwitchToChat={() => setNoteMode(false)} />
+        </div>
+      ) : null}
+
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-[20px_16px_8px] flex flex-col gap-3 scrollbar-hide min-h-0" style={{ display: noteMode ? 'none' : undefined }}>
         {thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls).length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-2">
             <div className="text-[28px] font-extrabold text-center leading-[1.25]" style={{ color: '#222224' }}>
@@ -559,12 +595,18 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))' }}
       >
         <div className="rounded-[20px] p-4" style={{ background: '#ffffff' }}>
-          <input
+          <textarea
+            ref={inputRef}
+            rows={1}
             className="w-full bg-transparent outline-none"
             style={{
-              fontFamily: "'Random Grotesque', sans-serif",
-              fontSize: '16px',
+              fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+              fontSize: '15px',
               color: '#222224',
+              resize: 'none',
+              lineHeight: 1.55,
+              border: 'none',
+              display: 'block',
             }}
             placeholder="Есть мысли?"
             value={input}
@@ -580,33 +622,20 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             </button>
             <div className="flex items-center gap-2">
               <motion.button
-                onPointerDown={(event) => {
-                  event.preventDefault();
-                  startRecording();
-                }}
-                onPointerUp={(event) => {
-                  event.preventDefault();
-                  stopRecording();
-                }}
+                onPointerDown={e => { e.preventDefault(); startRecording(); }}
+                onPointerUp={e => { e.preventDefault(); stopRecording(); }}
                 onPointerCancel={stopRecording}
-                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all flex-shrink-0 border-2 ${
-                  voiceState === 'recording'
-                    ? 'bg-red-500 border-red-600 animate-pulse'
-                    : voiceState === 'processing'
-                    ? 'bg-accent border-accent'
-                    : 'bg-gray-200 border-gray-400 hover:bg-gray-300'
-                }`}
-                title={voiceState === 'recording' ? 'Отпустите для завершения' : 'Нажмите для записи'}
+                style={{
+                  width: 32, height: 32, borderRadius: '50%', border: 'none', cursor: 'pointer', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: voiceState === 'recording' ? '#c0392b' : voiceState === 'processing' ? 'rgba(34,34,36,0.15)' : 'rgba(34,34,36,0.08)',
+                  transition: 'background 0.15s',
+                }}
               >
-                {voiceState === 'processing' ? (
-                  <Loader size={24} strokeWidth={2.5} color="#000000" className="animate-spin" />
-                ) : (
-                  <Mic
-                    size={24}
-                    strokeWidth={2.5}
-                    color={voiceState === 'recording' ? '#ffffff' : '#000000'}
-                  />
-                )}
+                {voiceState === 'processing'
+                  ? <Loader size={15} strokeWidth={2} color="#222224" className="animate-spin" />
+                  : <Mic size={15} strokeWidth={1.75} color={voiceState === 'recording' ? '#fff' : 'rgba(34,34,36,0.5)'} />
+                }
               </motion.button>
               <motion.button
                 whileTap={{ scale: 0.9 }}
