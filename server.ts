@@ -239,6 +239,26 @@ const ensureAuthSchema = async () => {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  // pgvector + second-brain columns
+  try {
+    await db.query(`CREATE EXTENSION IF NOT EXISTS vector;`);
+  } catch (e) {
+    console.warn('[DB] pgvector extension not available:', e);
+  }
+  await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS summary TEXT;`);
+  await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS is_meaningful BOOLEAN;`);
+  await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'мысль';`);
+  await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS label TEXT;`);
+  try {
+    await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS embedding vector(1536);`);
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS threads_embedding_idx
+        ON user_threads USING hnsw (embedding vector_cosine_ops);
+    `);
+  } catch (e) {
+    console.warn('[DB] vector column/index skipped (pgvector unavailable):', e);
+  }
 };
 
 app.post("/api/auth/register", async (req, res) => {
@@ -454,7 +474,7 @@ app.get("/api/data/bootstrap", async (req, res) => {
       ),
       db.query(
         `
-          SELECT id, title, preview, messages, created_at
+          SELECT id, title, preview, messages, created_at, summary, is_meaningful, source, label
           FROM user_threads
           WHERE user_id = $1
           ORDER BY created_at DESC
@@ -488,6 +508,10 @@ app.get("/api/data/bootstrap", async (req, res) => {
         preview: row.preview,
         messages: row.messages || [],
         createdAt: Number(row.created_at),
+        summary: row.summary || undefined,
+        is_meaningful: row.is_meaningful ?? undefined,
+        source: row.source || 'мысль',
+        label: row.label || undefined,
       })),
     });
   } catch {
@@ -605,8 +629,8 @@ app.post("/api/data/thread", async (req, res) => {
   try {
     await db.query(
       `
-        INSERT INTO user_threads (id, user_id, title, preview, messages, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5::jsonb, $6, NOW())
+        INSERT INTO user_threads (id, user_id, title, preview, messages, created_at, updated_at, source, label, summary, is_meaningful)
+        VALUES ($1, $2, $3, $4, $5::jsonb, $6, NOW(), $7, $8, $9, $10)
         ON CONFLICT (id)
         DO UPDATE SET
           user_id = EXCLUDED.user_id,
@@ -614,6 +638,10 @@ app.post("/api/data/thread", async (req, res) => {
           preview = EXCLUDED.preview,
           messages = EXCLUDED.messages,
           created_at = EXCLUDED.created_at,
+          source = COALESCE(EXCLUDED.source, user_threads.source),
+          label = COALESCE(EXCLUDED.label, user_threads.label),
+          summary = COALESCE(EXCLUDED.summary, user_threads.summary),
+          is_meaningful = COALESCE(EXCLUDED.is_meaningful, user_threads.is_meaningful),
           updated_at = NOW()
       `,
       [
@@ -623,6 +651,10 @@ app.post("/api/data/thread", async (req, res) => {
         String(thread.preview || ""),
         JSON.stringify(thread.messages || []),
         Number(thread.createdAt || Date.now()),
+        String(thread.source || 'мысль'),
+        thread.label ? String(thread.label) : null,
+        thread.summary ? String(thread.summary) : null,
+        thread.is_meaningful ?? null,
       ]
     );
     return res.status(200).json({ success: true });
@@ -714,6 +746,23 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
     if (tmpOut && fs.existsSync(tmpOut)) fs.unlinkSync(tmpOut);
   }
 });
+
+async function generateEmbedding(text: string): Promise<number[] | null> {
+  const apiKey = process.env.ROUTERAI_API_KEY;
+  if (!apiKey || !text?.trim()) return null;
+  try {
+    const response = await fetch('https://routerai.ru/api/v1/embeddings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: 'text-embedding-3-small', input: text.slice(0, 8000) }),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.data?.[0]?.embedding || null;
+  } catch {
+    return null;
+  }
+}
 
 async function callRouterAI(apiKey: string, body: object, attempt = 0): Promise<Response> {
   const controller = new AbortController();

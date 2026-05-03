@@ -43,8 +43,10 @@ export interface Thread {
   preview: string;
   messages: Message[];
   createdAt: number;
-  source?: 'thread' | 'text';
+  source?: 'thread' | 'text' | 'мысль' | 'заметка' | 'skill';
+  label?: string;
   summary?: string;
+  is_meaningful?: boolean | null;
 }
 
 export interface Settings {
