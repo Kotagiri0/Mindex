@@ -1,4 +1,5 @@
 import { Message } from "../types";
+import { getCurrentUser } from "./auth";
 
 const _today = new Date();
 const _todayStr = `${_today.getFullYear()}-${String(_today.getMonth()+1).padStart(2,'0')}-${String(_today.getDate()).padStart(2,'0')}`;
@@ -188,6 +189,7 @@ export async function generateResponse(messages: Message[], options: { tools?: a
         systemInstruction: SYSTEM_INSTRUCTION,
         tools: options.tools !== undefined ? options.tools : tools,
         tool_choice: options.tool_choice || "auto",
+        userId: getCurrentUser()?.id,
       }),
     });
 

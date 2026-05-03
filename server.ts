@@ -920,16 +920,50 @@ app.post("/api/summarize", async (req, res) => {
 
 app.post("/api/chat", async (req, res) => {
   try {
-    const { messages, systemInstruction, tools, tool_choice } = req.body;
+    const { messages, systemInstruction, tools, tool_choice, userId } = req.body;
 
     const apiKey = process.env.ROUTERAI_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ error: "ROUTERAI_API_KEY не найден в .env" });
     }
 
+    // RAG: inject relevant notes as context
+    let finalSystemInstruction = systemInstruction;
+    if (db && userId && Array.isArray(messages) && messages.length > 0) {
+      try {
+        const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user');
+        if (lastUserMsg?.content) {
+          const queryEmbedding = await generateEmbedding(String(lastUserMsg.content));
+          if (queryEmbedding) {
+            const ragResult = await db.query(
+              `SELECT summary
+               FROM user_threads
+               WHERE user_id = $1
+                 AND is_meaningful = true
+                 AND summary IS NOT NULL
+                 AND embedding IS NOT NULL
+                 AND 1 - (embedding <=> $2::vector) > 0.75
+               ORDER BY embedding <=> $2::vector
+               LIMIT 3`,
+              [userId, `[${queryEmbedding.join(',')}]`]
+            );
+            if (ragResult.rows.length > 0) {
+              const contextBlock = ragResult.rows
+                .map((r: any) => r.summary)
+                .join('\n---\n');
+              finalSystemInstruction = `## Контекст из архива пользователя\n${contextBlock}\n\n---\n\n${systemInstruction}`;
+            }
+          }
+        }
+      } catch (ragErr) {
+        // RAG is non-critical — skip silently if vector search fails
+        console.warn('[CHAT] RAG skipped:', ragErr);
+      }
+    }
+
     const response = await callRouterAI(apiKey, {
       model: "deepseek/deepseek-v4-flash",
-      messages: [{ role: "system", content: systemInstruction }, ...messages],
+      messages: [{ role: "system", content: finalSystemInstruction }, ...messages],
       tools,
       tool_choice: tool_choice || "auto",
       temperature: 0.7,
