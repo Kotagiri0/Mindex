@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Search, Settings, MoreVertical, ChevronLeft } from 'lucide-react';
+import { Search, Settings, MoreVertical, ChevronLeft, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Thread, Screen, Task } from '../types';
 import { db } from '../lib/db';
 import NoteView from './NoteView';
+import NoteEditor from './NoteEditor';
 
 interface ThreadsProps {
   threads: Thread[];
@@ -23,10 +24,29 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'thoughts' | 'notes'>('thoughts');
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
+  const [showNoteEditor, setShowNoteEditor] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+
+  const editingNote = editingNoteId ? threads.find(t => t.id === editingNoteId) : undefined;
+
+  const handleNoteSaved = (saved: Thread) => {
+    setThreads((prev: Thread[]) => {
+      const exists = prev.some(t => t.id === saved.id);
+      return exists ? prev.map(t => t.id === saved.id ? saved : t) : [saved, ...prev];
+    });
+    setShowNoteEditor(false);
+    setEditingNoteId(null);
+  };
+
+  const openNoteEditor = (noteId?: string) => {
+    setEditingNoteId(noteId || null);
+    setShowNoteEditor(true);
+  };
 
   const filtered = threads.filter(t =>
-    t.title.toLowerCase().includes(search.toLowerCase()) ||
-    t.preview.toLowerCase().includes(search.toLowerCase())
+    t.source !== 'skill' &&
+    (t.title.toLowerCase().includes(search.toLowerCase()) ||
+    t.preview.toLowerCase().includes(search.toLowerCase()))
   );
 
   const deleteThread = async (id: string) => {
@@ -34,6 +54,17 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
     setThreads(prev => prev.filter(t => t.id !== id));
     await db.deleteThread(id);
   };
+
+  // ── Note editor ──────────────────────────────────────────────────────────────
+  if (showNoteEditor) {
+    return (
+      <NoteEditor
+        thread={editingNote}
+        onSaved={handleNoteSaved}
+        onClose={() => { setShowNoteEditor(false); setEditingNoteId(null); }}
+      />
+    );
+  }
 
   // ── Note detail view ─────────────────────────────────────────────────────────
   if (activeTab === 'notes' && openNoteId) {
@@ -101,13 +132,23 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
           ))}
         </div>
 
-        <motion.button
-          whileTap={{ scale: 0.88 }}
-          onClick={() => onNavigate('settings')}
-          style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
-        >
-          <Settings size={24} strokeWidth={1.75} color="#111" />
-        </motion.button>
+        {activeTab === 'notes' ? (
+          <motion.button
+            whileTap={{ scale: 0.88 }}
+            onClick={() => openNoteEditor()}
+            style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            <Plus size={24} strokeWidth={1.75} color="#111" />
+          </motion.button>
+        ) : (
+          <motion.button
+            whileTap={{ scale: 0.88 }}
+            onClick={() => onNavigate('settings')}
+            style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            <Settings size={24} strokeWidth={1.75} color="#111" />
+          </motion.button>
+        )}
       </div>
 
       {/* Search bar */}
@@ -144,12 +185,12 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
       {/* ── Notes grid ─────────────────────────────────────────────────────────── */}
       {activeTab === 'notes' && (
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 80px' }}>
-          {threads.length === 0 ? (
+          {filtered.length === 0 ? (
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               style={{ textAlign: 'center', padding: '48px 20px', color: 'rgba(34,34,36,0.3)', fontFamily: F, fontSize: 15 }}
             >
-              Нет заметок. Начни мысль — она станет заметкой!
+              Нет заметок. Начни мысль или нажми +
             </motion.div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -159,7 +200,13 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
                   <motion.div
                     key={th.id}
                     whileTap={{ scale: 0.97 }}
-                    onClick={() => setOpenNoteId(th.id)}
+                    onClick={() => {
+                      if (th.source === 'заметка') {
+                        openNoteEditor(th.id);
+                      } else {
+                        setOpenNoteId(th.id);
+                      }
+                    }}
                     style={{
                       background: '#ffffff', borderRadius: 16, padding: '14px 14px 12px',
                       cursor: 'pointer', minHeight: 100,
