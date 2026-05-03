@@ -43,8 +43,8 @@ export default function NoteView({ threadId, threads, setThreads, tasks, onSwitc
     if (!thread) return;
     if (thread.summary) { setSummaryReady(true); return; }
 
-    // Not classified yet or classified as not meaningful — skip fetch
-    if (thread.is_meaningful !== true) { setSummaryReady(true); return; }
+    // Only skip if explicitly marked not meaningful
+    if (thread.is_meaningful === false) { setSummaryReady(true); return; }
 
     const userMessages = thread.messages.filter(m => m.role === 'user' || m.role === 'assistant');
     if (userMessages.length === 0) { setSummaryReady(true); return; }
@@ -122,10 +122,6 @@ export default function NoteView({ threadId, threads, setThreads, tasks, onSwitc
             ) : thread.is_meaningful === false ? (
               <div style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', fontStyle: 'italic' }}>
                 Эта мысль не попала в архив — слишком короткая или операционная.
-              </div>
-            ) : thread.is_meaningful == null && thread.messages.some(m => m.role === 'user') ? (
-              <div style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', fontStyle: 'italic' }}>
-                Мысль обрабатывается... Закрой и открой снова через минуту.
               </div>
             ) : summaryReady ? (
               <motion.div
