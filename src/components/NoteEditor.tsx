@@ -43,7 +43,7 @@ export default function NoteEditor({ thread, onSaved, onClose }: NoteEditorProps
         id: threadId,
         title: resolvedTitle || 'Заметка',
         preview: content.trim().slice(0, 100),
-        messages: [{ role: 'user' as const, content: content.trim(), time: timeStr }],
+        messages: [],
         createdAt: now,
         source: 'заметка' as const,
         is_meaningful: true,
@@ -56,7 +56,7 @@ export default function NoteEditor({ thread, onSaved, onClose }: NoteEditorProps
         fetch('/api/summarize', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: saved.messages, threadId, userId }),
+          body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId, userId }),
         }).catch(() => {});
       }
 

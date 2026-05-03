@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Search, Settings, MoreVertical, ChevronLeft, Plus } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Search, Settings, MoreVertical, ChevronLeft, Plus, Pencil } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Thread, Screen, Task } from '../types';
 import { db } from '../lib/db';
@@ -26,6 +26,9 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
   const [showNoteEditor, setShowNoteEditor] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   const editingNote = editingNoteId ? threads.find(t => t.id === editingNoteId) : undefined;
 
@@ -43,15 +46,35 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
     setShowNoteEditor(true);
   };
 
+  const searchMatch = (t: Thread) =>
+    t.title.toLowerCase().includes(search.toLowerCase()) ||
+    t.preview.toLowerCase().includes(search.toLowerCase());
+
   const filtered = threads.filter(t =>
     t.source !== 'skill' &&
-    (t.title.toLowerCase().includes(search.toLowerCase()) ||
-    t.preview.toLowerCase().includes(search.toLowerCase()))
+    (activeTab === 'thoughts' ? t.is_meaningful !== false : true) &&
+    searchMatch(t)
   );
+
+  const handleRename = async (id: string) => {
+    const val = renameValue.trim();
+    if (!val) { setRenamingId(null); return; }
+    setThreads((prev: Thread[]) => prev.map(t => {
+      if (t.id !== id) return t;
+      const u = { ...t, title: val };
+      db.saveThread(u);
+      return u;
+    }));
+    setRenamingId(null);
+  };
+
+  useEffect(() => {
+    if (renamingId && renameInputRef.current) renameInputRef.current.focus();
+  }, [renamingId]);
 
   const deleteThread = async (id: string) => {
     setOpenDropdown(null);
-    setThreads(prev => prev.filter(t => t.id !== id));
+    setThreads((prev: Thread[]) => prev.filter(t => t.id !== id));
     await db.deleteThread(id);
   };
 
@@ -96,7 +119,7 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f0f0f0' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: activeTab === 'notes' ? '#ffffff' : '#f0f0f0' }}>
       <div style={{ height: 'env(safe-area-inset-top, 0px)' }} />
 
       {/* Header */}
@@ -253,13 +276,25 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   transition={{ delay: idx * 0.04 }}
-                  onClick={() => { if (!openDropdown) onOpenThread(th.id); }}
+                  onClick={() => { if (!openDropdown && renamingId !== th.id) onOpenThread(th.id); }}
                   style={{ display: 'flex', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid rgba(0,0,0,0.05)', cursor: 'pointer' }}
                 >
                   <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                    {renamingId === th.id ? (
+                      <input
+                        ref={renameInputRef}
+                        value={renameValue}
+                        onChange={e => setRenameValue(e.target.value)}
+                        onBlur={() => handleRename(th.id)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleRename(th.id); if (e.key === 'Escape') setRenamingId(null); }}
+                        onClick={e => e.stopPropagation()}
+                        style={{ fontFamily: M, fontSize: 16, fontWeight: 500, color: '#111', background: 'transparent', border: 'none', outline: 'none', borderBottom: '1px solid rgba(0,0,0,0.2)', width: '100%', marginBottom: 3 }}
+                      />
+                    ) : (
                     <div style={{ fontFamily: M, fontSize: 16, fontWeight: 500, color: '#111', marginBottom: 3 }}>
                       {th.title}
                     </div>
+                    )}
                     <div style={{
                       fontSize: 13, color: '#aaa', fontWeight: 400, fontFamily: M,
                       lineHeight: 1.45, overflow: 'hidden',
@@ -287,9 +322,20 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
                           style={{
                             position: 'absolute', right: 0, top: '100%', zIndex: 20,
                             background: '#fff', borderRadius: 10, padding: '4px 0',
-                            boxShadow: '0 4px 20px rgba(0,0,0,0.12)', minWidth: 120,
+                            boxShadow: '0 4px 20px rgba(0,0,0,0.12)', minWidth: 140,
                           }}
                         >
+                          <button
+                            onClick={e => { e.stopPropagation(); setOpenDropdown(null); setRenameValue(th.title); setRenamingId(th.id); }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
+                              padding: '10px 16px', background: 'none', border: 'none',
+                              cursor: 'pointer', fontFamily: M, fontSize: 14, color: '#111',
+                            }}
+                          >
+                            <Pencil size={13} strokeWidth={1.75} />
+                            Переименовать
+                          </button>
                           <button
                             onClick={e => { e.stopPropagation(); deleteThread(th.id); }}
                             style={{

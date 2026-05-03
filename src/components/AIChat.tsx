@@ -53,6 +53,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     if (!text || !threadId) return;
 
     const userMsg: Message = { role: 'user', content: text, time: ft() };
+    const isFirstMessage = thread.messages.length === 0;
 
     let updatedThread: Thread | undefined;
 
@@ -160,6 +161,30 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             setTasks(prev => prev.filter(t => t.id !== taskId));
             db.deleteTask(taskId);
             result = { status: 'success' };
+          } else if (name === 'save_as_note') {
+            const { content, title } = args;
+            const noteId = uuid();
+            const savedNote: Thread = {
+              id: noteId,
+              title: (title || content.trim().slice(0, 40)) || 'Заметка',
+              preview: content.trim().slice(0, 100),
+              messages: [],
+              createdAt: Date.now(),
+              source: 'заметка' as const,
+              is_meaningful: true,
+              summary: content.trim(),
+            };
+            db.saveThread(savedNote);
+            setThreads((prev: Thread[]) => [savedNote, ...(Array.isArray(prev) ? prev : [])]);
+            const userId = db.getUserId();
+            if (userId) {
+              fetch('/api/summarize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId }),
+              }).catch(() => {});
+            }
+            result = { status: 'success', noteId };
           }
 
           toolResults.push({
@@ -182,6 +207,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       }
 
       const assistantMsg: Message = { role: 'assistant', content: response.content || 'Готово!', time: ft() };
+      if (isFirstMessage) generateTitle(text, assistantMsg.content);
 
       setThreads(prev => prev.map(t => {
         if (t.id === threadId) {
@@ -408,14 +434,41 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     }));
   };
 
+  const generateTitle = async (userText: string, assistantText: string) => {
+    try {
+      const resp = await generateResponse(
+        [{ role: 'user', content: `Придумай короткое название (3-5 слов, без кавычек) для чата, где пользователь написал:\n«${userText}»\nИИ ответил:\n«${assistantText.slice(0, 200)}»\nТолько название, без пояснений`, time: '' }],
+        { tools: [], tool_choice: 'none' } as any
+      );
+      const title = resp?.content?.trim().replace(/^["«]|["»]$/g, '').slice(0, 60);
+      if (!title || !threadId) return;
+      setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
+        if (t.id !== threadId) return t;
+        const u = { ...t, title };
+        db.saveThread(u);
+        return u;
+      }));
+    } catch { /* не критично */ }
+  };
+
   const handleClose = () => {
     const userId = db.getUserId();
-    if (userId && thread && thread.messages.some(m => m.role === 'user')) {
+    const threadSnapshot = thread;
+    if (userId && threadSnapshot && threadSnapshot.messages.some(m => m.role === 'user')) {
       fetch('/api/classify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threadId: thread.id, userId, messages: thread.messages }),
-      }).catch(() => {});
+        body: JSON.stringify({ threadId: threadSnapshot.id, userId, messages: threadSnapshot.messages }),
+      })
+        .then(r => r.json())
+        .then(({ is_meaningful }) => {
+          if (is_meaningful !== undefined) {
+            setThreads((prev: Thread[]) => prev.map(t =>
+              t.id === threadSnapshot.id ? { ...t, is_meaningful } : t
+            ));
+          }
+        })
+        .catch(() => {});
     }
     onClose();
   };
