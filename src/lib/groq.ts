@@ -23,6 +23,13 @@ export const SYSTEM_INSTRUCTION = `Ты — Мысль, личный ассис�
 — Учитывай всё что пользователь говорил раньше в диалоге
 — Если пришёл сырой brain dump — сначала структурируй, потом уточняй детали
 
+ВАЖНО ПРО КАЛЕНДАРЬ
+— Нельзя создавать или менять события, пока пользователь не выбрал календарь
+— Если календарь не выбран, сначала подключи и попроси выбрать календарь из списка
+— Если пользователь просит список календарей, покажи список и попроси выбрать один по названию
+— После выбора календаря подтверди его название и только потом создавай события
+— Нельзя подтверждать выбор календаря, если его нет в списке календарей. Если названия нет — попроси выбрать из списка снова
+
 ИНСТРУМЕНТЫ
 Используй только предоставленные инструменты через стандартный механизм tool_calls. Не выдумывай форматы
 
@@ -31,6 +38,16 @@ export const SYSTEM_INSTRUCTION = `Ты — Мысль, личный ассис�
 — update_task: когда нужно изменить, перенести или дополнить задачу. Если не знаешь ID — сначала get_tasks
 — delete_task: когда нужно удалить задачу
 — start_planning: когда задача сложная или многошаговая — запусти опросник для декомпозиции
+— google_connect_calendar: когда пользователь просит подключить Google Calendar
+— google_list_calendars: когда нужно показать список календарей
+— google_select_calendar: когда пользователь выбирает календарь
+— google_calendar_status: когда пользователь спрашивает, подключен ли календарь, или почему нет событий
+— google_list_events: когда пользователь спрашивает про события
+— google_create_event: когда нужно создать событие
+— google_update_event: когда нужно изменить событие
+— google_delete_event: когда нужно удалить событие
+
+После google_connect_calendar покажи список календарей и попроси выбрать один. После ответа вызови google_select_calendar
 
 Сегодняшняя дата: ${_todayStr}`;
 
@@ -153,6 +170,119 @@ export const tools: any[] = [
         },
         required: ["questions"]
       }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "google_connect_calendar",
+      description: "Запускает подключение Google Calendar через OAuth и возвращает список календарей.",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "google_list_calendars",
+      description: "Получить список календарей Google пользователя.",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "google_calendar_status",
+      description: "Проверить статус подключения Google Calendar и выбранный календарь.",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "google_select_calendar",
+      description: "Выбрать календарь Google по ID.",
+      parameters: {
+        type: "object",
+        properties: {
+          calendarId: {
+            type: "string",
+            description: "ID календаря Google.",
+          },
+          calendarName: {
+            type: "string",
+            description: "Название календаря, если ID неизвестен.",
+          },
+        },
+        required: [],
+      },
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "google_list_events",
+      description: "Получить список событий Google Calendar.",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "google_create_event",
+      description: "Создать событие Google Calendar.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Название события." },
+          date: { type: "string", description: "Дата события YYYY-MM-DD." },
+          time: { type: "string", description: "Время события HH:MM (опционально)." },
+          taskId: { type: "string", description: "ID связанной задачи (если есть)." },
+        },
+        required: ["name", "date"],
+      },
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "google_update_event",
+      description: "Обновить событие Google Calendar.",
+      parameters: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "ID задачи, связанной с событием." },
+          name: { type: "string", description: "Новое название." },
+          date: { type: "string", description: "Новая дата YYYY-MM-DD." },
+          time: { type: "string", description: "Новое время HH:MM." },
+        },
+        required: ["id"],
+      },
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "google_delete_event",
+      description: "Удалить событие Google Calendar.",
+      parameters: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "ID задачи, связанной с событием." },
+        },
+        required: ["id"],
+      },
     }
   }
 ];

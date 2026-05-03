@@ -18,6 +18,7 @@ import {
   collectDefaultMetrics,
 } from "prom-client";
 import { verifyGoogleIdToken } from './src/lib/google-auth.ts';
+import * as googleCalendar from './server/google-calendar.ts';
 
 dotenv.config();
 
@@ -28,6 +29,19 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const DATABASE_URL = process.env.DATABASE_URL;
 const db = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL }) : null;
+
+const resolveBaseUrl = (req: express.Request) => {
+  const protoHeader = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+  const proto = protoHeader || req.protocol;
+  const hostHeader = String(req.headers['x-forwarded-host'] || req.get('host') || '').split(',')[0].trim();
+  return `${proto}://${hostHeader}`;
+};
+
+const resolveCalendarWebhookUrl = (req: express.Request) =>
+  process.env.GOOGLE_CALENDAR_WEBHOOK_URL || `${resolveBaseUrl(req)}/api/integrations/google-calendar/webhook`;
+
+const resolveOAuthRedirectUrl = (req: express.Request) =>
+  process.env.GOOGLE_OAUTH_REDIRECT_URL || `${resolveBaseUrl(req)}/api/integrations/google-calendar/oauth/callback`;
 
 // Render and similar platforms terminate TLS on the proxy layer.
 // trust proxy keeps request metadata correct for HTTPS deployments.
@@ -239,6 +253,8 @@ const ensureAuthSchema = async () => {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  await googleCalendar.ensureGoogleCalendarSchema(db);
 };
 
 app.post("/api/auth/register", async (req, res) => {
@@ -422,6 +438,418 @@ app.post('/api/auth/google', async (req, res) => {
   }
 });
 
+app.get("/api/integrations/google-calendar/status", async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
+  }
+
+  const userId = String(req.query.userId || "").trim();
+  if (!userId) {
+    return res.status(400).json({ error: "userId обязателен." });
+  }
+
+  try {
+    const status = await googleCalendar.getCalendarStatus(db, userId);
+    return res.status(200).json(status);
+  } catch (error: any) {
+    console.error("[GCAL][STATUS]", error?.message || error);
+    return res.status(500).json({ error: "Не удалось получить статус Google Calendar." });
+  }
+});
+
+app.get("/api/integrations/google-calendar/oauth/start", async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
+  }
+
+  const userId = String(req.query.userId || "").trim();
+  if (!userId) {
+    return res.status(400).json({ error: "userId обязателен." });
+  }
+
+  const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!googleClientId || !googleClientSecret) {
+    return res.status(500).json({ error: "GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET не настроены." });
+  }
+
+  try {
+    const state = await googleCalendar.createOAuthState(db, userId);
+    const redirectUri = resolveOAuthRedirectUrl(req);
+    const params = new URLSearchParams({
+      client_id: googleClientId,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      access_type: "offline",
+      prompt: "consent",
+      scope: googleCalendar.GOOGLE_CALENDAR_SCOPE,
+      state,
+      include_granted_scopes: "true",
+    });
+    const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+    return res.status(200).json({ url });
+  } catch (error: any) {
+    console.error("[GCAL][OAUTH_START]", error?.message || error);
+    return res.status(500).json({ error: "Не удалось начать подключение Google Calendar." });
+  }
+});
+
+app.get("/api/integrations/google-calendar/oauth/callback", async (req, res) => {
+  if (!db) {
+    return res.status(500).send("DATABASE_URL не настроен.");
+  }
+
+  const code = String(req.query.code || "").trim();
+  const state = String(req.query.state || "").trim();
+  if (!code || !state) {
+    return res.status(400).send("Некорректный ответ OAuth.");
+  }
+
+  const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!googleClientId || !googleClientSecret) {
+    return res.status(500).send("GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET не настроены.");
+  }
+
+  try {
+    const userId = await googleCalendar.consumeOAuthState(db, state);
+    if (!userId) {
+      return res.status(400).send("OAuth-сессия истекла. Попробуй подключить заново.");
+    }
+
+    const redirectUri = resolveOAuthRedirectUrl(req);
+    const tokens = await googleCalendar.exchangeCodeForTokens({
+      code,
+      clientId: googleClientId,
+      clientSecret: googleClientSecret,
+      redirectUri,
+    });
+    await googleCalendar.upsertTokens(db, userId, tokens);
+
+    const html = `
+      <!doctype html>
+      <html lang="ru">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>Google Calendar подключен</title>
+          <style>
+            body { font-family: Arial, sans-serif; background: #f7f7f7; margin: 0; padding: 32px; color: #222; }
+            .card { max-width: 420px; margin: 0 auto; background: #fff; border-radius: 16px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
+            .title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+            .desc { font-size: 14px; line-height: 1.5; color: #555; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="title">Google Calendar подключен</div>
+            <div class="desc">Можно закрыть это окно и вернуться в Mindex.</div>
+          </div>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ type: "google_calendar_connected" }, "*");
+              window.close();
+            }
+          </script>
+        </body>
+      </html>
+    `;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.status(200).send(html);
+  } catch (error: any) {
+    console.error("[GCAL][OAUTH_CALLBACK]", error?.message || error);
+    return res.status(500).send("Не удалось подключить Google Calendar.");
+  }
+});
+
+app.get("/api/integrations/google-calendar/calendars", async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
+  }
+
+  const userId = String(req.query.userId || "").trim();
+  if (!userId) {
+    return res.status(400).json({ error: "userId обязателен." });
+  }
+
+  const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!googleClientId || !googleClientSecret) {
+    return res.status(500).json({ error: "GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET не настроены." });
+  }
+
+  try {
+    const tokens = await googleCalendar.getValidAccessToken(db, userId, googleClientId, googleClientSecret);
+    const calendars = await googleCalendar.listCalendars(tokens.access_token);
+    return res.status(200).json({ calendars, selectedId: tokens.calendar_id || null });
+  } catch (error: any) {
+    console.error("[GCAL][CALENDARS]", error?.message || error);
+    return res.status(500).json({ error: "Не удалось загрузить календари." });
+  }
+});
+
+app.post("/api/integrations/google-calendar/select", async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
+  }
+
+  const userId = String(req.body?.userId || "").trim();
+  const calendarId = String(req.body?.calendarId || "").trim();
+  if (!userId || !calendarId) {
+    return res.status(400).json({ error: "userId и calendarId обязательны." });
+  }
+
+  const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!googleClientId || !googleClientSecret) {
+    return res.status(500).json({ error: "GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET не настроены." });
+  }
+
+  try {
+    const tokens = await googleCalendar.getValidAccessToken(db, userId, googleClientId, googleClientSecret);
+    const calendars = await googleCalendar.listCalendars(tokens.access_token);
+    const selected = calendars.find((item: any) => item.id === calendarId);
+    if (!selected) {
+      return res.status(404).json({ error: "Календарь не найден." });
+    }
+
+    await googleCalendar.updateSelectedCalendar(db, userId, {
+      id: selected.id,
+      name: selected.name,
+      timeZone: selected.timeZone,
+    });
+
+    const sync = await googleCalendar.syncCalendarEvents({
+      db,
+      userId,
+      clientId: googleClientId,
+      clientSecret: googleClientSecret,
+      webhookUrl: resolveCalendarWebhookUrl(req),
+      forceFull: true,
+    });
+
+    return res.status(200).json({ success: true, sync });
+  } catch (error: any) {
+    console.error("[GCAL][SELECT]", error?.message || error);
+    return res.status(500).json({ error: "Не удалось выбрать календарь." });
+  }
+});
+
+app.post("/api/integrations/google-calendar/sync", async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
+  }
+
+  const userId = String(req.body?.userId || "").trim();
+  if (!userId) {
+    return res.status(400).json({ error: "userId обязателен." });
+  }
+
+  const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!googleClientId || !googleClientSecret) {
+    return res.status(500).json({ error: "GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET не настроены." });
+  }
+
+  try {
+    const sync = await googleCalendar.syncCalendarEvents({
+      db,
+      userId,
+      clientId: googleClientId,
+      clientSecret: googleClientSecret,
+      webhookUrl: resolveCalendarWebhookUrl(req),
+    });
+    return res.status(200).json({ success: true, sync });
+  } catch (error: any) {
+    console.error("[GCAL][SYNC]", error?.message || error);
+    return res.status(500).json({ error: "Не удалось синхронизировать календарь." });
+  }
+});
+
+app.post("/api/integrations/google-calendar/disconnect", async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
+  }
+
+  const userId = String(req.body?.userId || "").trim();
+  if (!userId) {
+    return res.status(400).json({ error: "userId обязателен." });
+  }
+
+  const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!googleClientId || !googleClientSecret) {
+    return res.status(500).json({ error: "GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET не настроены." });
+  }
+
+  try {
+    await googleCalendar.disconnectCalendar({ db, userId, clientId: googleClientId, clientSecret: googleClientSecret });
+    return res.status(200).json({ success: true });
+  } catch (error: any) {
+    console.error("[GCAL][DISCONNECT]", error?.message || error);
+    return res.status(500).json({ error: "Не удалось отключить Google Calendar." });
+  }
+});
+
+app.post("/api/integrations/google-calendar/tool/create-event", async (req, res) => {
+  if (!db) return res.status(500).json({ error: "DB not configured." });
+
+  const userId = String(req.body?.userId || '').trim();
+  const task = req.body?.task || null;
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+
+  const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!googleClientId || !googleClientSecret) return res.status(500).json({ error: 'Google client config missing' });
+
+  try {
+    if (task && task.id) {
+      // Ensure task exists in DB (upsert) then sync
+      await db.query(
+        `INSERT INTO user_tasks (id, user_id, name, time, date, done, type, subtasks, updated_at)
+         VALUES ($1,$2,$3,$4,$5,false,'regular','[]',NOW())
+         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, time = EXCLUDED.time, date = EXCLUDED.date, updated_at = NOW()`,
+        [String(task.id), userId, String(task.name || 'Без названия'), String(task.time || ''), String(task.date || new Date().toISOString().slice(0,10))]
+      );
+
+      const result = await googleCalendar.syncTaskToGoogle({
+        db,
+        userId,
+        task: { id: String(task.id), name: String(task.name), time: String(task.time || ''), date: String(task.date) },
+        clientId: googleClientId,
+        clientSecret: googleClientSecret
+      });
+      if ((result as any)?.skipped) {
+        return res.status(409).json({ success: false, error: (result as any).reason || 'calendar_not_selected', result });
+      }
+      const calendarStatus = await googleCalendar.getCalendarStatus(db, userId);
+      return res.status(200).json({ success: true, result, calendar: calendarStatus.calendar || null });
+    }
+
+    // Create ad-hoc task if no id provided
+    const newId = crypto.randomUUID();
+    const name = String(req.body?.name || 'Без названия');
+    const date = String(req.body?.date || new Date().toISOString().slice(0,10));
+    const time = String(req.body?.time || '');
+
+    await db.query(`INSERT INTO user_tasks (id, user_id, name, time, date, done, type, subtasks, created_at, updated_at)
+                    VALUES ($1,$2,$3,$4,$5,false,'regular','[]',NOW(),NOW())`, [newId, userId, name, time, date]);
+
+    const result = await googleCalendar.syncTaskToGoogle({ db, userId, task: { id: newId, name, time, date }, clientId: googleClientId, clientSecret: googleClientSecret });
+    if ((result as any)?.skipped) {
+      return res.status(409).json({ success: false, error: (result as any).reason || 'calendar_not_selected', result });
+    }
+    const calendarStatus = await googleCalendar.getCalendarStatus(db, userId);
+    return res.status(200).json({ success: true, result, calendar: calendarStatus.calendar || null });
+  } catch (error: any) {
+    console.error('[GCAL][TOOL][CREATE]', error?.message || error);
+    return res.status(500).json({ error: 'Failed to create event' });
+  }
+});
+
+app.post("/api/integrations/google-calendar/tool/update-event", async (req, res) => {
+  if (!db) return res.status(500).json({ error: "DB not configured." });
+  const userId = String(req.body?.userId || '').trim();
+  const task = req.body?.task || null;
+  if (!userId || !task || !task.id) return res.status(400).json({ error: 'userId and task.id required' });
+
+  const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!googleClientId || !googleClientSecret) return res.status(500).json({ error: 'Google client config missing' });
+
+  try {
+    await db.query(`UPDATE user_tasks SET name=$1, time=$2, date=$3, updated_at=NOW() WHERE id=$4 AND user_id=$5`, [String(task.name || ''), String(task.time || ''), String(task.date || ''), String(task.id), userId]);
+    const result = await googleCalendar.syncTaskToGoogle({ db, userId, task: { id: String(task.id), name: String(task.name), time: String(task.time || ''), date: String(task.date || '') }, clientId: googleClientId, clientSecret: googleClientSecret });
+    if ((result as any)?.skipped) {
+      return res.status(409).json({ success: false, error: (result as any).reason || 'calendar_not_selected', result });
+    }
+    const calendarStatus = await googleCalendar.getCalendarStatus(db, userId);
+    return res.status(200).json({ success: true, result, calendar: calendarStatus.calendar || null });
+  } catch (error: any) {
+    console.error('[GCAL][TOOL][UPDATE]', error?.message || error);
+    return res.status(500).json({ error: 'Failed to update event' });
+  }
+});
+
+app.post("/api/integrations/google-calendar/tool/delete-event", async (req, res) => {
+  if (!db) return res.status(500).json({ error: "DB not configured." });
+  const userId = String(req.body?.userId || '').trim();
+  const taskId = String(req.body?.taskId || '').trim();
+  if (!userId || !taskId) return res.status(400).json({ error: 'userId and taskId required' });
+
+  const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!googleClientId || !googleClientSecret) return res.status(500).json({ error: 'Google client config missing' });
+
+  try {
+    const result = await googleCalendar.deleteTaskFromGoogle({ db, userId, taskId, clientId: googleClientId, clientSecret: googleClientSecret });
+    if ((result as any)?.skipped) {
+      return res.status(409).json({ success: false, error: (result as any).reason || 'calendar_not_selected', result });
+    }
+    const calendarStatus = await googleCalendar.getCalendarStatus(db, userId);
+    return res.status(200).json({ success: true, result, calendar: calendarStatus.calendar || null });
+  } catch (error: any) {
+    console.error('[GCAL][TOOL][DELETE]', error?.message || error);
+    return res.status(500).json({ error: 'Failed to delete event' });
+  }
+});
+
+app.get("/api/integrations/google-calendar/tool/list-events", async (req, res) => {
+  if (!db) return res.status(500).json({ error: "DB not configured." });
+  const userId = String(req.query.userId || '').trim();
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+
+  const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!googleClientId || !googleClientSecret) return res.status(500).json({ error: 'Google client config missing' });
+
+  try {
+    const tokens = await googleCalendar.getValidAccessToken(db, userId, googleClientId, googleClientSecret);
+    const resp = await googleCalendar.listEvents({ accessToken: tokens.access_token, calendarId: tokens.calendar_id || 'primary' });
+    const mapped = (resp.events || []).map((e: any) => googleCalendar.eventToTaskFields(e, tokens.calendar_time_zone || undefined));
+    const calendarStatus = await googleCalendar.getCalendarStatus(db, userId);
+    return res.status(200).json({ success: true, events: mapped, calendar: calendarStatus.calendar || null });
+  } catch (error: any) {
+    console.error('[GCAL][TOOL][LIST]', error?.message || error);
+    return res.status(500).json({ error: 'Failed to list events' });
+  }
+});
+
+app.post("/api/integrations/google-calendar/webhook", async (req, res) => {
+  if (!db) {
+    return res.status(500).end();
+  }
+
+  const channelId = String(req.headers['x-goog-channel-id'] || '').trim();
+  if (!channelId) {
+    return res.status(400).end();
+  }
+
+  const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!googleClientId || !googleClientSecret) {
+    return res.status(500).end();
+  }
+
+  try {
+    const target = await googleCalendar.findWebhookTarget(db, channelId);
+    if (!target) {
+      return res.status(404).end();
+    }
+    await googleCalendar.syncCalendarEvents({
+      db,
+      userId: target.user_id,
+      clientId: googleClientId,
+      clientSecret: googleClientSecret,
+      webhookUrl: resolveCalendarWebhookUrl(req),
+    });
+  } catch (error: any) {
+    console.error("[GCAL][WEBHOOK]", error?.message || error);
+  }
+
+  return res.status(200).end();
+});
+
 app.get("/api/data/bootstrap", async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
@@ -445,7 +873,9 @@ app.get("/api/data/bootstrap", async (req, res) => {
       ),
       db.query(
         `
-          SELECT id, name, time, date, done, type, subtasks
+          SELECT id, name, time, date, done, type, subtasks,
+                 external_provider, external_id, external_calendar_id,
+                 external_updated_at, external_synced_at
           FROM user_tasks
           WHERE user_id = $1
           ORDER BY updated_at DESC, created_at DESC
@@ -481,6 +911,11 @@ app.get("/api/data/bootstrap", async (req, res) => {
         done: row.done,
         type: row.type || "regular",
         subtasks: row.subtasks || [],
+        externalProvider: row.external_provider || undefined,
+        externalId: row.external_id || undefined,
+        externalCalendarId: row.external_calendar_id || undefined,
+        externalUpdatedAt: row.external_updated_at || undefined,
+        externalSyncedAt: row.external_synced_at || undefined,
       })),
       threads: threadsRes.rows.map((row) => ({
         id: row.id,

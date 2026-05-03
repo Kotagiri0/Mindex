@@ -327,6 +327,46 @@ docker compose up --build -d
 
 - `GET /metrics`
 
+## Google Calendar Integration
+
+Добавлена встроенная интеграция с Google Calendar (через OAuth2) и двусторонней синхронизацией событий ↔ задач.
+
+Ключевые возможности:
+- Подключение календаря через OAuth 2.0
+- Выбор календаря пользователя
+- Синхронизация событий (push notifications + periodic sync)
+- Создание / редактирование / удаление событий из чата через инструменты ИИ
+- Двусторонняя синхронизация: события создают задачи и наоборот
+
+Эндпоинты сервера:
+- `GET /api/integrations/google-calendar/status?userId=...` — статус подключения
+- `GET /api/integrations/google-calendar/oauth/start?userId=...` — старт OAuth (возвращает URL)
+- `GET /api/integrations/google-calendar/oauth/callback` — OAuth callback (frontend открывает окно и слушает postMessage)
+- `GET /api/integrations/google-calendar/calendars?userId=...` — список календарей
+- `POST /api/integrations/google-calendar/select` — выбрать календарь (body: `userId`, `calendarId`)
+- `POST /api/integrations/google-calendar/sync` — запустить синхронизацию вручную
+- `POST /api/integrations/google-calendar/disconnect` — отключить интеграцию
+- `POST /api/integrations/google-calendar/webhook` — webhook target для Google push notifications
+
+Инструменты (tools) для AI-слоя — HTTP endpoints, которые ИИ может вызывать при tool-calls:
+- `POST /api/integrations/google-calendar/tool/create-event` — создать событие (body: `userId` + `task` или `name/date/time`)
+- `POST /api/integrations/google-calendar/tool/update-event` — обновить событие (body: `userId`, `task`)
+- `POST /api/integrations/google-calendar/tool/delete-event` — удалить событие (body: `userId`, `taskId`)
+- `GET  /api/integrations/google-calendar/tool/list-events?userId=...` — получить события (карта в формат задач)
+
+Переменные окружения для Google Calendar:
+- `GOOGLE_CLIENT_ID` — server client id
+- `VITE_GOOGLE_CLIENT_ID` — client id для фронтенда (опционально)
+- `GOOGLE_CLIENT_SECRET` — client secret
+- `GOOGLE_OAUTH_REDIRECT_URL` — (опционально) переопределить redirect URI
+- `GOOGLE_CALENDAR_WEBHOOK_URL` — (опционально) URL webhook, по умолчанию `${BASE_URL}/api/integrations/google-calendar/webhook`
+
+Советы по запуску локально:
+- Убедитесь, что `DATABASE_URL` настроен и у вас есть PostgreSQL для разработки.
+- Зарегистрируйте OAuth client в Google Console и укажите redirect URI `http://localhost:3000/api/integrations/google-calendar/oauth/callback`.
+- Для работы push-уведомлений потребуется публичный HTTPS webhook (ngrok или аналог) — без него синхронизация будет работать по polling/sync-token.
+
+
 ## Структура репозитория
 
 ```text

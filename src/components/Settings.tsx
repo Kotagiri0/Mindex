@@ -101,6 +101,10 @@ function AccountRow({ label, action, onAction, danger }: { label: string; action
 
 export default function SettingsScreen({ settings, setSettings, onBack, onLogout, isDesktop = false }: SettingsProps) {
   const [confirmClear, setConfirmClear] = useState(false);
+  const [gcalStatus, setGcalStatus] = useState<{ connected: boolean; calendar?: { id: string; name: string; timeZone?: string | null } } | null>(null);
+  const [gcalCalendars, setGcalCalendars] = useState<{ id: string; name: string; primary?: boolean; timeZone?: string }[]>([]);
+  const [gcalLoading, setGcalLoading] = useState(false);
+  const [gcalError, setGcalError] = useState('');
   const currentUser = getCurrentUser();
 
   const displayName = settings.name || currentUser?.displayName || 'Пользователь';
@@ -119,6 +123,114 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
     if (user) storage.clearUserData(user.id);
     window.location.reload();
   };
+
+  const fetchGcalStatus = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const resp = await fetch(`/api/integrations/google-calendar/status?userId=${encodeURIComponent(currentUser.id)}`);
+      const data = await resp.json();
+      setGcalStatus(resp.ok ? data : { connected: false });
+    } catch {
+      setGcalStatus({ connected: false });
+    }
+  };
+
+  const fetchGcalCalendars = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const resp = await fetch(`/api/integrations/google-calendar/calendars?userId=${encodeURIComponent(currentUser.id)}`);
+      const data = await resp.json();
+      if (resp.ok && Array.isArray(data?.calendars)) {
+        setGcalCalendars(data.calendars.map((item: any) => ({
+          id: String(item.id),
+          name: String(item.name || item.id),
+          primary: Boolean(item.primary),
+          timeZone: item.timeZone ? String(item.timeZone) : undefined,
+        })));
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const openGoogleCalendarOAuth = async () => {
+    if (!currentUser?.id) return { error: 'not_authenticated' };
+    const resp = await fetch(`/api/integrations/google-calendar/oauth/start?userId=${encodeURIComponent(currentUser.id)}`);
+    const data = await resp.json();
+    if (!resp.ok || !data?.url) return { error: data?.error || 'oauth_start_failed' };
+
+    const popup = window.open(data.url, 'mindex_google_calendar', 'width=480,height=720');
+    if (!popup) return { error: 'popup_blocked' };
+
+    return await new Promise<{ success?: boolean; error?: string }>((resolve) => {
+      const timeoutId = setTimeout(() => {
+        cleanup();
+        resolve({ error: 'timeout' });
+      }, 120000);
+
+      const intervalId = setInterval(() => {
+        if (popup.closed) {
+          cleanup();
+          resolve({ success: true });
+        }
+      }, 500);
+
+      const onMessage = (event: MessageEvent) => {
+        if (event?.data?.type === 'google_calendar_connected') {
+          cleanup();
+          resolve({ success: true });
+        }
+      };
+
+      const cleanup = () => {
+        clearTimeout(timeoutId);
+        clearInterval(intervalId);
+        window.removeEventListener('message', onMessage);
+      };
+
+      window.addEventListener('message', onMessage);
+    });
+  };
+
+  const connectGoogleCalendar = async () => {
+    setGcalError('');
+    setGcalLoading(true);
+    try {
+      const result = await openGoogleCalendarOAuth();
+      if (result?.error) {
+        setGcalError('Не удалось подключить Google Calendar.');
+        return;
+      }
+      await fetchGcalStatus();
+      await fetchGcalCalendars();
+    } finally {
+      setGcalLoading(false);
+    }
+  };
+
+  const selectGoogleCalendar = async (calendarId: string) => {
+    if (!currentUser?.id || !calendarId) return;
+    setGcalError('');
+    setGcalLoading(true);
+    try {
+      const resp = await fetch('/api/integrations/google-calendar/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id, calendarId }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        setGcalError(data?.error || 'Не удалось выбрать календарь.');
+      }
+      await fetchGcalStatus();
+    } finally {
+      setGcalLoading(false);
+    }
+  };
+
+  if (gcalStatus === null && currentUser?.id) {
+    fetchGcalStatus();
+  }
 
   return (
     <div style={{
@@ -261,7 +373,57 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
           <div style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 4 }}>
             Интеграции
           </div>
-          <IntegrationRow name="Google Календарь" desc="Синхронизация твоих событий и задач" />
+          <div>
+            <div style={{ height: 1, background: 'rgba(0,0,0,0.06)' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 0' }}>
+              <div>
+                <div style={{ fontFamily: M, fontSize: 15, color: 'var(--text-primary)', marginBottom: 3 }}>Google Календарь</div>
+                <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)' }}>Синхронизация твоих событий и задач</div>
+              </div>
+              <PillButton label={gcalStatus?.connected ? 'Подключен' : 'Подключить'} onClick={connectGoogleCalendar} />
+            </div>
+            <div style={{ paddingBottom: 14 }}>
+              <div style={{ fontFamily: M, fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+                Статус: {gcalStatus?.connected ? 'подключен' : 'не подключен'}
+              </div>
+              {gcalStatus?.calendar?.name && (
+                <div style={{ fontFamily: M, fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                  Основной календарь: {gcalStatus.calendar.name}
+                </div>
+              )}
+              {gcalStatus?.connected && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <select
+                    value={gcalStatus.calendar?.id || ''}
+                    onChange={(e) => selectGoogleCalendar(e.target.value)}
+                    style={{
+                      fontFamily: M,
+                      fontSize: 13,
+                      padding: '8px 12px',
+                      borderRadius: 10,
+                      border: '1px solid rgba(0,0,0,0.12)',
+                      background: 'var(--surface)',
+                      color: 'var(--text-primary)',
+                      minWidth: 220,
+                    }}
+                  >
+                    <option value="">Выбери календарь</option>
+                    {gcalCalendars.map((cal) => (
+                      <option key={cal.id} value={cal.id}>
+                        {cal.name}{cal.primary ? ' (основной)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <PillButton label={gcalLoading ? '...' : 'Обновить'} onClick={fetchGcalCalendars} />
+                </div>
+              )}
+              {gcalError && (
+                <div style={{ fontFamily: M, fontSize: 12, color: '#c0392b', marginTop: 8 }}>
+                  {gcalError}
+                </div>
+              )}
+            </div>
+          </div>
           <IntegrationRow name="Яндекс Календарь" desc="Синхронизация твоих событий и задач" />
           <IntegrationRow name="Notion" desc="Импорт страниц как заметок" />
         </div>

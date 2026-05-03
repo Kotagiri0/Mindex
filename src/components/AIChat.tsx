@@ -24,6 +24,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [noteMode, setNoteMode] = useState(false);
+  const lastCalendarsRef = useRef<{ id: string; name: string; primary?: boolean }[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const autoSentRef = useRef(false);
@@ -47,6 +48,108 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   const ft = () => {
     const n = new Date();
     return n.getHours().toString().padStart(2, '0') + ':' + n.getMinutes().toString().padStart(2, '0');
+  };
+
+  const openGoogleCalendarOAuth = async () => {
+    const userId = db.getUserId();
+    if (!userId) {
+      return { error: 'not_authenticated' };
+    }
+
+    const resp = await fetch(`/api/integrations/google-calendar/oauth/start?userId=${encodeURIComponent(userId)}`);
+    const data = await resp.json();
+    if (!resp.ok || !data?.url) {
+      return { error: data?.error || 'oauth_start_failed' };
+    }
+
+    const popup = window.open(data.url, 'mindex_google_calendar', 'width=480,height=720');
+    if (!popup) {
+      return { error: 'popup_blocked' };
+    }
+
+    return await new Promise<{ success?: boolean; error?: string }>((resolve) => {
+      const timeoutId = setTimeout(() => {
+        cleanup();
+        resolve({ error: 'timeout' });
+      }, 120000);
+
+      const intervalId = setInterval(() => {
+        if (popup.closed) {
+          cleanup();
+          resolve({ success: true });
+        }
+      }, 500);
+
+      const onMessage = (event: MessageEvent) => {
+        if (event?.data?.type === 'google_calendar_connected') {
+          cleanup();
+          resolve({ success: true });
+        }
+      };
+
+      const cleanup = () => {
+        clearTimeout(timeoutId);
+        clearInterval(intervalId);
+        window.removeEventListener('message', onMessage);
+      };
+
+      window.addEventListener('message', onMessage);
+    });
+  };
+
+  const fetchGoogleCalendars = async () => {
+    const userId = db.getUserId();
+    if (!userId) {
+      return { error: 'not_authenticated' };
+    }
+
+    const resp = await fetch(`/api/integrations/google-calendar/calendars?userId=${encodeURIComponent(userId)}`);
+    const data = await resp.json();
+    if (!resp.ok) {
+      return { error: data?.error || 'calendar_list_failed' };
+    }
+    if (Array.isArray(data?.calendars)) {
+      lastCalendarsRef.current = data.calendars.map((item: any) => ({
+        id: String(item.id),
+        name: String(item.name || item.id),
+        primary: Boolean(item.primary),
+      }));
+    }
+    return data;
+  };
+
+  const selectGoogleCalendar = async (calendarId: string, calendarName?: string) => {
+    const userId = db.getUserId();
+    if (!userId) {
+      return { error: 'not_authenticated' };
+    }
+
+    let resolvedId = calendarId;
+    if (calendarName && lastCalendarsRef.current.length === 0) {
+      await fetchGoogleCalendars();
+    }
+    if (calendarName && lastCalendarsRef.current.length > 0) {
+      const match = lastCalendarsRef.current.find((item) =>
+        item.name.toLowerCase() === calendarName.toLowerCase()
+      );
+      if (match) {
+        resolvedId = match.id;
+      }
+    }
+
+    const resp = await fetch('/api/integrations/google-calendar/select', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, calendarId: resolvedId }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      return { error: data?.error || 'calendar_select_failed' };
+    }
+
+    const refreshed = await db.getTasks();
+    setTasks(refreshed);
+    return data;
   };
 
   const sendText = async (text: string) => {
@@ -160,6 +263,145 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             setTasks(prev => prev.filter(t => t.id !== taskId));
             db.deleteTask(taskId);
             result = { status: 'success' };
+          } else if (name === 'google_list_events') {
+            const userId = db.getUserId();
+            if (!userId) {
+              result = { error: 'not_authenticated' };
+            } else {
+              try {
+                const resp = await fetch(`/api/integrations/google-calendar/tool/list-events?userId=${encodeURIComponent(userId)}`);
+                const data = await resp.json();
+                result = data.success ? data.events : { error: 'failed' };
+              } catch (e: any) {
+                result = { error: e?.message || 'fetch_failed' };
+              }
+            }
+          } else if (name === 'google_connect_calendar') {
+            try {
+              const started = await openGoogleCalendarOAuth();
+              if (started?.error) {
+                result = started;
+              } else {
+                const calendars = await fetchGoogleCalendars();
+                const list = lastCalendarsRef.current.map((item) => ({ id: item.id, name: item.name, primary: item.primary }));
+                result = { ...calendars, calendars: list, needsSelection: true };
+              }
+            } catch (e: any) {
+              result = { error: e?.message || 'connect_failed' };
+            }
+          } else if (name === 'google_list_calendars') {
+            try {
+              const calendars = await fetchGoogleCalendars();
+              const list = lastCalendarsRef.current.map((item) => ({ id: item.id, name: item.name, primary: item.primary }));
+              result = { ...calendars, calendars: list };
+            } catch (e: any) {
+              result = { error: e?.message || 'calendar_list_failed' };
+            }
+          } else if (name === 'google_calendar_status') {
+            const userId = db.getUserId();
+            if (!userId) {
+              result = { error: 'not_authenticated' };
+            } else {
+              try {
+                const resp = await fetch(`/api/integrations/google-calendar/status?userId=${encodeURIComponent(userId)}`);
+                const data = await resp.json();
+                result = resp.ok ? data : { error: data?.error || 'status_failed' };
+              } catch (e: any) {
+                result = { error: e?.message || 'status_failed' };
+              }
+            }
+          } else if (name === 'google_select_calendar') {
+            try {
+              const rawName = String(args.calendarName || args.name || '');
+              if (!args.calendarId && rawName) {
+                if (lastCalendarsRef.current.length === 0) {
+                  await fetchGoogleCalendars();
+                }
+                const match = lastCalendarsRef.current.find((item) => item.name.toLowerCase() === rawName.toLowerCase());
+                if (!match) {
+                  result = { error: 'calendar_not_found', calendars: lastCalendarsRef.current };
+                } else {
+                  result = await selectGoogleCalendar(match.id, match.name);
+                }
+              } else {
+                result = await selectGoogleCalendar(String(args.calendarId || ''), rawName);
+              }
+            } catch (e: any) {
+              result = { error: e?.message || 'calendar_select_failed' };
+            }
+          } else if (name === 'google_create_event') {
+            const userId = db.getUserId();
+            if (!userId) {
+              result = { error: 'not_authenticated' };
+            } else {
+              try {
+                const body: any = { userId };
+                if (args.taskId) body.task = { id: args.taskId, name: args.name, time: args.time, date: args.date };
+                else { body.name = args.name; body.time = args.time; body.date = args.date; }
+                const resp = await fetch('/api/integrations/google-calendar/tool/create-event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                const data = await resp.json();
+                if (!resp.ok && data?.error === 'calendar_not_selected') {
+                  const calendars = await fetchGoogleCalendars();
+                  const list = lastCalendarsRef.current.map((item) => ({ id: item.id, name: item.name, primary: item.primary }));
+                  result = { ...data, calendars: list, needsSelection: true, calendarsResponse: calendars };
+                } else {
+                  if (data?.success) {
+                    const refreshed = await db.getTasks();
+                    setTasks(refreshed);
+                  }
+                  result = data;
+                }
+              } catch (e: any) {
+                result = { error: e?.message || 'create_failed' };
+              }
+            }
+          } else if (name === 'google_update_event') {
+            const userId = db.getUserId();
+            if (!userId) {
+              result = { error: 'not_authenticated' };
+            } else {
+              try {
+                const body: any = { userId, task: { id: args.id, name: args.name, time: args.time, date: args.date } };
+                const resp = await fetch('/api/integrations/google-calendar/tool/update-event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                const data = await resp.json();
+                if (!resp.ok && data?.error === 'calendar_not_selected') {
+                  const calendars = await fetchGoogleCalendars();
+                  const list = lastCalendarsRef.current.map((item) => ({ id: item.id, name: item.name, primary: item.primary }));
+                  result = { ...data, calendars: list, needsSelection: true, calendarsResponse: calendars };
+                } else {
+                  if (data?.success) {
+                    const refreshed = await db.getTasks();
+                    setTasks(refreshed);
+                  }
+                  result = data;
+                }
+              } catch (e: any) {
+                result = { error: e?.message || 'update_failed' };
+              }
+            }
+          } else if (name === 'google_delete_event') {
+            const userId = db.getUserId();
+            if (!userId) {
+              result = { error: 'not_authenticated' };
+            } else {
+              try {
+                const resp = await fetch('/api/integrations/google-calendar/tool/delete-event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, taskId: args.id }) });
+                const data = await resp.json();
+                if (!resp.ok && data?.error === 'calendar_not_selected') {
+                  const calendars = await fetchGoogleCalendars();
+                  const list = lastCalendarsRef.current.map((item) => ({ id: item.id, name: item.name, primary: item.primary }));
+                  result = { ...data, calendars: list, needsSelection: true, calendarsResponse: calendars };
+                } else {
+                  if (data?.success) {
+                    const refreshed = await db.getTasks();
+                    setTasks(refreshed);
+                  }
+                  result = data;
+                }
+              } catch (e: any) {
+                result = { error: e?.message || 'delete_failed' };
+              }
+            }
           }
 
           toolResults.push({
