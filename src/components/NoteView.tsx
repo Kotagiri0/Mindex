@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { MessageCircle, Check } from 'lucide-react';
 import { Thread, Task } from '../types';
 import { db } from '../lib/db';
+import { getCurrentUser } from '../lib/auth';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
@@ -42,14 +43,18 @@ export default function NoteView({ threadId, threads, setThreads, tasks, onSwitc
     if (!thread) return;
     if (thread.summary) { setSummaryReady(true); return; }
 
+    // Not classified yet or classified as not meaningful — skip fetch
+    if (thread.is_meaningful !== true) { setSummaryReady(true); return; }
+
     const userMessages = thread.messages.filter(m => m.role === 'user' || m.role === 'assistant');
     if (userMessages.length === 0) { setSummaryReady(true); return; }
 
+    const userId = getCurrentUser()?.id;
     setLoading(true);
     fetch('/api/summarize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: thread.messages }),
+      body: JSON.stringify({ messages: thread.messages, threadId, userId }),
     })
       .then(r => r.json())
       .then(({ summary }) => {
@@ -113,6 +118,14 @@ export default function NoteView({ threadId, threads, setThreads, tasks, onSwitc
                 <SkeletonLine width="60%" />
                 <SkeletonLine width="85%" />
                 <SkeletonLine width="50%" />
+              </div>
+            ) : thread.is_meaningful === false ? (
+              <div style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', fontStyle: 'italic' }}>
+                Эта мысль не попала в архив — слишком короткая или операционная.
+              </div>
+            ) : thread.is_meaningful == null && thread.messages.some(m => m.role === 'user') ? (
+              <div style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', fontStyle: 'italic' }}>
+                Мысль обрабатывается... Закрой и открой снова через минуту.
               </div>
             ) : summaryReady ? (
               <motion.div

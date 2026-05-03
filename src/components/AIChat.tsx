@@ -408,6 +408,18 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     }));
   };
 
+  const handleClose = () => {
+    const userId = db.getUserId();
+    if (userId && thread && thread.messages.some(m => m.role === 'user')) {
+      fetch('/api/classify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threadId: thread.id, userId, messages: thread.messages }),
+      }).catch(() => {});
+    }
+    onClose();
+  };
+
   const updatePlanStep = (msgIndex: number, stepIndex: number, newName: string) => {
     setThreads(prev => prev.map(t => {
       if (t.id === threadId) {
@@ -483,7 +495,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       >
         <motion.button
           whileTap={{ scale: 0.88 }}
-          onClick={onClose}
+          onClick={handleClose}
           className="w-11 h-11 flex items-center justify-center"
         >
           <ChevronLeft size={24} strokeWidth={1.75} color="#222224" />

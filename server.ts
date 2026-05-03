@@ -786,6 +786,138 @@ async function callRouterAI(apiKey: string, body: object, attempt = 0): Promise<
   }
 }
 
+app.post("/api/classify", async (req, res) => {
+  const { threadId, userId, messages } = req.body || {};
+  if (!threadId || !userId || !Array.isArray(messages)) {
+    return res.status(400).json({ error: 'threadId, userId, messages required' });
+  }
+  const apiKey = process.env.ROUTERAI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'ROUTERAI_API_KEY not set' });
+
+  const dialogText = messages
+    .filter((m: any) => m.role === 'user' || m.role === 'assistant')
+    .slice(-20)
+    .map((m: any) => `${m.role === 'user' ? 'Пользователь' : 'Мысль'}: ${String(m.content || '').slice(0, 300)}`)
+    .join('\n');
+
+  try {
+    const response = await callRouterAI(apiKey, {
+      model: 'deepseek/deepseek-v4-flash',
+      messages: [
+        {
+          role: 'system',
+          content: 'Этот тред требует сохранения как заметка? Ответь только: yes или no.\nyes — если: длинная беседа, план, анализ, цели, инсайты, важные решения, обсуждение идей, 4+ сообщений со смыслом.\nno — если: короткие команды, добавление задач, операционные запросы, менее 4 сообщений.',
+        },
+        { role: 'user', content: `Тред:\n${dialogText}` },
+      ],
+      max_tokens: 5,
+      temperature: 0,
+      thinking: false,
+    });
+
+    const data = await response.json();
+    const answer = (data.choices?.[0]?.message?.content || '').trim().toLowerCase();
+    const isMeaningful = answer.startsWith('yes');
+
+    if (db) {
+      await db.query(
+        `UPDATE user_threads SET is_meaningful = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3`,
+        [isMeaningful, threadId, userId]
+      );
+
+      if (isMeaningful) {
+        const threadRes = await db.query(
+          `SELECT title, preview FROM user_threads WHERE id = $1 AND user_id = $2 LIMIT 1`,
+          [threadId, userId]
+        );
+        if (threadRes.rows.length > 0) {
+          const { title, preview } = threadRes.rows[0];
+          const embedding = await generateEmbedding(`${title}\n${preview}`);
+          if (embedding) {
+            await db.query(
+              `UPDATE user_threads SET embedding = $1::vector WHERE id = $2 AND user_id = $3`,
+              [`[${embedding.join(',')}]`, threadId, userId]
+            );
+          }
+        }
+      }
+    }
+
+    return res.status(200).json({ is_meaningful: isMeaningful });
+  } catch (err: any) {
+    console.error('[classify]', err);
+    return res.status(500).json({ error: err.message || 'classify failed' });
+  }
+});
+
+app.post("/api/summarize", async (req, res) => {
+  const { messages, threadId, userId } = req.body || {};
+  if (!messages || !Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'messages required' });
+  }
+  const apiKey = process.env.ROUTERAI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'ROUTERAI_API_KEY not set' });
+
+  const dialogText = messages
+    .filter((m: any) => m.role === 'user' || m.role === 'assistant')
+    .map((m: any) => `${m.role === 'user' ? 'Пользователь' : 'Мысль'}: ${String(m.content || '')}`)
+    .join('\n');
+
+  try {
+    const response = await callRouterAI(apiKey, {
+      model: 'deepseek/deepseek-v4-flash',
+      messages: [
+        {
+          role: 'system',
+          content: `Ты — Мысль, персональный ИИ-ассистент. Структурированно изложи суть диалога в виде заметки.
+Формат:
+**Суть:** одно предложение — о чём был разговор.
+**Ключевые тезисы:** 2–4 буллет-пункта с главными мыслями и решениями.
+**Задачи:** (только если были явно упомянуты) краткий список.
+Пиши по-русски, кратко, без воды.`,
+        },
+        { role: 'user', content: `Диалог:\n\n${dialogText}` },
+      ],
+      max_tokens: 500,
+      temperature: 0.3,
+      thinking: false,
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      return res.status(500).json({ error: `RouterAI error: ${text}` });
+    }
+
+    const data = await response.json();
+    const summary = data.choices?.[0]?.message?.content || '';
+
+    if (summary && db && threadId && userId) {
+      await db.query(
+        `UPDATE user_threads SET summary = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3`,
+        [summary, threadId, userId]
+      );
+
+      const threadRes = await db.query(
+        `SELECT title FROM user_threads WHERE id = $1 AND user_id = $2 LIMIT 1`,
+        [threadId, userId]
+      );
+      const title = threadRes.rows?.[0]?.title || '';
+      const embedding = await generateEmbedding(`${title}\n${summary}`);
+      if (embedding) {
+        await db.query(
+          `UPDATE user_threads SET embedding = $1::vector WHERE id = $2 AND user_id = $3`,
+          [`[${embedding.join(',')}]`, threadId, userId]
+        );
+      }
+    }
+
+    return res.status(200).json({ summary });
+  } catch (err: any) {
+    console.error('[summarize]', err);
+    return res.status(500).json({ error: err.message || 'summarize failed' });
+  }
+});
+
 app.post("/api/chat", async (req, res) => {
   try {
     const { messages, systemInstruction, tools, tool_choice } = req.body;
