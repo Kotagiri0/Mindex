@@ -158,6 +158,53 @@ app.get('/api/config', (_req, res) => {
   });
 });
 
+const SELF_KNOWLEDGE_TEXT = `Я — Мысль, ассистент внутри Mindex. Не универсальный чат-бот — фокус на личной эффективности: мысли, заметки и задачи в одном месте.
+
+Большинство людей используют нейронку для всего подряд, а планировщик отдельно. Здесь всё связано — заметки и задачи читаются как контекст, не нужно переключаться между приложениями. Планировщик с агентом, а не агент с планировщиком. Один из немногих агентных планировщиков — на таком уровне внедрения вообще первый.
+
+Работаю на мощной современной модели. Если спросят напрямую какой — отвечу честно.
+
+Что умею:
+Надиктовал задачу голосом — получил структурированный список. Никакой формы, никаких полей.
+Управление задачами через разговор — перенести, изменить, удалить прямо в чате.
+Brain dump — выгружаешь всё подряд одним сообщением, я структурирую.
+Живая беседа → заметка → действие. Обсуждаешь идеи свободно — открываешь заметку, там всё структурировано. В новом треде просишь раскидать задачи — я уже знаю контекст.
+Архив который думает. Чем дольше пользуешься — тем точнее понимаю тебя.
+
+Что пока не умею: работать с файлами, искать в интернете, интегрироваться с внешними сервисами автоматически.
+
+Конфиденциальность: твои данные хранятся только у тебя.`;
+
+async function createSelfKnowledgeSkill(userId: string) {
+  if (!db) return;
+  try {
+    const id = crypto.randomUUID();
+    await db.query(
+      `INSERT INTO user_threads
+         (id, user_id, title, preview, messages, created_at, updated_at, source, label, summary, is_meaningful)
+       VALUES ($1, $2, $3, $4, '[]'::jsonb, $5, NOW(), 'skill', 'skill:self_knowledge', $6, true)
+       ON CONFLICT DO NOTHING`,
+      [
+        id,
+        userId,
+        'О Мысли',
+        SELF_KNOWLEDGE_TEXT.slice(0, 100),
+        Date.now(),
+        SELF_KNOWLEDGE_TEXT,
+      ]
+    );
+    const embedding = await generateEmbedding(SELF_KNOWLEDGE_TEXT);
+    if (embedding) {
+      await db.query(
+        `UPDATE user_threads SET embedding = $1::vector WHERE id = $2 AND user_id = $3`,
+        [`[${embedding.join(',')}]`, id, userId]
+      );
+    }
+  } catch (e) {
+    console.warn('[skill] createSelfKnowledgeSkill failed:', e);
+  }
+}
+
 const hashPassword = (username: string, password: string) => {
   return crypto
     .createHash("sha256")
@@ -296,6 +343,7 @@ app.post("/api/auth/register", async (req, res) => {
       [userId, username, displayName, passwordHash]
     );
 
+    createSelfKnowledgeSkill(userId);
     return res.status(201).json({
       user: formatAuthUser(result.rows[0]),
     });
@@ -435,6 +483,7 @@ app.post('/api/auth/google', async (req, res) => {
       [userId, username, displayName, payload.sub, email || null, payload.picture || null]
     );
 
+    createSelfKnowledgeSkill(userId);
     return res.status(201).json({ user: formatAuthUser(result.rows[0]) });
   } catch (error: any) {
     console.error('[AUTH][GOOGLE]', error?.message || error);
