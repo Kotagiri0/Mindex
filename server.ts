@@ -978,6 +978,7 @@ app.post("/api/chat", async (req, res) => {
 
     // RAG: inject relevant notes as context
     let finalSystemInstruction = systemInstruction;
+    let ragSources: { title: string }[] = [];
     if (db && userId && Array.isArray(messages) && messages.length > 0) {
       try {
         const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user');
@@ -985,7 +986,7 @@ app.post("/api/chat", async (req, res) => {
           const queryEmbedding = await generateEmbedding(String(lastUserMsg.content));
           if (queryEmbedding) {
             const ragResult = await db.query(
-              `SELECT summary
+              `SELECT title, summary
                FROM user_threads
                WHERE user_id = $1
                  AND is_meaningful = true
@@ -1001,6 +1002,7 @@ app.post("/api/chat", async (req, res) => {
                 .map((r: any) => r.summary)
                 .join('\n---\n');
               finalSystemInstruction = `## Контекст из архива пользователя\n${contextBlock}\n\n---\n\n${systemInstruction}`;
+              ragSources = ragResult.rows.map((r: any) => ({ title: r.title }));
             }
           }
         }
@@ -1032,7 +1034,7 @@ app.post("/api/chat", async (req, res) => {
       throw new Error("RouterAI вернул пустой список вариантов (choices).");
     }
 
-    res.json(data.choices[0].message);
+    res.json({ ...data.choices[0].message, sources: ragSources });
   } catch (error: any) {
     const isTimeout = error?.name === "AbortError";
     const msg = isTimeout

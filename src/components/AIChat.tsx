@@ -24,9 +24,44 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [noteMode, setNoteMode] = useState(false);
+  const [thinkingIdx, setThinkingIdx] = useState(0);
+  const [animatingContent, setAnimatingContent] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const autoSentRef = useRef(false);
+  const animIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevIsTypingRef = useRef(false);
+
+  const THINKING_PHRASES = ['Думаю...', 'Анализирую...', 'Ищу в архиве...', 'Формулирую...', 'Пишу ответ...'];
+
+  useEffect(() => {
+    if (!isTyping) return;
+    const iv = setInterval(() => setThinkingIdx(p => (p + 1) % THINKING_PHRASES.length), 1800);
+    return () => clearInterval(iv);
+  }, [isTyping]);
+
+  useEffect(() => {
+    if (prevIsTypingRef.current && !isTyping) {
+      const visibleMsgs = (thread?.messages || []).filter(m => m.role !== 'tool' && !m.tool_calls);
+      const last = visibleMsgs[visibleMsgs.length - 1];
+      if (last?.role === 'assistant' && last.content) {
+        const fullText = last.content;
+        let i = 0;
+        setAnimatingContent('');
+        if (animIntervalRef.current) clearInterval(animIntervalRef.current);
+        animIntervalRef.current = setInterval(() => {
+          i += 6;
+          if (i >= fullText.length) {
+            clearInterval(animIntervalRef.current!);
+            setAnimatingContent(null);
+          } else {
+            setAnimatingContent(fullText.slice(0, i));
+          }
+        }, 10);
+      }
+    }
+    prevIsTypingRef.current = isTyping;
+  }, [isTyping]);
 
   const { state: voiceState, error: voiceError, startRecording, stopRecording } = useVoiceInput(
     (text) => {
@@ -206,7 +241,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         response = await generateResponse(conversationHistory);
       }
 
-      const assistantMsg: Message = { role: 'assistant', content: response.content || 'Готово!', time: ft() };
+      const assistantMsg: Message = { role: 'assistant', content: response.content || 'Готово!', time: ft(), sources: response.sources };
       if (isFirstMessage) generateTitle(text, assistantMsg.content);
 
       setThreads(prev => prev.map(t => {
