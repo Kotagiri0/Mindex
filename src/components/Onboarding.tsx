@@ -1,124 +1,247 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { ArrowUp, Copy, Check } from 'lucide-react';
+import { db } from '../lib/db';
+import { uuid } from '../lib/utils';
+import { getCurrentUser } from '../lib/auth';
+
+const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const F = "'Random Grotesque', sans-serif";
+
+const AI_PROMPT = `Опиши меня в свободной форме: чем занимаюсь, какие проекты веду, главные цели сейчас, что меня беспокоит, как я принимаю решения. 150-200 слов, без списков, как будто рассказываешь о человеке другу.`;
 
 interface OnboardingProps {
   onComplete: () => void;
 }
 
-const steps = [
-  {
-    emoji: '🧠',
-    label: 'Проблема',
-    title: 'Миллионы пытаются привести мысли в порядок',
-    desc: 'Инструменты продуктивности лишь повышают когнитивную нагрузку вместо того, чтобы снижать её',
-    gradient: 'from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/20'
-  },
-  {
-    emoji: '⚡',
-    label: 'Решение',
-    title: 'Майндекс меняет подход',
-    desc: 'Не очередной планировщик — инструмент эффективности. ИИ организует мысли и действует за тебя',
-    gradient: 'from-purple-100 to-purple-200 dark:from-purple-900/30 dark:to-purple-800/20'
-  },
-  {
-    emoji: '✨',
-    label: 'Добро пожаловать',
-    title: 'Просто скажи, что на уме',
-    desc: 'Майндекс превратит мысли в задачи, напомнит о важном и поможет сфокусироваться на главном',
-    gradient: 'from-cyan-100 to-cyan-200 dark:from-cyan-900/30 dark:to-cyan-800/20'
-  }
-];
-
 export default function Onboarding({ onComplete }: OnboardingProps) {
-  const [step, setStep] = useState(0);
+  const [text, setText] = useState('');
+  const [showAiPrompt, setShowAiPrompt] = useState(false);
+  const [skipped, setSkipped] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const handleNext = () => {
-    if (step < steps.length - 1) {
-      setStep(step + 1);
-    } else {
+  const handleSubmit = async () => {
+    const content = text.trim();
+    if (!content || loading) return;
+
+    setLoading(true);
+    try {
+      const userId = getCurrentUser()?.id;
+      const threadId = uuid();
+      const now = Date.now();
+      const timeStr = new Date().toTimeString().slice(0, 5);
+
+      const thread = {
+        id: threadId,
+        title: 'О себе',
+        preview: content.slice(0, 100),
+        messages: [{ role: 'user' as const, content, time: timeStr }],
+        createdAt: now,
+        source: 'заметка' as const,
+        is_meaningful: true,
+        summary: content,
+      };
+
+      await db.saveThread(thread);
+
+      if (userId) {
+        fetch('/api/summarize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: thread.messages, threadId, userId }),
+        }).catch(() => {});
+      }
+    } catch (e) {
+      console.error('[onboarding]', e);
+    } finally {
+      setLoading(false);
       onComplete();
     }
   };
 
-  return (
-    <div className="flex flex-col h-full bg-bg transition-colors duration-300">
-      <div className="safe-top flex-shrink-0" />
-      
-      <div className="flex-1 relative overflow-hidden">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={step}
-            initial={{ opacity: 0, x: 28 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -28 }}
-            transition={{ duration: 0.32, ease: [0.4, 0, 0.2, 1] }}
-            className="absolute inset-0 flex flex-col justify-center items-center px-7"
+  const handleCopy = () => {
+    navigator.clipboard.writeText(AI_PROMPT).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    }).catch(() => {});
+  };
+
+  // Path C — skip view
+  if (skipped) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f0f0f0', alignItems: 'center', justifyContent: 'center', padding: '0 28px' }}>
+        <div style={{ height: 'env(safe-area-inset-top, 0px)' }} />
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          style={{ background: '#ffffff', borderRadius: 20, padding: '20px 20px 16px', width: '100%', maxWidth: 400 }}
+        >
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 18 }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: '50%', background: '#0B0D10', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <span style={{ color: '#fff', fontSize: 15 }}>✳</span>
+            </div>
+            <div style={{ fontFamily: M, fontSize: 15, color: '#222224', lineHeight: 1.65 }}>
+              Я Мысль — помогаю с задачами, заметками и планами. Всё что ты обсуждаешь со мной — сохраняется и помогает мне понимать тебя лучше со временем. Можешь добавлять задачи голосом, выгружать хаос из головы или просто думать вслух.
+            </div>
+          </div>
+          <motion.button
+            whileTap={{ scale: 0.96 }}
+            onClick={onComplete}
+            style={{
+              width: '100%', padding: '13px 0', background: '#0B0D10', color: '#ffffff',
+              border: 'none', borderRadius: 13, fontFamily: M, fontSize: 15, fontWeight: 500,
+              cursor: 'pointer',
+            }}
           >
-            <motion.div 
-              className={`w-[100px] h-[100px] rounded-[28px] mb-7 flex items-center justify-center text-[46px] bg-gradient-to-br ${steps[step].gradient} shadow-lg`}
-              whileHover={{ scale: 1.05 }}
-              transition={{ duration: 0.2 }}
-            >
-              {steps[step].emoji}
-            </motion.div>
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.1 }}
-              className="text-[12px] font-bold tracking-[1.5px] uppercase text-accent mb-2.5"
-            >
-              {steps[step].label}
-            </motion.div>
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="text-[24px] font-extrabold text-text-primary text-center leading-[1.25] mb-2.5"
-            >
-              {steps[step].title}
-            </motion.div>
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.3 }}
-              className="text-[15px] text-text-secondary text-center leading-relaxed"
-            >
-              {steps[step].desc}
-            </motion.div>
-          </motion.div>
-        </AnimatePresence>
+            Продолжить
+          </motion.button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Path A / B — main view
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f0f0f0' }}>
+      <div style={{ height: 'env(safe-area-inset-top, 0px)' }} />
+
+      {/* Upper spacer */}
+      <div style={{ flex: '0 0 16%' }} />
+
+      {/* Logo */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 28 }}>
+        <motion.div
+          initial={{ scale: 0.7, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+          style={{
+            width: 64, height: 64, borderRadius: '50%', background: '#0B0D10',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <span style={{ color: '#fff', fontSize: 28 }}>✳</span>
+        </motion.div>
       </div>
 
-      <div className="px-5 pb-[calc(28px+env(safe-area-inset-bottom,0px))] flex flex-col items-center gap-3 flex-shrink-0">
-        <div className="flex gap-1.5 mb-2">
-          {steps.map((_, i) => (
-            <motion.div
-              key={i}
-              animate={{ 
-                width: i === step ? 22 : 6,
-                backgroundColor: i === step ? 'var(--accent)' : 'var(--border)'
-              }}
-              transition={{ duration: 0.3 }}
-              className="h-1.5 rounded-full"
-            />
-          ))}
+      {/* Heading */}
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        style={{ textAlign: 'center', padding: '0 28px', marginBottom: 8 }}
+      >
+        <div style={{ fontFamily: F, fontSize: 26, color: '#222224', lineHeight: 1.15, marginBottom: 8 }}>
+          Скажи пару слов о себе
         </div>
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={handleNext}
-          className="w-full h-[52px] bg-gradient-to-r from-accent to-accent/90 text-white rounded-[15px] font-bold text-[16px] active:opacity-85 transition-opacity shadow-lg hover:shadow-xl"
-        >
-          {step === steps.length - 1 ? 'Начать →' : 'Далее →'}
-        </motion.button>
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          onClick={onComplete}
-          className="bg-none border-none text-[14px] text-text-tertiary cursor-pointer p-1 hover:text-text-secondary transition-colors"
-        >
-          Пропустить
-        </motion.button>
-      </div>
+        <div style={{ fontFamily: M, fontSize: 15, color: 'rgba(34,34,36,0.45)' }}>
+          Расскажи о себе — буду помогать точнее
+        </div>
+      </motion.div>
+
+      <div style={{ flex: 1 }} />
+
+      {/* Bottom card */}
+      <motion.div
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.18 }}
+        style={{ background: '#ffffff', borderRadius: '20px 20px 0 0', padding: '18px 20px 0' }}
+      >
+        {/* Path B — AI prompt block */}
+        <AnimatePresence>
+          {showAiPrompt && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.22 }}
+              style={{ overflow: 'hidden' }}
+            >
+              <div style={{ background: '#f5f5f5', borderRadius: 12, padding: '12px 14px', marginBottom: 12 }}>
+                <div style={{ fontFamily: M, fontSize: 13, color: '#444', lineHeight: 1.55, marginBottom: 10 }}>
+                  {AI_PROMPT}
+                </div>
+                <button
+                  onClick={handleCopy}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    background: 'none', border: '1px solid rgba(34,34,36,0.15)', borderRadius: 8,
+                    padding: '6px 12px', cursor: 'pointer', fontFamily: M, fontSize: 13, color: '#444',
+                  }}
+                >
+                  {copied ? <Check size={13} /> : <Copy size={13} />}
+                  {copied ? 'Скопировано' : 'Скопировать'}
+                </button>
+              </div>
+              <div style={{ fontFamily: M, fontSize: 12, color: 'rgba(34,34,36,0.4)', marginBottom: 10 }}>
+                Вставь в нейронку, которой пользуешься, и пришли сюда результат
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Textarea */}
+        <textarea
+          autoFocus
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmit();
+          }}
+          placeholder="Напиши пару слов о себе..."
+          rows={4}
+          style={{
+            width: '100%', border: 'none', outline: 'none', background: 'transparent',
+            fontFamily: M, fontSize: 15, color: '#222224', lineHeight: 1.65,
+            resize: 'none', display: 'block', boxSizing: 'border-box',
+          }}
+        />
+
+        {/* Actions row */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0 4px' }}>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <button
+              onClick={() => setShowAiPrompt(v => !v)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: M, fontSize: 13, color: 'rgba(34,34,36,0.4)', padding: 0 }}
+            >
+              Пусть нейронка расскажет
+            </button>
+            <button
+              onClick={() => setSkipped(true)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: M, fontSize: 13, color: 'rgba(34,34,36,0.3)', padding: 0 }}
+            >
+              Пропустить
+            </button>
+          </div>
+
+          <AnimatePresence>
+            {text.trim() && (
+              <motion.button
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0, opacity: 0 }}
+                whileTap={{ scale: 0.88 }}
+                onClick={handleSubmit}
+                disabled={loading}
+                style={{
+                  width: 40, height: 40, borderRadius: '50%', background: '#0B0D10',
+                  border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0, opacity: loading ? 0.5 : 1, transition: 'opacity 0.15s',
+                }}
+              >
+                <ArrowUp size={17} color="#fff" strokeWidth={2} />
+              </motion.button>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <div style={{ height: 'max(20px, env(safe-area-inset-bottom, 20px))' }} />
+      </motion.div>
     </div>
   );
 }
