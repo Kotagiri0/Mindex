@@ -1,5 +1,6 @@
 import { Task, Thread, Settings, LocalProfile } from '../types';
 import { getCurrentUser } from './auth';
+import { deleteGoogleCalendarEvent, syncGoogleCalendarTask } from './google-calendar';
 import { storage } from './storage';
 
 const getUserId = () => getCurrentUser()?.id;
@@ -18,6 +19,31 @@ const defaultProfile = (): LocalProfile => ({
   onboarding_complete: false,
   updated_at: new Date().toISOString(),
 });
+
+const persistTask = async (userId: string, task: Task) => {
+  const tasks = storage.getTasks(userId);
+  const index = tasks.findIndex((item) => item.id === task.id);
+  if (index >= 0) tasks[index] = task;
+  else tasks.unshift(task);
+  storage.setTasks(userId, tasks);
+
+  try {
+    await request<{ success: boolean }>(`${apiBase()}/task`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, task }),
+    });
+  } catch {
+    // Local fallback already saved.
+  }
+};
+
+const mergeStoredCalendarEvent = (userId: string, task: Task) => {
+  if (task.calendarEventId) return task;
+  const stored = storage.getTasks(userId).find((item) => item.id === task.id);
+  if (!stored?.calendarEventId) return task;
+  return { ...task, calendarEventId: stored.calendarEventId };
+};
 
 export const db = {
   getUserId: () => getCurrentUser()?.id,
@@ -147,26 +173,26 @@ export const db = {
     }
   },
   
-  saveTask: async (task: Task) => {
+  saveTask: async (task: Task, options?: { skipCalendarSync?: boolean }) => {
     const userId = getUserId();
     if (!userId) {
       return;
     }
 
-    const tasks = storage.getTasks(userId);
-    const index = tasks.findIndex((item) => item.id === task.id);
-    if (index >= 0) tasks[index] = task;
-    else tasks.unshift(task);
-    storage.setTasks(userId, tasks);
+    const baseTask = mergeStoredCalendarEvent(userId, task);
+    await persistTask(userId, baseTask);
+
+    if (options?.skipCalendarSync) {
+      return;
+    }
 
     try {
-      await request<{ success: boolean }>(`${apiBase()}/task`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, task }),
-      });
-    } catch {
-      // Local fallback already saved.
+      const syncedTask = await syncGoogleCalendarTask(baseTask);
+      if (syncedTask?.calendarEventId && syncedTask.calendarEventId !== baseTask.calendarEventId) {
+        await persistTask(userId, syncedTask);
+      }
+    } catch (error) {
+      console.warn('[GCAL] Sync failed for task', { userId, taskId: baseTask.id, error });
     }
   },
   
@@ -176,7 +202,17 @@ export const db = {
       return;
     }
 
-    const tasks = storage.getTasks(userId).filter((task) => task.id !== id);
+    const storedTasks = storage.getTasks(userId);
+    const existing = storedTasks.find((task) => task.id === id);
+    if (existing?.calendarEventId) {
+      try {
+        await deleteGoogleCalendarEvent(existing.calendarEventId);
+      } catch {
+        // Ignore calendar delete failures.
+      }
+    }
+
+    const tasks = storedTasks.filter((task) => task.id !== id);
     storage.setTasks(userId, tasks);
 
     try {

@@ -13,6 +13,7 @@ export interface Task {
   threadId?: string;
   type?: 'regular' | 'thought';
   subtasks?: SubTask[];
+  calendarEventId?: string;
 }
 
 export interface Message {

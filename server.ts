@@ -59,6 +59,35 @@ const httpRequestsInFlight = new Gauge({
   registers: [metricsRegistry],
 });
 
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 120;
+const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+
+const dataRateLimit = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const key = `${req.ip || "unknown"}:${req.path}`;
+  const now = Date.now();
+  if (rateLimitBuckets.size > 1000) {
+    for (const [bucketKey, bucketValue] of rateLimitBuckets) {
+      if (bucketValue.resetAt <= now) {
+        rateLimitBuckets.delete(bucketKey);
+      }
+    }
+  }
+  const bucket = rateLimitBuckets.get(key);
+
+  if (!bucket || bucket.resetAt <= now) {
+    rateLimitBuckets.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return next();
+  }
+
+  bucket.count += 1;
+  if (bucket.count > RATE_LIMIT_MAX) {
+    return res.status(429).json({ error: "Слишком много запросов. Попробуй чуть позже." });
+  }
+
+  return next();
+};
+
 const getRouteLabel = (req: express.Request) => {
   if (req.route?.path) {
     const routePath = typeof req.route.path === "string" ? req.route.path : req.path;
@@ -222,11 +251,14 @@ const ensureAuthSchema = async () => {
       date TEXT NOT NULL,
       done BOOLEAN NOT NULL DEFAULT FALSE,
       type TEXT NOT NULL DEFAULT 'regular',
+      calendar_event_id TEXT,
       subtasks JSONB NOT NULL DEFAULT '[]',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS calendar_event_id TEXT;`);
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS user_threads (
@@ -445,7 +477,7 @@ app.get("/api/data/bootstrap", async (req, res) => {
       ),
       db.query(
         `
-          SELECT id, name, time, date, done, type, subtasks
+          SELECT id, name, time, date, done, type, calendar_event_id, subtasks
           FROM user_tasks
           WHERE user_id = $1
           ORDER BY updated_at DESC, created_at DESC
@@ -480,6 +512,7 @@ app.get("/api/data/bootstrap", async (req, res) => {
         date: row.date,
         done: row.done,
         type: row.type || "regular",
+        calendarEventId: row.calendar_event_id || undefined,
         subtasks: row.subtasks || [],
       })),
       threads: threadsRes.rows.map((row) => ({
@@ -495,7 +528,7 @@ app.get("/api/data/bootstrap", async (req, res) => {
   }
 });
 
-app.post("/api/data/profile", async (req, res) => {
+app.post("/api/data/profile", dataRateLimit, async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }
@@ -528,7 +561,7 @@ app.post("/api/data/profile", async (req, res) => {
   }
 });
 
-app.post("/api/data/task", async (req, res) => {
+app.post("/api/data/task", dataRateLimit, async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }
@@ -540,10 +573,10 @@ app.post("/api/data/task", async (req, res) => {
   }
 
   try {
-    await db.query(
-      `
-        INSERT INTO user_tasks (id, user_id, name, time, date, done, type, subtasks, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, NOW())
+      await db.query(
+        `
+        INSERT INTO user_tasks (id, user_id, name, time, date, done, type, calendar_event_id, subtasks, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, NOW())
         ON CONFLICT (id)
         DO UPDATE SET
           user_id = EXCLUDED.user_id,
@@ -552,6 +585,7 @@ app.post("/api/data/task", async (req, res) => {
           date = EXCLUDED.date,
           done = EXCLUDED.done,
           type = EXCLUDED.type,
+          calendar_event_id = EXCLUDED.calendar_event_id,
           subtasks = EXCLUDED.subtasks,
           updated_at = NOW()
       `,
@@ -563,6 +597,7 @@ app.post("/api/data/task", async (req, res) => {
         String(task.date),
         Boolean(task.done),
         String(task.type || "regular"),
+        task.calendarEventId ? String(task.calendarEventId) : null,
         JSON.stringify(task.subtasks || []),
       ]
     );
@@ -572,7 +607,7 @@ app.post("/api/data/task", async (req, res) => {
   }
 });
 
-app.delete("/api/data/task/:id", async (req, res) => {
+app.delete("/api/data/task/:id", dataRateLimit, async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }
@@ -591,7 +626,7 @@ app.delete("/api/data/task/:id", async (req, res) => {
   }
 });
 
-app.post("/api/data/thread", async (req, res) => {
+app.post("/api/data/thread", dataRateLimit, async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }
@@ -631,7 +666,7 @@ app.post("/api/data/thread", async (req, res) => {
   }
 });
 
-app.delete("/api/data/thread/:id", async (req, res) => {
+app.delete("/api/data/thread/:id", dataRateLimit, async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }
