@@ -18,6 +18,8 @@ type TokenClient = {
   callback?: (response: GoogleTokenResponse) => void;
 };
 
+type GooglePrompt = 'consent' | 'none' | 'select_account';
+
 const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 const CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3';
 const TOKEN_TTL_BUFFER_MS = 60_000;
@@ -75,8 +77,8 @@ const fetchGoogleClientId = async () => {
     if (!response.ok) {
       return '';
     }
-    const data = await response.json().catch(() => {
-      console.warn('[GCAL] Не удалось разобрать ответ /api/config.');
+    const data = await response.json().catch((error) => {
+      console.warn(`[GCAL] Не удалось разобрать ответ /api/config (status ${response.status}).`, error);
       return null;
     }) as { googleClientId?: string } | null;
     cachedClientId = data?.googleClientId || '';
@@ -135,7 +137,7 @@ const getTokenClient = async (): Promise<TokenClient> => {
   return tokenClient;
 };
 
-const requestAccessToken = async (prompt: string): Promise<StoredToken | null> => {
+const requestAccessToken = async (prompt: GooglePrompt): Promise<StoredToken | null> => {
   const userId = getCurrentUser()?.id;
   if (!userId) return null;
 
@@ -201,7 +203,7 @@ const ensureGoogleCalendarToken = async (): Promise<string | null> => {
     clearToken(userId);
   }
 
-  const silent = await requestAccessToken(hadStoredToken ? '' : 'consent');
+  const silent = await requestAccessToken(hadStoredToken ? 'none' : 'consent');
   if (silent?.accessToken) {
     return silent.accessToken;
   }
@@ -285,6 +287,26 @@ const calendarRequest = async (path: string, method: string, accessToken: string
   return response;
 };
 
+const createCalendarEvent = async (accessToken: string, payload: object) => {
+  const response = await calendarRequest('/calendars/primary/events', 'POST', accessToken, payload);
+  if (response.status === 401 || response.status === 403) {
+    const userId = getCurrentUser()?.id;
+    if (userId) clearToken(userId);
+    return null;
+  }
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    console.warn(`[GCAL] Ошибка создания события: ${response.status} ${text}`);
+    return null;
+  }
+  const data = await response.json().catch(() => null) as { id?: string } | null;
+  if (!data?.id) {
+    console.warn('[GCAL] Ответ создания события без id.');
+    return null;
+  }
+  return data.id;
+};
+
 export const syncGoogleCalendarTask = async (task: Task): Promise<Task | null> => {
   const accessToken = await ensureGoogleCalendarToken();
   if (!accessToken) return null;
@@ -301,11 +323,9 @@ export const syncGoogleCalendarTask = async (task: Task): Promise<Task | null> =
     );
 
     if (response.status === 404) {
-      const createResponse = await calendarRequest('/calendars/primary/events', 'POST', accessToken, payload);
-      if (!createResponse.ok) return null;
-      const data = await createResponse.json().catch(() => null) as { id?: string } | null;
-      if (!data?.id) return null;
-      return { ...task, calendarEventId: data.id };
+      const eventId = await createCalendarEvent(accessToken, payload);
+      if (!eventId) return null;
+      return { ...task, calendarEventId: eventId };
     }
 
     if (response.status === 401 || response.status === 403) {
@@ -320,18 +340,9 @@ export const syncGoogleCalendarTask = async (task: Task): Promise<Task | null> =
     return null;
   }
 
-  const createResponse = await calendarRequest('/calendars/primary/events', 'POST', accessToken, payload);
-  if (createResponse.status === 401 || createResponse.status === 403) {
-    const userId = getCurrentUser()?.id;
-    if (userId) clearToken(userId);
-    return null;
-  }
-  if (!createResponse.ok) {
-    return null;
-  }
-  const data = await createResponse.json().catch(() => null) as { id?: string } | null;
-  if (!data?.id) return null;
-  return { ...task, calendarEventId: data.id };
+  const eventId = await createCalendarEvent(accessToken, payload);
+  if (!eventId) return null;
+  return { ...task, calendarEventId: eventId };
 };
 
 export const deleteGoogleCalendarEvent = async (eventId: string) => {

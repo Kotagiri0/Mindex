@@ -191,8 +191,8 @@ export const db = {
       if (syncedTask?.calendarEventId && syncedTask.calendarEventId !== baseTask.calendarEventId) {
         await persistTask(userId, syncedTask);
       }
-    } catch {
-      // Sync is optional; keep local task saved even if calendar fails.
+    } catch (error) {
+      console.warn('[GCAL] Sync failed for task', { userId, taskId: baseTask.id, error });
     }
   },
   

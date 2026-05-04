@@ -63,7 +63,7 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 120;
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
-const taskRateLimit = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+const dataRateLimit = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const key = `${req.ip || "unknown"}:${req.path}`;
   const now = Date.now();
   const bucket = rateLimitBuckets.get(key);
@@ -521,7 +521,7 @@ app.get("/api/data/bootstrap", async (req, res) => {
   }
 });
 
-app.post("/api/data/profile", async (req, res) => {
+app.post("/api/data/profile", dataRateLimit, async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }
@@ -554,7 +554,7 @@ app.post("/api/data/profile", async (req, res) => {
   }
 });
 
-app.post("/api/data/task", taskRateLimit, async (req, res) => {
+app.post("/api/data/task", dataRateLimit, async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }
@@ -600,7 +600,7 @@ app.post("/api/data/task", taskRateLimit, async (req, res) => {
   }
 });
 
-app.delete("/api/data/task/:id", taskRateLimit, async (req, res) => {
+app.delete("/api/data/task/:id", dataRateLimit, async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }
@@ -619,7 +619,7 @@ app.delete("/api/data/task/:id", taskRateLimit, async (req, res) => {
   }
 });
 
-app.post("/api/data/thread", async (req, res) => {
+app.post("/api/data/thread", dataRateLimit, async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }
@@ -659,7 +659,7 @@ app.post("/api/data/thread", async (req, res) => {
   }
 });
 
-app.delete("/api/data/thread/:id", async (req, res) => {
+app.delete("/api/data/thread/:id", dataRateLimit, async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }
