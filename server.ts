@@ -66,6 +66,13 @@ const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 const dataRateLimit = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const key = `${req.ip || "unknown"}:${req.path}`;
   const now = Date.now();
+  if (rateLimitBuckets.size > 1000) {
+    for (const [bucketKey, bucketValue] of rateLimitBuckets) {
+      if (bucketValue.resetAt <= now) {
+        rateLimitBuckets.delete(bucketKey);
+      }
+    }
+  }
   const bucket = rateLimitBuckets.get(key);
 
   if (!bucket || bucket.resetAt <= now) {

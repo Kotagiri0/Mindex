@@ -23,6 +23,7 @@ type GooglePrompt = 'consent' | 'none' | 'select_account';
 const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 const CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3';
 const TOKEN_TTL_BUFFER_MS = 60_000;
+const DEFAULT_EVENT_DURATION_MINUTES = 60;
 const TOKEN_STORAGE_PREFIX = 'mx_google_calendar_token_';
 
 let googleScriptPromise: Promise<void> | null = null;
@@ -157,7 +158,11 @@ const requestAccessToken = async (prompt: GooglePrompt): Promise<StoredToken | n
     expiresAt: Date.now() + (response.expires_in ?? 3600) * 1000,
   };
 
-  storeToken(userId, token);
+  const activeUserId = getCurrentUser()?.id;
+  if (!activeUserId || activeUserId !== userId) {
+    return null;
+  }
+  storeToken(activeUserId, token);
   return token;
 };
 
@@ -173,23 +178,7 @@ export const connectGoogleCalendar = async () => {
   return Boolean(token);
 };
 
-const getStoredAccessToken = () => {
-  const userId = getCurrentUser()?.id;
-  if (!userId) return null;
-
-  const stored = readStoredToken(userId);
-  if (stored && isTokenValid(stored)) {
-    return stored.accessToken;
-  }
-
-  if (stored && !isTokenValid(stored)) {
-    clearToken(userId);
-  }
-
-  return null;
-};
-
-const ensureGoogleCalendarToken = async (): Promise<string | null> => {
+const ensureGoogleCalendarToken = async (options: { allowPrompt?: boolean } = {}): Promise<string | null> => {
   const userId = getCurrentUser()?.id;
   if (!userId) return null;
 
@@ -203,17 +192,20 @@ const ensureGoogleCalendarToken = async (): Promise<string | null> => {
     clearToken(userId);
   }
 
-  const silent = await requestAccessToken(hadStoredToken ? 'none' : 'consent');
-  if (silent?.accessToken) {
-    return silent.accessToken;
-  }
-
+  const { allowPrompt = true } = options;
   if (hadStoredToken) {
-    const consent = await requestAccessToken('consent');
-    return consent?.accessToken ?? null;
+    const silent = await requestAccessToken('none');
+    if (silent?.accessToken) {
+      return silent.accessToken;
+    }
   }
 
-  return null;
+  if (!allowPrompt) {
+    return null;
+  }
+
+  const consent = await requestAccessToken('consent');
+  return consent?.accessToken ?? null;
 };
 
 const formatOffset = (offsetMinutes: number) => {
@@ -259,7 +251,7 @@ const buildEventPayload = (task: Task) => {
   const [hour, minute] = task.time.split(':').map(Number);
   const [year, month, day] = task.date.split('-').map(Number);
   const endDate = new Date(year, month - 1, day, hour, minute, 0, 0);
-  endDate.setMinutes(endDate.getMinutes() + 60);
+  endDate.setMinutes(endDate.getMinutes() + DEFAULT_EVENT_DURATION_MINUTES);
   const end = buildDateTime(
     `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`,
     `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`,
@@ -346,7 +338,7 @@ export const syncGoogleCalendarTask = async (task: Task): Promise<Task | null> =
 };
 
 export const deleteGoogleCalendarEvent = async (eventId: string) => {
-  const accessToken = getStoredAccessToken();
+  const accessToken = await ensureGoogleCalendarToken({ allowPrompt: false });
   if (!accessToken) return;
 
   const response = await calendarRequest(
