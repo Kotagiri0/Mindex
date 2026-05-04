@@ -3,13 +3,14 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Sun, Calendar, MessageCircle, Settings as SettingsIcon,
   Plus, ChevronDown, ArrowUp, Search, Check, Mic, Loader,
-  PanelLeftOpen, PanelLeftClose,
+  PanelLeftOpen, PanelLeftClose, Pencil, Copy, MoreHorizontal, X,
 } from 'lucide-react';
-import { Task, Thread, Settings as SettingsType, Screen } from '../types';
+import { Task, Thread, Message, Settings as SettingsType, Screen } from '../types';
 import AddTaskModal from './AddTaskModal';
 import EditTaskModal from './EditTaskModal';
 import SettingsScreen from './Settings';
 import NoteView from './NoteView';
+import NoteEditor from './NoteEditor';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
@@ -298,7 +299,7 @@ function TaskRow({
 
 // ─── Thread dropdown menu (правка №4) ─────────────────────────────────────────
 
-function ThreadMenu({ onDelete }: { onDelete: () => void }) {
+function ThreadMenu({ onDelete, onRename }: { onDelete: () => void; onRename: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -331,9 +332,22 @@ function ThreadMenu({ onDelete }: { onDelete: () => void }) {
           borderRadius: 10,
           boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
           zIndex: 50,
-          minWidth: 130,
+          minWidth: 140,
           overflow: 'hidden',
         }}>
+          <button
+            onClick={e => { e.stopPropagation(); onRename(); setOpen(false); }}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none',
+              padding: '10px 16px', textAlign: 'left', cursor: 'pointer',
+              fontFamily: M, fontSize: 14, color: 'var(--text-primary)',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.04)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+          >
+            <Pencil size={13} strokeWidth={1.75} />
+            Переименовать
+          </button>
           <button
             onClick={e => { e.stopPropagation(); onDelete(); setOpen(false); }}
             style={{
@@ -565,16 +579,49 @@ function ChatView({
   onInitialConsumed?: () => void;
   onNetworkError?: () => void;
 }) {
+  const THINKING_PHRASES = ['Думаю...', 'Анализирую...', 'Ищу в архиве...', 'Формулирую...', 'Пишу ответ...'];
+
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [thinkingIdx, setThinkingIdx] = useState(0);
+  const [animatingContent, setAnimatingContent] = useState<string | null>(null);
+  const [replyQuote, setReplyQuote] = useState<string | null>(null);
+  const [openMsgMenuIdx, setOpenMsgMenuIdx] = useState<number | null>(null);
+  const [hoveredMsgIdx, setHoveredMsgIdx] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const didAutoSend = useRef(false);
+  const animIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevIsTypingRef = useRef(false);
 
   const thread = threads.find(t => t.id === threadId);
+  const threadRef = useRef(thread);
+  threadRef.current = thread;
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [thread?.messages, isTyping]);
+
+  // Summarize on unmount if thread has enough content and no summary
+  useEffect(() => {
+    return () => {
+      const t = threadRef.current;
+      const userId = db.getUserId();
+      if (!userId || !t || t.summary) return;
+      const userMsgs = t.messages.filter((m: any) => m.role === 'user');
+      if (userMsgs.length < 2) return;
+      fetch('/api/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: t.messages, threadId: t.id, userId }),
+      }).then(r => r.json()).then(({ summary }) => {
+        if (summary) {
+          setThreads((prev: Thread[]) => prev.map(p =>
+            p.id === t.id ? { ...p, summary, is_meaningful: true } : p
+          ));
+        }
+      }).catch(() => {});
+    };
+  }, []);
 
   useEffect(() => {
     if (initialMessage && !didAutoSend.current) {
@@ -583,6 +630,35 @@ function ChatView({
       sendMessage(initialMessage);
     }
   }, []);
+
+  useEffect(() => {
+    if (!isTyping) return;
+    const iv = setInterval(() => setThinkingIdx(p => (p + 1) % THINKING_PHRASES.length), 1800);
+    return () => clearInterval(iv);
+  }, [isTyping]);
+
+  useEffect(() => {
+    if (prevIsTypingRef.current && !isTyping) {
+      const visibleMsgs = (thread?.messages || []).filter(m => m.role !== 'tool' && !m.tool_calls);
+      const last = visibleMsgs[visibleMsgs.length - 1];
+      if (last?.role === 'assistant' && last.content) {
+        const fullText = last.content;
+        let i = 0;
+        setAnimatingContent('');
+        if (animIntervalRef.current) clearInterval(animIntervalRef.current);
+        animIntervalRef.current = setInterval(() => {
+          i += 6;
+          if (i >= fullText.length) {
+            clearInterval(animIntervalRef.current!);
+            setAnimatingContent(null);
+          } else {
+            setAnimatingContent(fullText.slice(0, i));
+          }
+        }, 10);
+      }
+    }
+    prevIsTypingRef.current = isTyping;
+  }, [isTyping]);
 
   if (!thread) return null;
 
@@ -601,6 +677,51 @@ function ChatView({
         return u;
       }));
     } catch { /* не критично */ }
+  };
+
+  const saveMessageAsNote = (content: string) => {
+    const noteId = uuid();
+    const note: Thread = {
+      id: noteId,
+      title: content.trim().slice(0, 40) || 'Заметка',
+      preview: content.trim().slice(0, 100),
+      messages: [],
+      createdAt: Date.now(),
+      source: 'заметка' as const,
+      is_meaningful: true,
+      summary: content.trim(),
+    };
+    db.saveThread(note);
+    setThreads((prev: Thread[]) => [note, ...(Array.isArray(prev) ? prev : [])]);
+    const userId = db.getUserId();
+    if (userId) {
+      fetch('/api/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId }),
+      }).catch(() => {});
+    }
+  };
+
+  const deleteMessage = (msg: Message) => {
+    setThreads((prev: Thread[]) => prev.map(t => {
+      if (t.id !== threadId) return t;
+      const newMessages = t.messages.filter(m => m !== msg);
+      const updated = { ...t, messages: newMessages };
+      db.saveThread(updated);
+      return updated;
+    }));
+  };
+
+  const handleSend = () => {
+    const text = input.trim();
+    if (!text || isTyping) return;
+    const finalText = replyQuote
+      ? `[Ответ на: "${replyQuote.length > 100 ? replyQuote.slice(0, 100) + '...' : replyQuote}"]\n${text}`
+      : text;
+    setInput('');
+    setReplyQuote(null);
+    sendMessage(finalText);
   };
 
   const sendMessage = async (text: string) => {
@@ -657,6 +778,30 @@ function ChatView({
             setTasks(prev => (Array.isArray(prev) ? prev : []).filter(t => t.id !== args.id));
             db.deleteTask(args.id);
             result = { status: 'success' };
+          } else if (name === 'save_as_note') {
+            const { content, title } = args;
+            const noteId = uuid();
+            const savedNote: Thread = {
+              id: noteId,
+              title: (title || content.trim().slice(0, 40)) || 'Заметка',
+              preview: content.trim().slice(0, 100),
+              messages: [],
+              createdAt: Date.now(),
+              source: 'заметка' as const,
+              is_meaningful: true,
+              summary: content.trim(),
+            };
+            db.saveThread(savedNote);
+            setThreads(prev => [savedNote, ...(Array.isArray(prev) ? prev : [])]);
+            const userId = db.getUserId();
+            if (userId) {
+              fetch('/api/summarize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId }),
+              }).catch(() => {});
+            }
+            result = { status: 'success', noteId };
           } else if (name === 'start_planning') {
             const planningMsg = {
               role: 'assistant' as const,
@@ -680,7 +825,7 @@ function ChatView({
         response = await generateResponse(history);
       }
 
-      const finalMsg = { role: 'assistant' as const, content: response.content || 'Готово!', reasoning_content: response.reasoning_content, time: nowTime() };
+      const finalMsg = { role: 'assistant' as const, content: response.content || 'Готово!', reasoning_content: response.reasoning_content, time: nowTime(), sources: response.sources };
       setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
         if (t.id === threadId) {
           const hasUser = t.messages.some(m => m.role === 'user' && m.content === userMsg.content && m.time === userMsg.time);
@@ -820,10 +965,20 @@ function ChatView({
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', paddingTop: 32, paddingBottom: 16 }}>
         <div style={{ ...CC, display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {openMsgMenuIdx !== null && (
+            <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => setOpenMsgMenuIdx(null)} />
+          )}
+
           {visible.map((m, i) => {
             const realIdx = thread.messages.indexOf(m);
+            const isLast = i === visible.length - 1;
+            const showAnimated = isLast && m.role === 'assistant' && animatingContent !== null;
+            const showActions = hoveredMsgIdx === i;
             return (
-              <div key={i} style={{
+              <div key={i}
+                onMouseEnter={() => m.role === 'assistant' && setHoveredMsgIdx(i)}
+                onMouseLeave={() => setHoveredMsgIdx(null)}
+                style={{
                 display: 'flex', flexDirection: 'column',
                 alignItems: m.role === 'user' ? 'flex-end' : 'flex-start',
                 alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
@@ -837,7 +992,10 @@ function ChatView({
                   </div>
                 ) : (
                   <div style={{ width: '100%' }}>
-                    <MarkdownText text={m.content} style={{ fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.75 }} />
+                    {showAnimated
+                      ? <span style={{ fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>{animatingContent}</span>
+                      : <MarkdownText text={m.content} style={{ fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.75 }} />
+                    }
 
                     {/* Planning: questionnaire */}
                     {m.planning_data?.status === 'questionnaire' && (
@@ -900,19 +1058,132 @@ function ChatView({
                         </div>
                       </div>
                     )}
+                    {m.sources && m.sources.length > 0 && !showAnimated && (
+                      <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                        <div style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)', marginBottom: 6, letterSpacing: '0.05em', textTransform: 'uppercase' as const }}>
+                          Из архива
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                          {m.sources.map((s: { title: string }, si: number) => (
+                            <span key={si} style={{
+                              fontFamily: M, fontSize: 12, color: 'var(--text-muted)',
+                              background: 'rgba(0,0,0,0.05)', borderRadius: 6, padding: '3px 8px',
+                            }}>
+                              {s.title}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 <span style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)' }}>{m.time}</span>
+
+                {/* Action panel — assistant messages only */}
+                {m.role === 'assistant' && !showAnimated && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    width: '100%', marginTop: 2,
+                    opacity: showActions ? 1 : 0,
+                    transition: 'opacity 0.15s',
+                    position: 'relative',
+                  }}>
+                    <button
+                      onClick={() => navigator.clipboard?.writeText(m.content)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#bbb', display: 'flex', alignItems: 'center', transition: 'color 0.12s' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = '#555')}
+                      onMouseLeave={e => (e.currentTarget.style.color = '#bbb')}
+                    >
+                      <Copy size={14} strokeWidth={1.5} />
+                    </button>
+
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        onClick={() => setOpenMsgMenuIdx(openMsgMenuIdx === i ? null : i)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#bbb', display: 'flex', alignItems: 'center', transition: 'color 0.12s' }}
+                        onMouseEnter={e => (e.currentTarget.style.color = '#555')}
+                        onMouseLeave={e => (e.currentTarget.style.color = '#bbb')}
+                      >
+                        <MoreHorizontal size={14} strokeWidth={1.5} />
+                      </button>
+
+                      <AnimatePresence>
+                        {openMsgMenuIdx === i && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                            transition={{ duration: 0.12 }}
+                            style={{
+                              position: 'absolute', right: 0, bottom: '100%', marginBottom: 4,
+                              background: '#fff', border: '1px solid #ebebeb',
+                              borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                              padding: '4px 0', zIndex: 20, minWidth: 160,
+                            }}
+                          >
+                            {[
+                              { label: 'Сохранить как заметку', color: '#222', action: () => { saveMessageAsNote(m.content); setOpenMsgMenuIdx(null); } },
+                              { label: 'Ответить', color: '#222', action: () => { setReplyQuote(m.content); setOpenMsgMenuIdx(null); } },
+                              { label: 'Удалить', color: '#e53e3e', action: () => { deleteMessage(m); setOpenMsgMenuIdx(null); } },
+                            ].map(item => (
+                              <button key={item.label}
+                                onClick={item.action}
+                                style={{
+                                  display: 'block', width: '100%', textAlign: 'left',
+                                  padding: '8px 14px', fontSize: 13, color: item.color,
+                                  background: 'none', border: 'none', cursor: 'pointer',
+                                  fontFamily: M, transition: 'background 0.1s',
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
-          {isTyping && <div style={{ alignSelf: 'flex-start' }}><TypingDots /></div>}
+          {isTyping && (
+            <div style={{ alignSelf: 'flex-start', paddingLeft: 2 }}>
+              <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', fontStyle: 'italic' }}>
+                {THINKING_PHRASES[thinkingIdx]}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
       <div style={{ padding: '0 0 32px', flexShrink: 0 }}>
         <div style={{ ...CC }}>
-          <ChatInputBar value={input} onChange={setInput} onSend={() => sendMessage(input)} disabled={isTyping} placeholder="Задай уточняющий вопрос" />
+          <AnimatePresence>
+            {replyQuote && (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 6 }}
+                transition={{ duration: 0.12 }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: '#f5f5f5', borderRadius: 6, padding: '8px 12px',
+                  marginBottom: 6, borderLeft: '2px solid #aaa',
+                }}
+              >
+                <span style={{ flex: 1, fontSize: 12, color: '#888', fontFamily: M, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {replyQuote.length > 100 ? replyQuote.slice(0, 100) + '...' : replyQuote}
+                </span>
+                <button onClick={() => setReplyQuote(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#aaa', padding: 0, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                  <X size={14} strokeWidth={1.5} />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <ChatInputBar value={input} onChange={setInput} onSend={handleSend} disabled={isTyping} placeholder="Задай уточняющий вопрос" />
         </div>
       </div>
     </div>
@@ -944,27 +1215,79 @@ function ThreadsView({
 }) {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'thoughts' | 'notes'>('thoughts');
+  const [showNoteEditor, setShowNoteEditor] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (renamingId && renameInputRef.current) renameInputRef.current.focus();
+  }, [renamingId]);
+
+  const handleNoteSaved = (saved: Thread) => {
+    setThreads((prev: Thread[]) => {
+      const exists = (Array.isArray(prev) ? prev : []).some(t => t.id === saved.id);
+      return exists ? prev.map(t => t.id === saved.id ? saved : t) : [saved, ...(Array.isArray(prev) ? prev : [])];
+    });
+    setShowNoteEditor(false);
+    setEditingNoteId(null);
+  };
+
+  const openNoteEditor = (noteId?: string) => {
+    setEditingNoteId(noteId || null);
+    setShowNoteEditor(true);
+  };
+
+  const handleRename = async (id: string) => {
+    const val = renameValue.trim();
+    if (!val) { setRenamingId(null); return; }
+    setThreads((prev: Thread[]) => (Array.isArray(prev) ? prev : []).map(t => {
+      if (t.id !== id) return t;
+      const u = { ...t, title: val };
+      db.saveThread(u);
+      return u;
+    }));
+    setRenamingId(null);
+  };
 
   const all = Array.isArray(threads) ? threads : [];
-  const thoughts = all.filter(t => t.source !== 'text');
-  const notes = all;
-
-  const applySearch = (list: Thread[]) => list.filter(t =>
+  const searchMatch = (t: Thread) =>
     t.title.toLowerCase().includes(search.toLowerCase()) ||
-    t.preview.toLowerCase().includes(search.toLowerCase())
-  );
+    t.preview.toLowerCase().includes(search.toLowerCase());
 
-  const displayed = tab === 'thoughts' ? applySearch(thoughts) : applySearch(notes);
+  const thoughts = all.filter(t => t.source !== 'skill' && t.source !== 'заметка' && searchMatch(t));
+  const notes = all.filter(t => t.source !== 'skill' && searchMatch(t));
+
+  const displayed = tab === 'thoughts' ? thoughts : notes;
 
   const deleteThread = async (id: string) => {
-    setThreads(prev => (Array.isArray(prev) ? prev : []).filter(t => t.id !== id));
+    setThreads((prev: Thread[]) => (Array.isArray(prev) ? prev : []).filter(t => t.id !== id));
     await db.deleteThread(id);
   };
 
   const handleRowClick = (th: Thread) => {
-    if (tab === 'notes') onOpenNote(th.id);
-    else onOpenThread(th.id);
+    if (tab === 'notes') {
+      if (th.source === 'заметка') openNoteEditor(th.id);
+      else onOpenNote(th.id);
+    } else {
+      onOpenThread(th.id);
+    }
   };
+
+  const editingNote = editingNoteId ? threads.find(t => t.id === editingNoteId) : undefined;
+
+  if (showNoteEditor) {
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)' }}>
+        <NoteEditor
+          thread={editingNote}
+          onSaved={handleNoteSaved}
+          onClose={() => { setShowNoteEditor(false); setEditingNoteId(null); }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -1001,13 +1324,25 @@ function ThreadsView({
               ))}
             </div>
           </div>
-          <button onClick={startNewThread} style={{
-            fontFamily: M, fontSize: 13, letterSpacing: '0.06em',
-            color: 'var(--text-primary)', background: 'none', border: 'none',
-            cursor: 'pointer', textTransform: 'uppercase' as const, padding: 0,
-          }}>
-            НОВАЯ МЫСЛЬ
-          </button>
+          {tab === 'notes' ? (
+            <button onClick={() => openNoteEditor()} style={{
+              fontFamily: M, fontSize: 13, letterSpacing: '0.06em',
+              color: 'var(--text-primary)', background: 'none', border: 'none',
+              cursor: 'pointer', textTransform: 'uppercase' as const, padding: 0,
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <Plus size={15} strokeWidth={1.75} />
+              НОВАЯ ЗАМЕТКА
+            </button>
+          ) : (
+            <button onClick={startNewThread} style={{
+              fontFamily: M, fontSize: 13, letterSpacing: '0.06em',
+              color: 'var(--text-primary)', background: 'none', border: 'none',
+              cursor: 'pointer', textTransform: 'uppercase' as const, padding: 0,
+            }}>
+              НОВАЯ МЫСЛЬ
+            </button>
+          )}
         </div>
 
         {/* Search */}
@@ -1018,10 +1353,63 @@ function ThreadsView({
             style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 14, color: 'var(--text-primary)' }} />
         </div>
 
-        {/* List */}
+        {/* List / Grid */}
         {displayed.length === 0 ? (
           <div style={{ padding: '40px 0', fontFamily: M, fontSize: 14, color: 'var(--text-30)', textAlign: 'center' }}>
-            {search ? 'Ничего не найдено' : tab === 'thoughts' ? 'Мыслей пока нет' : 'Заметок пока нет'}
+            {search ? 'Ничего не найдено' : tab === 'thoughts' ? 'Мыслей пока нет' : 'Заметок пока нет. Нажми «+ Новая заметка»'}
+          </div>
+        ) : tab === 'notes' ? (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, paddingTop: 8 }}>
+            {displayed.map(th => {
+              const dateStr = new Date(th.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+              return (
+                <div
+                  key={th.id}
+                  onClick={() => handleRowClick(th)}
+                  style={{
+                    background: 'var(--surface)', borderRadius: 16, padding: '14px 14px 12px',
+                    cursor: 'pointer', minHeight: 100, display: 'flex', flexDirection: 'column', gap: 6,
+                    border: '1px solid var(--border)', transition: 'box-shadow 0.15s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.08)')}
+                  onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
+                >
+                  {renamingId === th.id ? (
+                    <input
+                      ref={renameInputRef}
+                      value={renameValue}
+                      onChange={e => setRenameValue(e.target.value)}
+                      onBlur={() => handleRename(th.id)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleRename(th.id); if (e.key === 'Escape') setRenamingId(null); }}
+                      onClick={e => e.stopPropagation()}
+                      style={{ fontFamily: M, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', background: 'transparent', border: 'none', outline: 'none', borderBottom: '1px solid rgba(0,0,0,0.2)', width: '100%' }}
+                    />
+                  ) : (
+                    <div style={{
+                      fontFamily: M, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.35,
+                      overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
+                    }}>
+                      {th.title}
+                    </div>
+                  )}
+                  {th.preview && (
+                    <div style={{
+                      fontFamily: M, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4, flex: 1,
+                      overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as const,
+                    }}>
+                      {th.preview}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' }}>
+                    <span style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)' }}>{dateStr}</span>
+                    <ThreadMenu
+                      onRename={() => { setRenameValue(th.title); setRenamingId(th.id); }}
+                      onDelete={() => deleteThread(th.id)}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
           displayed.map(th => (
@@ -1033,13 +1421,24 @@ function ThreadsView({
             }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                  <div style={{
-                    fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
-                  }}>
-                    {th.title}
-                  </div>
-                  {tab === 'notes' && <NoteTag label={th.source === 'text' ? 'Текст' : 'Мысль'} />}
+                  {renamingId === th.id ? (
+                    <input
+                      ref={renameInputRef}
+                      value={renameValue}
+                      onChange={e => setRenameValue(e.target.value)}
+                      onBlur={() => handleRename(th.id)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleRename(th.id); if (e.key === 'Escape') setRenamingId(null); }}
+                      onClick={e => e.stopPropagation()}
+                      style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', background: 'transparent', border: 'none', outline: 'none', borderBottom: '1px solid rgba(0,0,0,0.2)', flex: 1 }}
+                    />
+                  ) : (
+                    <div style={{
+                      fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+                    }}>
+                      {th.title}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{
@@ -1055,7 +1454,10 @@ function ThreadsView({
                   </span>
                 </div>
               </div>
-              <ThreadMenu onDelete={() => deleteThread(th.id)} />
+              <ThreadMenu
+                onRename={() => { setRenameValue(th.title); setRenamingId(th.id); }}
+                onDelete={() => deleteThread(th.id)}
+              />
             </div>
           ))
         )}
@@ -1554,7 +1956,6 @@ export default function DesktopApp({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [calActive, setCalActive] = useState(false);
   const [noteMode, setNoteMode] = useState(false);
-
   useEffect(() => {
     if (screen === 'ob') setScreen('dash');
   }, [screen]);
@@ -1701,7 +2102,7 @@ export default function DesktopApp({
 
           {screen === 'settings' && (
             <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-              <SettingsScreen settings={settings} setSettings={setSettings} onBack={() => setScreen('dash')} onLogout={handleLogout} />
+              <SettingsScreen settings={settings} setSettings={setSettings} onBack={() => setScreen('dash')} onLogout={handleLogout} isDesktop />
             </motion.div>
           )}
 

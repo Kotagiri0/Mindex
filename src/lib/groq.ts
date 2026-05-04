@@ -1,4 +1,5 @@
 import { Message } from "../types";
+import { getCurrentUser } from "./auth";
 
 const _today = new Date();
 const _todayStr = `${_today.getFullYear()}-${String(_today.getMonth()+1).padStart(2,'0')}-${String(_today.getDate()).padStart(2,'0')}`;
@@ -31,6 +32,7 @@ export const SYSTEM_INSTRUCTION = `Ты — Мысль, личный ассис�
 — update_task: когда нужно изменить, перенести или дополнить задачу. Если не знаешь ID — сначала get_tasks
 — delete_task: когда нужно удалить задачу
 — start_planning: когда задача сложная или многошаговая — запусти опросник для декомпозиции
+— save_as_note: когда пользователь просит сохранить что-то как заметку (своё сообщение, твой ответ, любой текст). Придумай подходящее название
 
 Сегодняшняя дата: ${_todayStr}`;
 
@@ -129,6 +131,27 @@ export const tools: any[] = [
   {
     type: "function",
     function: {
+      name: "save_as_note",
+      description: "Сохранить текст как отдельную заметку в архив. Используй когда пользователь просит сохранить что-то как заметку — своё сообщение, твой ответ или любой другой текст. Можешь сам переименовать заметку исходя из контекста.",
+      parameters: {
+        type: "object",
+        properties: {
+          content: {
+            type: "string",
+            description: "Текст заметки для сохранения.",
+          },
+          title: {
+            type: "string",
+            description: "Название заметки. Придумай короткое и точное название исходя из содержимого (3-5 слов).",
+          },
+        },
+        required: ["content", "title"],
+      },
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "start_planning",
       description: "Запускает процесс декомпозиции сложной задачи или планирования (опросник). Используй это, когда пользователь просит что-то спланировать или когда задача кажется сложной.",
       parameters: {
@@ -188,6 +211,7 @@ export async function generateResponse(messages: Message[], options: { tools?: a
         systemInstruction: SYSTEM_INSTRUCTION,
         tools: options.tools !== undefined ? options.tools : tools,
         tool_choice: options.tool_choice || "auto",
+        userId: getCurrentUser()?.id,
       }),
     });
 

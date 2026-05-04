@@ -1,4 +1,4 @@
-import { CalendarDays, MessageCircle, PenLine } from 'lucide-react';
+import { CalendarDays, MessageCircle, PenLine, Plus } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Screen } from '../types';
 
@@ -11,47 +11,85 @@ interface BottomNavProps {
 export default function BottomNav({ activeScreen, onNavigate, onNewThread }: BottomNavProps) {
   if (!['dash', 'threads'].includes(activeScreen)) return null;
 
+  const activeTab = activeScreen === 'dash' ? 'dash' : activeScreen === 'threads' ? 'threads' : null;
+
   return (
-    <div
-      className="fixed bottom-0 left-0 right-0 z-[100] flex items-center justify-between px-8"
-      style={{
-        background: '#f0f0f0',
-        height: '72px',
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-        borderTop: '1px solid rgba(34,34,36,0.08)',
-      }}
-    >
-      <motion.button
-        whileTap={{ scale: 0.88 }}
-        onClick={() => onNavigate('dash')}
-        className="w-12 h-12 flex items-center justify-center"
-      >
-        <CalendarDays
-          size={26}
-          strokeWidth={activeScreen === 'dash' ? 2 : 1.5}
-          color={activeScreen === 'dash' ? '#222224' : 'rgba(34,34,36,0.32)'}
-        />
-      </motion.button>
+    <div style={{
+      position: 'fixed',
+      bottom: 'max(20px, env(safe-area-inset-bottom, 20px))',
+      left: 16,
+      right: 16,
+      zIndex: 100,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+    }}>
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        background: '#e8e8e8',
+        borderRadius: 999,
+        padding: 6,
+        boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+      }}>
+        {(['dash', 'threads'] as const).map(tab => {
+          const isActive = activeTab === tab;
+          return (
+            <motion.button
+              key={tab}
+              onClick={() => onNavigate(tab)}
+              whileTap={{ scale: 0.9 }}
+              style={{
+                position: 'relative',
+                flex: 1,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '12px 12px',
+                borderRadius: 999,
+                border: 'none',
+                cursor: 'pointer',
+                background: 'transparent',
+              }}
+            >
+              {isActive && (
+                <motion.div
+                  layoutId="nav-indicator"
+                  style={{
+                    position: 'absolute', inset: 0,
+                    background: '#ffffff',
+                    borderRadius: 999,
+                  }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 36 }}
+                />
+              )}
+              <span style={{ position: 'relative', zIndex: 1, display: 'flex' }}>
+                {tab === 'dash'
+                  ? <CalendarDays size={22} strokeWidth={1.75} color={isActive ? '#111' : '#bbb'} />
+                  : <MessageCircle size={22} strokeWidth={1.75} color={isActive ? '#111' : '#bbb'} />
+                }
+              </span>
+            </motion.button>
+          );
+        })}
+      </div>
 
       <motion.button
-        whileTap={{ scale: 0.88 }}
-        onClick={() => onNavigate('threads')}
-        className="w-12 h-12 flex items-center justify-center"
-      >
-        <MessageCircle
-          size={26}
-          strokeWidth={activeScreen === 'threads' ? 2 : 1.5}
-          color={activeScreen === 'threads' ? '#222224' : 'rgba(34,34,36,0.32)'}
-        />
-      </motion.button>
-
-      <motion.button
+        onClick={() => onNavigate('today')}
         whileTap={{ scale: 0.92 }}
-        onClick={onNewThread}
-        className="w-14 h-14 rounded-full flex items-center justify-center"
-        style={{ background: '#222224' }}
+        style={{
+          width: 54, height: 54,
+          borderRadius: '50%',
+          background: '#111',
+          border: 'none',
+          cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          gap: 2,
+          flexShrink: 0,
+          boxShadow: '0 2px 12px rgba(0,0,0,0.18)',
+        }}
       >
-        <PenLine size={22} color="#ffffff" strokeWidth={1.75} />
+        <PenLine size={17} color="#fff" strokeWidth={1.75} />
+        <Plus size={12} color="#fff" strokeWidth={2.5} />
       </motion.button>
     </div>
   );

@@ -23,6 +23,7 @@ export interface Message {
   tool_calls?: any[];
   tool_call_id?: string;
   reasoning_content?: string;
+  sources?: { title: string }[];
   planning_data?: {
     questions: {
       id: string;
@@ -44,8 +45,10 @@ export interface Thread {
   preview: string;
   messages: Message[];
   createdAt: number;
-  source?: 'thread' | 'text';
+  source?: 'thread' | 'text' | 'мысль' | 'заметка' | 'skill';
+  label?: string;
   summary?: string;
+  is_meaningful?: boolean | null;
 }
 
 export interface Settings {
@@ -74,4 +77,4 @@ export interface LocalProfile {
   updated_at: string;
 }
 
-export type Screen = 'ob' | 'dash' | 'ai' | 'threads' | 'settings' | 'cal';
+export type Screen = 'ob' | 'dash' | 'ai' | 'threads' | 'settings' | 'cal' | 'today';

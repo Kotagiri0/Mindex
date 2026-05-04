@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pencil } from 'lucide-react';
+import { Pencil, ArrowLeft } from 'lucide-react';
 import { Settings } from '../types';
 import { getCurrentUser } from '../lib/auth';
 import { storage } from '../lib/storage';
@@ -12,6 +12,7 @@ interface SettingsProps {
   setSettings: (settings: Settings) => void;
   onBack: () => void;
   onLogout: () => void;
+  isDesktop?: boolean;
 }
 
 function PillButton({ label, onClick, danger }: { label: string; onClick: () => void; danger?: boolean }) {
@@ -39,7 +40,7 @@ function PillButton({ label, onClick, danger }: { label: string; onClick: () => 
 }
 
 function SectionDivider() {
-  return <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', margin: '24px 0 0' }} />;
+  return <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', margin: '16px 0 0' }} />;
 }
 
 function IntegrationRow({ name, desc }: { name: string; desc: string }) {
@@ -98,7 +99,7 @@ function AccountRow({ label, action, onAction, danger }: { label: string; action
   );
 }
 
-export default function SettingsScreen({ settings, setSettings, onBack, onLogout }: SettingsProps) {
+export default function SettingsScreen({ settings, setSettings, onBack, onLogout, isDesktop = false }: SettingsProps) {
   const [confirmClear, setConfirmClear] = useState(false);
   const currentUser = getCurrentUser();
 
@@ -121,20 +122,45 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
 
   return (
     <div style={{
-      flex: 1,
+      height: '100%',
       overflowY: 'auto',
       background: 'var(--bg)',
-      padding: '40px 40px 60px',
+      padding: isDesktop ? '40px 40px 60px' : 'env(safe-area-inset-top, 0px) 0 60px',
+      boxSizing: 'border-box',
     }}>
-      <div style={{ maxWidth: 680, margin: '0 auto' }}>
-        {/* Title */}
-        <div style={{ fontFamily: F, fontSize: 36, color: 'var(--text-80)', textAlign: 'center', marginBottom: 24 }}>
-          настройки
-        </div>
-        <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', marginBottom: 32 }} />
+      <div style={{ maxWidth: 680, margin: '0 auto', padding: isDesktop ? '0' : '0 20px' }}>
+        {/* Header */}
+        {isDesktop ? (
+          <>
+            <div style={{ fontFamily: F, fontSize: 36, color: 'var(--text-80)', textAlign: 'center', marginBottom: 24 }}>
+              настройки
+            </div>
+            <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', marginBottom: 32 }} />
+          </>
+        ) : (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', paddingTop: 16, paddingBottom: 8, marginBottom: 8 }}>
+              <button
+                onClick={onBack}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  padding: '8px 8px 8px 0', display: 'flex', alignItems: 'center',
+                  color: 'var(--text-primary)', flexShrink: 0,
+                }}
+              >
+                <ArrowLeft size={22} strokeWidth={1.75} />
+              </button>
+              <div style={{ flex: 1, fontFamily: F, fontSize: 22, color: 'var(--text-80)', textAlign: 'center' }}>
+                настройки
+              </div>
+              <div style={{ width: 30 }} />
+            </div>
+            <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', marginBottom: 24 }} />
+          </>
+        )}
 
         {/* Profile */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
           {/* Avatar */}
           <div style={{
             width: 48, height: 48, borderRadius: '50%',
@@ -177,7 +203,7 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
 
         {/* Instructions */}
         <SectionDivider />
-        <div style={{ paddingTop: 24, marginBottom: 32 }}>
+        <div style={{ paddingTop: 16, marginBottom: 20 }}>
           <div style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 12 }}>
             Инструкции
           </div>
@@ -205,7 +231,7 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
 
         {/* Toggles */}
         <SectionDivider />
-        <div style={{ paddingTop: 24, marginBottom: 8 }}>
+        <div style={{ paddingTop: 16, marginBottom: 8 }}>
           <div style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 4 }}>
             Поведение
           </div>
@@ -231,7 +257,7 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
 
         {/* Integrations */}
         <SectionDivider />
-        <div style={{ paddingTop: 24, marginBottom: 8 }}>
+        <div style={{ paddingTop: 16, marginBottom: 8 }}>
           <div style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 4 }}>
             Интеграции
           </div>
@@ -242,7 +268,7 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
 
         {/* Account */}
         <SectionDivider />
-        <div style={{ paddingTop: 24 }}>
+        <div style={{ paddingTop: 16 }}>
           <div style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 4 }}>
             Данные и аккаунт
           </div>

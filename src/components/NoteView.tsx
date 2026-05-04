@@ -3,9 +3,50 @@ import { motion } from 'motion/react';
 import { MessageCircle, Check } from 'lucide-react';
 import { Thread, Task } from '../types';
 import { db } from '../lib/db';
+import { getCurrentUser } from '../lib/auth';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
+
+function renderMarkdown(text: string): React.ReactNode[] {
+  const paragraphs = text.split(/\n\n+/);
+  return paragraphs.map((para, pi) => {
+    const lines = para.split('\n');
+    const isList = lines.every(l => /^[-–—•]\s/.test(l.trim()) || l.trim() === '');
+    if (isList) {
+      return (
+        <ul key={pi} style={{ margin: '0 0 12px', paddingLeft: 16, listStyle: 'none' }}>
+          {lines.filter(l => l.trim()).map((line, li) => (
+            <li key={li} style={{ marginBottom: 4, display: 'flex', gap: 8 }}>
+              <span style={{ color: 'var(--text-30)', flexShrink: 0 }}>–</span>
+              <span>{renderInline(line.replace(/^[-–—•]\s*/, ''))}</span>
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    return (
+      <p key={pi} style={{ margin: '0 0 12px', lineHeight: 1.75 }}>
+        {lines.map((line, li) => (
+          <React.Fragment key={li}>
+            {li > 0 && <br />}
+            {renderInline(line)}
+          </React.Fragment>
+        ))}
+      </p>
+    );
+  });
+}
+
+function renderInline(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i} style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+}
 
 const CC: React.CSSProperties = {
   width: '100%',
@@ -42,14 +83,18 @@ export default function NoteView({ threadId, threads, setThreads, tasks, onSwitc
     if (!thread) return;
     if (thread.summary) { setSummaryReady(true); return; }
 
+    // Only skip if explicitly marked not meaningful
+    if (thread.is_meaningful === false) { setSummaryReady(true); return; }
+
     const userMessages = thread.messages.filter(m => m.role === 'user' || m.role === 'assistant');
     if (userMessages.length === 0) { setSummaryReady(true); return; }
 
+    const userId = getCurrentUser()?.id;
     setLoading(true);
     fetch('/api/summarize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: thread.messages }),
+      body: JSON.stringify({ messages: thread.messages, threadId, userId }),
     })
       .then(r => r.json())
       .then(({ summary }) => {
@@ -77,7 +122,7 @@ export default function NoteView({ threadId, threads, setThreads, tasks, onSwitc
           100% { background-position: -200% 0; }
         }
       `}</style>
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         <div style={{ ...CC, paddingTop: 48, paddingBottom: 60 }}>
 
           {/* Tag + date */}
@@ -114,14 +159,18 @@ export default function NoteView({ threadId, threads, setThreads, tasks, onSwitc
                 <SkeletonLine width="85%" />
                 <SkeletonLine width="50%" />
               </div>
+            ) : thread.is_meaningful === false ? (
+              <div style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', fontStyle: 'italic' }}>
+                Эта мысль не попала в архив — слишком короткая или операционная.
+              </div>
             ) : summaryReady ? (
               <motion.div
                 initial={thread.summary ? false : { opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.4 }}
-                style={{ fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.75, whiteSpace: 'pre-wrap' }}
+                style={{ fontFamily: M, fontSize: 15, color: 'var(--text-80)' }}
               >
-                {thread.summary || 'Нет сообщений для саммари.'}
+                {thread.summary ? renderMarkdown(thread.summary) : 'Нет сообщений для саммари.'}
               </motion.div>
             ) : null}
           </div>
@@ -174,7 +223,7 @@ export default function NoteView({ threadId, threads, setThreads, tasks, onSwitc
           )}
 
           {/* Switch to chat */}
-          {thread.source !== 'text' && (
+          {thread.source !== 'text' && thread.source !== 'заметка' && (
             <button
               onClick={onSwitchToChat}
               style={{

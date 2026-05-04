@@ -28,6 +28,7 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const DATABASE_URL = process.env.DATABASE_URL;
 const db = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL }) : null;
+let vectorEnabled = false;
 
 // Render and similar platforms terminate TLS on the proxy layer.
 // trust proxy keeps request metadata correct for HTTPS deployments.
@@ -187,6 +188,53 @@ app.get('/api/config', (_req, res) => {
   });
 });
 
+const SELF_KNOWLEDGE_TEXT = `Я — Мысль, ассистент внутри Mindex. Не универсальный чат-бот — фокус на личной эффективности: мысли, заметки и задачи в одном месте.
+
+Большинство людей используют нейронку для всего подряд, а планировщик отдельно. Здесь всё связано — заметки и задачи читаются как контекст, не нужно переключаться между приложениями. Планировщик с агентом, а не агент с планировщиком. Один из немногих агентных планировщиков — на таком уровне внедрения вообще первый.
+
+Работаю на мощной современной модели. Если спросят напрямую какой — отвечу честно.
+
+Что умею:
+Надиктовал задачу голосом — получил структурированный список. Никакой формы, никаких полей.
+Управление задачами через разговор — перенести, изменить, удалить прямо в чате.
+Brain dump — выгружаешь всё подряд одним сообщением, я структурирую.
+Живая беседа → заметка → действие. Обсуждаешь идеи свободно — открываешь заметку, там всё структурировано. В новом треде просишь раскидать задачи — я уже знаю контекст.
+Архив который думает. Чем дольше пользуешься — тем точнее понимаю тебя.
+
+Что пока не умею: работать с файлами, искать в интернете, интегрироваться с внешними сервисами автоматически.
+
+Конфиденциальность: твои данные хранятся только у тебя.`;
+
+async function createSelfKnowledgeSkill(userId: string) {
+  if (!db) return;
+  try {
+    const id = crypto.randomUUID();
+    await db.query(
+      `INSERT INTO user_threads
+         (id, user_id, title, preview, messages, created_at, updated_at, source, label, summary, is_meaningful)
+       VALUES ($1, $2, $3, $4, '[]'::jsonb, $5, NOW(), 'skill', 'skill:self_knowledge', $6, true)
+       ON CONFLICT DO NOTHING`,
+      [
+        id,
+        userId,
+        'О Мысли',
+        SELF_KNOWLEDGE_TEXT.slice(0, 100),
+        Date.now(),
+        SELF_KNOWLEDGE_TEXT,
+      ]
+    );
+    const embedding = await generateEmbedding(SELF_KNOWLEDGE_TEXT);
+    if (embedding) {
+      await db.query(
+        `UPDATE user_threads SET embedding = $1::vector WHERE id = $2 AND user_id = $3`,
+        [`[${embedding.join(',')}]`, id, userId]
+      );
+    }
+  } catch (e) {
+    console.warn('[skill] createSelfKnowledgeSkill failed:', e);
+  }
+}
+
 const hashPassword = (username: string, password: string) => {
   return crypto
     .createHash("sha256")
@@ -271,6 +319,28 @@ const ensureAuthSchema = async () => {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  // pgvector + second-brain columns
+  try {
+    await db.query(`CREATE EXTENSION IF NOT EXISTS vector;`);
+  } catch (e) {
+    console.warn('[DB] pgvector extension not available:', e);
+  }
+  await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS summary TEXT;`);
+  await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS is_meaningful BOOLEAN;`);
+  await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'мысль';`);
+  await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS label TEXT;`);
+  try {
+    await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS embedding vector(1536);`);
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS threads_embedding_idx
+        ON user_threads USING hnsw (embedding vector_cosine_ops);
+    `);
+    vectorEnabled = true;
+    console.log('[DB] pgvector ready');
+  } catch (e) {
+    console.warn('[DB] vector column/index skipped (pgvector unavailable):', e);
+  }
 };
 
 app.post("/api/auth/register", async (req, res) => {
@@ -308,6 +378,7 @@ app.post("/api/auth/register", async (req, res) => {
       [userId, username, displayName, passwordHash]
     );
 
+    createSelfKnowledgeSkill(userId);
     return res.status(201).json({
       user: formatAuthUser(result.rows[0]),
     });
@@ -447,6 +518,7 @@ app.post('/api/auth/google', async (req, res) => {
       [userId, username, displayName, payload.sub, email || null, payload.picture || null]
     );
 
+    createSelfKnowledgeSkill(userId);
     return res.status(201).json({ user: formatAuthUser(result.rows[0]) });
   } catch (error: any) {
     console.error('[AUTH][GOOGLE]', error?.message || error);
@@ -486,7 +558,7 @@ app.get("/api/data/bootstrap", async (req, res) => {
       ),
       db.query(
         `
-          SELECT id, title, preview, messages, created_at
+          SELECT id, title, preview, messages, created_at, summary, is_meaningful, source, label
           FROM user_threads
           WHERE user_id = $1
           ORDER BY created_at DESC
@@ -521,6 +593,10 @@ app.get("/api/data/bootstrap", async (req, res) => {
         preview: row.preview,
         messages: row.messages || [],
         createdAt: Number(row.created_at),
+        summary: row.summary || undefined,
+        is_meaningful: row.is_meaningful ?? undefined,
+        source: row.source || 'мысль',
+        label: row.label || undefined,
       })),
     });
   } catch {
@@ -640,8 +716,8 @@ app.post("/api/data/thread", dataRateLimit, async (req, res) => {
   try {
     await db.query(
       `
-        INSERT INTO user_threads (id, user_id, title, preview, messages, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5::jsonb, $6, NOW())
+        INSERT INTO user_threads (id, user_id, title, preview, messages, created_at, updated_at, source, label, summary, is_meaningful)
+        VALUES ($1, $2, $3, $4, $5::jsonb, $6, NOW(), $7, $8, $9, $10)
         ON CONFLICT (id)
         DO UPDATE SET
           user_id = EXCLUDED.user_id,
@@ -649,6 +725,10 @@ app.post("/api/data/thread", dataRateLimit, async (req, res) => {
           preview = EXCLUDED.preview,
           messages = EXCLUDED.messages,
           created_at = EXCLUDED.created_at,
+          source = COALESCE(EXCLUDED.source, user_threads.source),
+          label = COALESCE(EXCLUDED.label, user_threads.label),
+          summary = COALESCE(EXCLUDED.summary, user_threads.summary),
+          is_meaningful = COALESCE(EXCLUDED.is_meaningful, user_threads.is_meaningful),
           updated_at = NOW()
       `,
       [
@@ -658,6 +738,10 @@ app.post("/api/data/thread", dataRateLimit, async (req, res) => {
         String(thread.preview || ""),
         JSON.stringify(thread.messages || []),
         Number(thread.createdAt || Date.now()),
+        String(thread.source || 'мысль'),
+        thread.label ? String(thread.label) : null,
+        thread.summary ? String(thread.summary) : null,
+        thread.is_meaningful ?? null,
       ]
     );
     return res.status(200).json({ success: true });
@@ -750,6 +834,23 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
   }
 });
 
+async function generateEmbedding(text: string): Promise<number[] | null> {
+  const apiKey = process.env.ROUTERAI_API_KEY;
+  if (!apiKey || !text?.trim()) return null;
+  try {
+    const response = await fetch('https://routerai.ru/api/v1/embeddings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: 'text-embedding-3-small', input: text.slice(0, 8000) }),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.data?.[0]?.embedding || null;
+  } catch {
+    return null;
+  }
+}
+
 async function callRouterAI(apiKey: string, body: object, attempt = 0): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -772,18 +873,170 @@ async function callRouterAI(apiKey: string, body: object, attempt = 0): Promise<
   }
 }
 
+app.post("/api/summarize", async (req, res) => {
+  const { messages, threadId, userId } = req.body || {};
+  if (!messages || !Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'messages required' });
+  }
+  const apiKey = process.env.ROUTERAI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'ROUTERAI_API_KEY not set' });
+
+  const dialogText = messages
+    .filter((m: any) => m.role === 'user' || m.role === 'assistant')
+    .map((m: any) => `${m.role === 'user' ? 'Пользователь' : 'Мысль'}: ${String(m.content || '')}`)
+    .join('\n');
+
+  try {
+    const response = await callRouterAI(apiKey, {
+      model: 'deepseek/deepseek-v4-flash',
+      messages: [
+        {
+          role: 'system',
+          content: `Ты — Мысль, персональный ИИ-ассистент. Структурированно изложи суть диалога в виде заметки.
+Формат:
+**Суть:** одно предложение — о чём был разговор.
+**Ключевые тезисы:** 2–4 буллет-пункта с главными мыслями и решениями.
+**Задачи:** (только если были явно упомянуты) краткий список.
+Пиши по-русски, кратко, без воды.`,
+        },
+        { role: 'user', content: `Диалог:\n\n${dialogText}` },
+      ],
+      max_tokens: 500,
+      temperature: 0.3,
+      thinking: false,
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      return res.status(500).json({ error: `RouterAI error: ${text}` });
+    }
+
+    const data = await response.json();
+    const summary = data.choices?.[0]?.message?.content || '';
+
+    if (summary && db && threadId && userId) {
+      await db.query(
+        `UPDATE user_threads SET summary = $1, is_meaningful = true, updated_at = NOW() WHERE id = $2 AND user_id = $3`,
+        [summary, threadId, userId]
+      );
+
+      const threadRes = await db.query(
+        `SELECT title FROM user_threads WHERE id = $1 AND user_id = $2 LIMIT 1`,
+        [threadId, userId]
+      );
+      const title = threadRes.rows?.[0]?.title || '';
+      const embedding = await generateEmbedding(`${title}\n${summary}`);
+      if (embedding) {
+        await db.query(
+          `UPDATE user_threads SET embedding = $1::vector WHERE id = $2 AND user_id = $3`,
+          [`[${embedding.join(',')}]`, threadId, userId]
+        );
+      }
+    }
+
+    return res.status(200).json({ summary });
+  } catch (err: any) {
+    console.error('[summarize]', err);
+    return res.status(500).json({ error: err.message || 'summarize failed' });
+  }
+});
+
 app.post("/api/chat", async (req, res) => {
   try {
-    const { messages, systemInstruction, tools, tool_choice } = req.body;
+    const { messages, systemInstruction, tools, tool_choice, userId } = req.body;
 
     const apiKey = process.env.ROUTERAI_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ error: "ROUTERAI_API_KEY не найден в .env" });
     }
 
+    // RAG: inject relevant notes as context + always inject self-knowledge
+    // Self-knowledge is injected directly from the constant — no DB dependency
+    let finalSystemInstruction = `${systemInstruction}\n\n## О себе\n${SELF_KNOWLEDGE_TEXT}`;
+    let ragSources: { title: string }[] = [];
+
+    // Ensure DB skill thread exists for vector search (fire-and-forget for new users)
+    if (db && userId) {
+      db.query(
+        `SELECT 1 FROM user_threads WHERE user_id = $1 AND label = 'skill:self_knowledge' LIMIT 1`,
+        [userId]
+      ).then((r: any) => {
+        if (r.rows.length === 0) createSelfKnowledgeSkill(userId).catch(() => {});
+      }).catch(() => {});
+    }
+
+    if (db && userId) {
+
+      if (Array.isArray(messages) && messages.length > 0) {
+        try {
+          const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user');
+          if (lastUserMsg?.content) {
+            let ragResult: any = { rows: [] };
+
+            if (vectorEnabled) {
+              const queryEmbedding = await generateEmbedding(String(lastUserMsg.content));
+              if (queryEmbedding) {
+                ragResult = await db.query(
+                  `SELECT title, summary
+                   FROM user_threads
+                   WHERE user_id = $1
+                     AND summary IS NOT NULL
+                     AND embedding IS NOT NULL
+                     AND label IS DISTINCT FROM 'skill:self_knowledge'
+                     AND 1 - (embedding <=> $2::vector) > 0.65
+                   ORDER BY embedding <=> $2::vector
+                   LIMIT 3`,
+                  [userId, `[${queryEmbedding.join(',')}]`]
+                );
+              }
+            } else {
+              // Text-based fallback: keyword matching on summary/title
+              const keywords = String(lastUserMsg.content)
+                .toLowerCase()
+                .replace(/[^\wа-яё\s]/gi, '')
+                .split(/\s+/)
+                .filter(w => w.length > 3)
+                .slice(0, 5);
+
+              if (keywords.length > 0) {
+                const conditions = keywords.map((_: string, i: number) => `(title ILIKE $${i + 2} OR summary ILIKE $${i + 2})`).join(' OR ');
+                ragResult = await db.query(
+                  `SELECT title, summary FROM user_threads
+                   WHERE user_id = $1 AND summary IS NOT NULL AND label IS DISTINCT FROM 'skill:self_knowledge'
+                     AND (${conditions})
+                   ORDER BY updated_at DESC LIMIT 3`,
+                  [userId, ...keywords.map((k: string) => `%${k}%`)]
+                );
+              }
+
+              // Fallback: most recent summarized threads
+              if (ragResult.rows.length === 0) {
+                ragResult = await db.query(
+                  `SELECT title, summary FROM user_threads
+                   WHERE user_id = $1 AND summary IS NOT NULL AND label IS DISTINCT FROM 'skill:self_knowledge'
+                   ORDER BY updated_at DESC LIMIT 3`,
+                  [userId]
+                );
+              }
+            }
+
+            if (ragResult.rows.length > 0) {
+              const contextBlock = ragResult.rows
+                .map((r: any) => `[${r.title}]\n${r.summary}`)
+                .join('\n---\n');
+              finalSystemInstruction = `## Контекст из архива пользователя\n${contextBlock}\n\n---\n\n${finalSystemInstruction}`;
+              ragSources = ragResult.rows.map((r: any) => ({ title: r.title }));
+            }
+          }
+        } catch (ragErr) {
+          console.warn('[CHAT] RAG skipped:', ragErr);
+        }
+      }
+    }
+
     const response = await callRouterAI(apiKey, {
       model: "deepseek/deepseek-v4-flash",
-      messages: [{ role: "system", content: systemInstruction }, ...messages],
+      messages: [{ role: "system", content: finalSystemInstruction }, ...messages],
       tools,
       tool_choice: tool_choice || "auto",
       temperature: 0.7,
@@ -803,7 +1056,7 @@ app.post("/api/chat", async (req, res) => {
       throw new Error("RouterAI вернул пустой список вариантов (choices).");
     }
 
-    res.json(data.choices[0].message);
+    res.json({ ...data.choices[0].message, sources: ragSources });
   } catch (error: any) {
     const isTimeout = error?.name === "AbortError";
     const msg = isTimeout
