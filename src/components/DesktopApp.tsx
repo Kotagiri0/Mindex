@@ -579,10 +579,16 @@ function ChatView({
   onInitialConsumed?: () => void;
   onNetworkError?: () => void;
 }) {
+  const THINKING_PHRASES = ['Думаю...', 'Анализирую...', 'Ищу в архиве...', 'Формулирую...', 'Пишу ответ...'];
+
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [thinkingIdx, setThinkingIdx] = useState(0);
+  const [animatingContent, setAnimatingContent] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const didAutoSend = useRef(false);
+  const animIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevIsTypingRef = useRef(false);
 
   const thread = threads.find(t => t.id === threadId);
 
@@ -597,6 +603,35 @@ function ChatView({
       sendMessage(initialMessage);
     }
   }, []);
+
+  useEffect(() => {
+    if (!isTyping) return;
+    const iv = setInterval(() => setThinkingIdx(p => (p + 1) % THINKING_PHRASES.length), 1800);
+    return () => clearInterval(iv);
+  }, [isTyping]);
+
+  useEffect(() => {
+    if (prevIsTypingRef.current && !isTyping) {
+      const visibleMsgs = (thread?.messages || []).filter(m => m.role !== 'tool' && !m.tool_calls);
+      const last = visibleMsgs[visibleMsgs.length - 1];
+      if (last?.role === 'assistant' && last.content) {
+        const fullText = last.content;
+        let i = 0;
+        setAnimatingContent('');
+        if (animIntervalRef.current) clearInterval(animIntervalRef.current);
+        animIntervalRef.current = setInterval(() => {
+          i += 6;
+          if (i >= fullText.length) {
+            clearInterval(animIntervalRef.current!);
+            setAnimatingContent(null);
+          } else {
+            setAnimatingContent(fullText.slice(0, i));
+          }
+        }, 10);
+      }
+    }
+    prevIsTypingRef.current = isTyping;
+  }, [isTyping]);
 
   if (!thread) return null;
 
@@ -718,7 +753,7 @@ function ChatView({
         response = await generateResponse(history);
       }
 
-      const finalMsg = { role: 'assistant' as const, content: response.content || 'Готово!', reasoning_content: response.reasoning_content, time: nowTime() };
+      const finalMsg = { role: 'assistant' as const, content: response.content || 'Готово!', reasoning_content: response.reasoning_content, time: nowTime(), sources: response.sources };
       setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
         if (t.id === threadId) {
           const hasUser = t.messages.some(m => m.role === 'user' && m.content === userMsg.content && m.time === userMsg.time);
@@ -860,6 +895,8 @@ function ChatView({
         <div style={{ ...CC, display: 'flex', flexDirection: 'column', gap: 24 }}>
           {visible.map((m, i) => {
             const realIdx = thread.messages.indexOf(m);
+            const isLast = i === visible.length - 1;
+            const showAnimated = isLast && m.role === 'assistant' && animatingContent !== null;
             return (
               <div key={i} style={{
                 display: 'flex', flexDirection: 'column',
@@ -875,7 +912,10 @@ function ChatView({
                   </div>
                 ) : (
                   <div style={{ width: '100%' }}>
-                    <MarkdownText text={m.content} style={{ fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.75 }} />
+                    {showAnimated
+                      ? <span style={{ fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>{animatingContent}</span>
+                      : <MarkdownText text={m.content} style={{ fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.75 }} />
+                    }
 
                     {/* Planning: questionnaire */}
                     {m.planning_data?.status === 'questionnaire' && (
@@ -938,13 +978,36 @@ function ChatView({
                         </div>
                       </div>
                     )}
+                    {m.sources && m.sources.length > 0 && !showAnimated && (
+                      <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                        <div style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)', marginBottom: 6, letterSpacing: '0.05em', textTransform: 'uppercase' as const }}>
+                          Из архива
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                          {m.sources.map((s: { title: string }, si: number) => (
+                            <span key={si} style={{
+                              fontFamily: M, fontSize: 12, color: 'var(--text-muted)',
+                              background: 'rgba(0,0,0,0.05)', borderRadius: 6, padding: '3px 8px',
+                            }}>
+                              {s.title}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 <span style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)' }}>{m.time}</span>
               </div>
             );
           })}
-          {isTyping && <div style={{ alignSelf: 'flex-start' }}><TypingDots /></div>}
+          {isTyping && (
+            <div style={{ alignSelf: 'flex-start', paddingLeft: 2 }}>
+              <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', fontStyle: 'italic' }}>
+                {THINKING_PHRASES[thinkingIdx]}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

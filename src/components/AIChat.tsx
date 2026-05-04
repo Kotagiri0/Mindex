@@ -622,17 +622,22 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       ) : null}
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-[20px_16px_8px] flex flex-col gap-3 scrollbar-hide min-h-0" style={{ display: noteMode ? 'none' : undefined }}>
-        {thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls).length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-2">
-            <div className="text-[28px] font-extrabold text-center leading-[1.25]" style={{ color: '#222224' }}>
-              Привет!<br />Есть мысли?
+        {(() => {
+          const visibleMsgs = thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls);
+          if (visibleMsgs.length === 0) return (
+            <div className="flex-1 flex flex-col items-center justify-center gap-2">
+              <div className="text-[28px] font-extrabold text-center leading-[1.25]" style={{ color: '#222224' }}>
+                Привет!<br />Есть мысли?
+              </div>
+              <div className="text-[15px] text-text-tertiary text-center">
+                Поделись тем, что на уме
+              </div>
             </div>
-            <div className="text-[15px] text-text-tertiary text-center">
-              Поделись тем, что на уме
-            </div>
-          </div>
-        ) : (
-          thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls).map((m, i) => (
+          );
+          return visibleMsgs.map((m, i) => {
+            const isLast = i === visibleMsgs.length - 1;
+            const showAnimated = isLast && m.role === 'assistant' && animatingContent !== null;
+            return (
             <div key={i} style={{
               display: 'flex', flexDirection: 'column', gap: 3,
               alignItems: m.role === 'user' ? 'flex-end' : 'flex-start',
@@ -644,7 +649,12 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                 ? { background: 'rgba(9,14,23,0.07)', borderRadius: 18, borderBottomRightRadius: 4, padding: '10px 14px', fontSize: 15, lineHeight: 1.5, color: '#222224', fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif" }
                 : { fontSize: 15, lineHeight: 1.75, color: '#222224', fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", width: '100%' }
               }>
-                {m.role === 'user' ? m.content : renderMarkdown(m.content)}
+                {m.role === 'user'
+                  ? m.content
+                  : showAnimated
+                    ? <span style={{ whiteSpace: 'pre-wrap' }}>{animatingContent}</span>
+                    : renderMarkdown(m.content)
+                }
 
                 {m.planning_data && (
                   <div className="mt-3 flex flex-col gap-3">
@@ -728,19 +738,40 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                     )}
                   </div>
                 )}
+                {m.role === 'assistant' && m.sources && m.sources.length > 0 && !showAnimated && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(34,34,36,0.07)' }}>
+                    <div style={{ fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 11, color: 'rgba(34,34,36,0.35)', marginBottom: 6, letterSpacing: '0.05em', textTransform: 'uppercase' as const }}>
+                      Из архива
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                      {m.sources.map((s, si) => (
+                        <span key={si} style={{
+                          fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+                          fontSize: 12, color: 'rgba(34,34,36,0.5)',
+                          background: 'rgba(34,34,36,0.06)', borderRadius: 6,
+                          padding: '3px 8px',
+                        }}>
+                          {s.title}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="text-[11px] text-text-tertiary px-1">{m.time}</div>
             </div>
-          ))
-        )}
+            );
+          });
+        })()}
 
         {isTyping && (
-          <div className="flex flex-col max-w-[80%] gap-[3px] self-start items-start">
-            <div className="flex gap-1 p-[11px_15px] bg-surface2 rounded-[18px] rounded-bl-[4px] w-fit">
-              <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce" />
-              <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce [animation-delay:0.2s]" />
-              <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce [animation-delay:0.4s]" />
-            </div>
+          <div style={{ alignSelf: 'flex-start', paddingLeft: 2, paddingBottom: 4 }}>
+            <span style={{
+              fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+              fontSize: 14, color: 'rgba(34,34,36,0.4)', fontStyle: 'italic',
+            }}>
+              {THINKING_PHRASES[thinkingIdx]}
+            </span>
           </div>
         )}
       </div>
