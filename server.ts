@@ -222,11 +222,14 @@ const ensureAuthSchema = async () => {
       date TEXT NOT NULL,
       done BOOLEAN NOT NULL DEFAULT FALSE,
       type TEXT NOT NULL DEFAULT 'regular',
+      calendar_event_id TEXT,
       subtasks JSONB NOT NULL DEFAULT '[]',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS calendar_event_id TEXT;`);
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS user_threads (
@@ -445,7 +448,7 @@ app.get("/api/data/bootstrap", async (req, res) => {
       ),
       db.query(
         `
-          SELECT id, name, time, date, done, type, subtasks
+          SELECT id, name, time, date, done, type, calendar_event_id, subtasks
           FROM user_tasks
           WHERE user_id = $1
           ORDER BY updated_at DESC, created_at DESC
@@ -480,6 +483,7 @@ app.get("/api/data/bootstrap", async (req, res) => {
         date: row.date,
         done: row.done,
         type: row.type || "regular",
+        calendarEventId: row.calendar_event_id || undefined,
         subtasks: row.subtasks || [],
       })),
       threads: threadsRes.rows.map((row) => ({
@@ -540,10 +544,10 @@ app.post("/api/data/task", async (req, res) => {
   }
 
   try {
-    await db.query(
-      `
-        INSERT INTO user_tasks (id, user_id, name, time, date, done, type, subtasks, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, NOW())
+      await db.query(
+        `
+        INSERT INTO user_tasks (id, user_id, name, time, date, done, type, calendar_event_id, subtasks, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, NOW())
         ON CONFLICT (id)
         DO UPDATE SET
           user_id = EXCLUDED.user_id,
@@ -552,6 +556,7 @@ app.post("/api/data/task", async (req, res) => {
           date = EXCLUDED.date,
           done = EXCLUDED.done,
           type = EXCLUDED.type,
+          calendar_event_id = EXCLUDED.calendar_event_id,
           subtasks = EXCLUDED.subtasks,
           updated_at = NOW()
       `,
@@ -563,6 +568,7 @@ app.post("/api/data/task", async (req, res) => {
         String(task.date),
         Boolean(task.done),
         String(task.type || "regular"),
+        task.calendarEventId ? String(task.calendarEventId) : null,
         JSON.stringify(task.subtasks || []),
       ]
     );
