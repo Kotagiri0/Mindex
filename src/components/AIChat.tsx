@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, Settings, Star, Plus, ArrowUp, MessageCircle, StickyNote, Mic, Loader } from 'lucide-react';
+import { ChevronLeft, Settings, Star, Plus, ArrowUp, MessageCircle, StickyNote, Mic, Loader, Copy, MoreHorizontal, X } from 'lucide-react';
 import NoteView from './NoteView';
 import { Thread, Screen, Message, Task, SubTask } from '../types';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useVoiceInput } from '../lib/useVoiceInput';
 
 interface AIChatProps {
@@ -26,6 +26,10 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   const [noteMode, setNoteMode] = useState(false);
   const [thinkingIdx, setThinkingIdx] = useState(0);
   const [animatingContent, setAnimatingContent] = useState<string | null>(null);
+  const [replyQuote, setReplyQuote] = useState<string | null>(null);
+  const [openMsgMenuIdx, setOpenMsgMenuIdx] = useState<number | null>(null);
+  const [hoveredMsgIdx, setHoveredMsgIdx] = useState<number | null>(null);
+  const [isTouchDevice] = useState(() => typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const autoSentRef = useRef(false);
@@ -299,8 +303,12 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   const handleSend = () => {
     const text = input.trim();
     if (!text) return;
+    const finalText = replyQuote
+      ? `[Ответ на: "${replyQuote.length > 100 ? replyQuote.slice(0, 100) + '...' : replyQuote}"]\n${text}`
+      : text;
     setInput('');
-    sendText(text);
+    setReplyQuote(null);
+    sendText(finalText);
   };
 
   useEffect(() => {
@@ -508,6 +516,41 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     onClose();
   };
 
+  const saveMessageAsNote = (content: string) => {
+    const noteId = uuid();
+    const note: Thread = {
+      id: noteId,
+      title: content.trim().slice(0, 40) || 'Заметка',
+      preview: content.trim().slice(0, 100),
+      messages: [],
+      createdAt: Date.now(),
+      source: 'заметка' as const,
+      is_meaningful: true,
+      summary: content.trim(),
+    };
+    db.saveThread(note);
+    setThreads((prev: Thread[]) => [note, ...(Array.isArray(prev) ? prev : [])]);
+    const userId = db.getUserId();
+    if (userId) {
+      fetch('/api/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId }),
+      }).catch(() => {});
+    }
+  };
+
+  const deleteMessage = (msg: Message) => {
+    if (!threadId) return;
+    setThreads((prev: Thread[]) => prev.map(t => {
+      if (t.id !== threadId) return t;
+      const newMessages = t.messages.filter(m => m !== msg);
+      const updated = { ...t, messages: newMessages };
+      db.saveThread(updated);
+      return updated;
+    }));
+  };
+
   const updatePlanStep = (msgIndex: number, stepIndex: number, newName: string) => {
     setThreads(prev => prev.map(t => {
       if (t.id === threadId) {
@@ -647,11 +690,20 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
               </div>
             </div>
           );
-          return visibleMsgs.map((m, i) => {
+          // Close dropdown on outside click
+          const backdropEl = openMsgMenuIdx !== null ? (
+            <div key="msg-backdrop" style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => setOpenMsgMenuIdx(null)} />
+          ) : null;
+
+          const msgs = visibleMsgs.map((m, i) => {
             const isLast = i === visibleMsgs.length - 1;
             const showAnimated = isLast && m.role === 'assistant' && animatingContent !== null;
+            const showActions = isTouchDevice || hoveredMsgIdx === i;
             return (
-            <div key={i} style={{
+            <div key={i}
+              onMouseEnter={() => m.role === 'assistant' && setHoveredMsgIdx(i)}
+              onMouseLeave={() => setHoveredMsgIdx(null)}
+              style={{
               display: 'flex', flexDirection: 'column', gap: 3,
               alignItems: m.role === 'user' ? 'flex-end' : 'flex-start',
               alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
@@ -772,9 +824,79 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                 )}
               </div>
               <div className="text-[11px] text-text-tertiary px-1">{m.time}</div>
+
+              {/* Action panel — assistant messages only */}
+              {m.role === 'assistant' && !showAnimated && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  width: '100%', marginTop: 2,
+                  opacity: showActions ? 1 : 0,
+                  transition: 'opacity 0.15s',
+                  position: 'relative',
+                }}>
+                  <button
+                    onClick={() => navigator.clipboard?.writeText(m.content)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#bbb', display: 'flex', alignItems: 'center', transition: 'color 0.12s' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#555')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#bbb')}
+                  >
+                    <Copy size={14} strokeWidth={1.5} />
+                  </button>
+
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      onClick={() => setOpenMsgMenuIdx(openMsgMenuIdx === i ? null : i)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#bbb', display: 'flex', alignItems: 'center', transition: 'color 0.12s' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = '#555')}
+                      onMouseLeave={e => (e.currentTarget.style.color = '#bbb')}
+                    >
+                      <MoreHorizontal size={14} strokeWidth={1.5} />
+                    </button>
+
+                    <AnimatePresence>
+                      {openMsgMenuIdx === i && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                          transition={{ duration: 0.12 }}
+                          style={{
+                            position: 'absolute', right: 0, bottom: '100%', marginBottom: 4,
+                            background: '#fff', border: '1px solid #ebebeb',
+                            borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                            padding: '4px 0', zIndex: 20, minWidth: 160,
+                          }}
+                        >
+                          {[
+                            { label: 'Сохранить как заметку', color: '#222', action: () => { saveMessageAsNote(m.content); setOpenMsgMenuIdx(null); } },
+                            { label: 'Ответить', color: '#222', action: () => { setReplyQuote(m.content); setOpenMsgMenuIdx(null); inputRef.current?.focus(); } },
+                            { label: 'Удалить', color: '#e53e3e', action: () => { deleteMessage(m); setOpenMsgMenuIdx(null); } },
+                          ].map(item => (
+                            <button key={item.label}
+                              onClick={item.action}
+                              style={{
+                                display: 'block', width: '100%', textAlign: 'left',
+                                padding: '8px 14px', fontSize: 13, color: item.color,
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+                                transition: 'background 0.1s',
+                              }}
+                              onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
+                              onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              )}
             </div>
             );
           });
+          return [backdropEl, ...msgs];
         })()}
 
         {isTyping && (
@@ -793,6 +915,28 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         className="px-4 flex-shrink-0"
         style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))' }}
       >
+        <AnimatePresence>
+          {replyQuote && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 6 }}
+              transition={{ duration: 0.12 }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: '#f5f5f5', borderRadius: 6, padding: '8px 12px',
+                marginBottom: 6, borderLeft: '2px solid #aaa',
+              }}
+            >
+              <span style={{ flex: 1, fontSize: 12, color: '#888', fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {replyQuote.length > 100 ? replyQuote.slice(0, 100) + '...' : replyQuote}
+              </span>
+              <button onClick={() => setReplyQuote(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#aaa', padding: 0, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                <X size={14} strokeWidth={1.5} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
         <div className="rounded-[20px] p-4" style={{ background: '#ffffff' }}>
           <textarea
             ref={inputRef}

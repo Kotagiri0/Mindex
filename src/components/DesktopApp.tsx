@@ -3,9 +3,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Sun, Calendar, MessageCircle, Settings as SettingsIcon,
   Plus, ChevronDown, ArrowUp, Search, Check, Mic, Loader,
-  PanelLeftOpen, PanelLeftClose, Pencil,
+  PanelLeftOpen, PanelLeftClose, Pencil, Copy, MoreHorizontal, X,
 } from 'lucide-react';
-import { Task, Thread, Settings as SettingsType, Screen } from '../types';
+import { Task, Thread, Message, Settings as SettingsType, Screen } from '../types';
 import AddTaskModal from './AddTaskModal';
 import EditTaskModal from './EditTaskModal';
 import SettingsScreen from './Settings';
@@ -585,6 +585,9 @@ function ChatView({
   const [isTyping, setIsTyping] = useState(false);
   const [thinkingIdx, setThinkingIdx] = useState(0);
   const [animatingContent, setAnimatingContent] = useState<string | null>(null);
+  const [replyQuote, setReplyQuote] = useState<string | null>(null);
+  const [openMsgMenuIdx, setOpenMsgMenuIdx] = useState<number | null>(null);
+  const [hoveredMsgIdx, setHoveredMsgIdx] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const didAutoSend = useRef(false);
   const animIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -674,6 +677,51 @@ function ChatView({
         return u;
       }));
     } catch { /* не критично */ }
+  };
+
+  const saveMessageAsNote = (content: string) => {
+    const noteId = uuid();
+    const note: Thread = {
+      id: noteId,
+      title: content.trim().slice(0, 40) || 'Заметка',
+      preview: content.trim().slice(0, 100),
+      messages: [],
+      createdAt: Date.now(),
+      source: 'заметка' as const,
+      is_meaningful: true,
+      summary: content.trim(),
+    };
+    db.saveThread(note);
+    setThreads((prev: Thread[]) => [note, ...(Array.isArray(prev) ? prev : [])]);
+    const userId = db.getUserId();
+    if (userId) {
+      fetch('/api/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId }),
+      }).catch(() => {});
+    }
+  };
+
+  const deleteMessage = (msg: Message) => {
+    setThreads((prev: Thread[]) => prev.map(t => {
+      if (t.id !== threadId) return t;
+      const newMessages = t.messages.filter(m => m !== msg);
+      const updated = { ...t, messages: newMessages };
+      db.saveThread(updated);
+      return updated;
+    }));
+  };
+
+  const handleSend = () => {
+    const text = input.trim();
+    if (!text || isTyping) return;
+    const finalText = replyQuote
+      ? `[Ответ на: "${replyQuote.length > 100 ? replyQuote.slice(0, 100) + '...' : replyQuote}"]\n${text}`
+      : text;
+    setInput('');
+    setReplyQuote(null);
+    sendMessage(finalText);
   };
 
   const sendMessage = async (text: string) => {
@@ -917,12 +965,20 @@ function ChatView({
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', paddingTop: 32, paddingBottom: 16 }}>
         <div style={{ ...CC, display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {openMsgMenuIdx !== null && (
+            <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => setOpenMsgMenuIdx(null)} />
+          )}
+
           {visible.map((m, i) => {
             const realIdx = thread.messages.indexOf(m);
             const isLast = i === visible.length - 1;
             const showAnimated = isLast && m.role === 'assistant' && animatingContent !== null;
+            const showActions = hoveredMsgIdx === i;
             return (
-              <div key={i} style={{
+              <div key={i}
+                onMouseEnter={() => m.role === 'assistant' && setHoveredMsgIdx(i)}
+                onMouseLeave={() => setHoveredMsgIdx(null)}
+                style={{
                 display: 'flex', flexDirection: 'column',
                 alignItems: m.role === 'user' ? 'flex-end' : 'flex-start',
                 alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
@@ -1022,6 +1078,74 @@ function ChatView({
                   </div>
                 )}
                 <span style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)' }}>{m.time}</span>
+
+                {/* Action panel — assistant messages only */}
+                {m.role === 'assistant' && !showAnimated && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    width: '100%', marginTop: 2,
+                    opacity: showActions ? 1 : 0,
+                    transition: 'opacity 0.15s',
+                    position: 'relative',
+                  }}>
+                    <button
+                      onClick={() => navigator.clipboard?.writeText(m.content)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#bbb', display: 'flex', alignItems: 'center', transition: 'color 0.12s' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = '#555')}
+                      onMouseLeave={e => (e.currentTarget.style.color = '#bbb')}
+                    >
+                      <Copy size={14} strokeWidth={1.5} />
+                    </button>
+
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        onClick={() => setOpenMsgMenuIdx(openMsgMenuIdx === i ? null : i)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#bbb', display: 'flex', alignItems: 'center', transition: 'color 0.12s' }}
+                        onMouseEnter={e => (e.currentTarget.style.color = '#555')}
+                        onMouseLeave={e => (e.currentTarget.style.color = '#bbb')}
+                      >
+                        <MoreHorizontal size={14} strokeWidth={1.5} />
+                      </button>
+
+                      <AnimatePresence>
+                        {openMsgMenuIdx === i && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                            transition={{ duration: 0.12 }}
+                            style={{
+                              position: 'absolute', right: 0, bottom: '100%', marginBottom: 4,
+                              background: '#fff', border: '1px solid #ebebeb',
+                              borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                              padding: '4px 0', zIndex: 20, minWidth: 160,
+                            }}
+                          >
+                            {[
+                              { label: 'Сохранить как заметку', color: '#222', action: () => { saveMessageAsNote(m.content); setOpenMsgMenuIdx(null); } },
+                              { label: 'Ответить', color: '#222', action: () => { setReplyQuote(m.content); setOpenMsgMenuIdx(null); } },
+                              { label: 'Удалить', color: '#e53e3e', action: () => { deleteMessage(m); setOpenMsgMenuIdx(null); } },
+                            ].map(item => (
+                              <button key={item.label}
+                                onClick={item.action}
+                                style={{
+                                  display: 'block', width: '100%', textAlign: 'left',
+                                  padding: '8px 14px', fontSize: 13, color: item.color,
+                                  background: 'none', border: 'none', cursor: 'pointer',
+                                  fontFamily: M, transition: 'background 0.1s',
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1037,7 +1161,29 @@ function ChatView({
 
       <div style={{ padding: '0 0 32px', flexShrink: 0 }}>
         <div style={{ ...CC }}>
-          <ChatInputBar value={input} onChange={setInput} onSend={() => sendMessage(input)} disabled={isTyping} placeholder="Задай уточняющий вопрос" />
+          <AnimatePresence>
+            {replyQuote && (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 6 }}
+                transition={{ duration: 0.12 }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: '#f5f5f5', borderRadius: 6, padding: '8px 12px',
+                  marginBottom: 6, borderLeft: '2px solid #aaa',
+                }}
+              >
+                <span style={{ flex: 1, fontSize: 12, color: '#888', fontFamily: M, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {replyQuote.length > 100 ? replyQuote.slice(0, 100) + '...' : replyQuote}
+                </span>
+                <button onClick={() => setReplyQuote(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#aaa', padding: 0, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                  <X size={14} strokeWidth={1.5} />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <ChatInputBar value={input} onChange={setInput} onSend={handleSend} disabled={isTyping} placeholder="Задай уточняющий вопрос" />
         </div>
       </div>
     </div>
