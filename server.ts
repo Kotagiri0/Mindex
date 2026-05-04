@@ -59,6 +59,28 @@ const httpRequestsInFlight = new Gauge({
   registers: [metricsRegistry],
 });
 
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 120;
+const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+
+const taskRateLimit = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const key = `${req.ip || "unknown"}:${req.path}`;
+  const now = Date.now();
+  const bucket = rateLimitBuckets.get(key);
+
+  if (!bucket || bucket.resetAt <= now) {
+    rateLimitBuckets.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return next();
+  }
+
+  bucket.count += 1;
+  if (bucket.count > RATE_LIMIT_MAX) {
+    return res.status(429).json({ error: "Слишком много запросов. Попробуй чуть позже." });
+  }
+
+  return next();
+};
+
 const getRouteLabel = (req: express.Request) => {
   if (req.route?.path) {
     const routePath = typeof req.route.path === "string" ? req.route.path : req.path;
@@ -532,7 +554,7 @@ app.post("/api/data/profile", async (req, res) => {
   }
 });
 
-app.post("/api/data/task", async (req, res) => {
+app.post("/api/data/task", taskRateLimit, async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }
@@ -578,7 +600,7 @@ app.post("/api/data/task", async (req, res) => {
   }
 });
 
-app.delete("/api/data/task/:id", async (req, res) => {
+app.delete("/api/data/task/:id", taskRateLimit, async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }

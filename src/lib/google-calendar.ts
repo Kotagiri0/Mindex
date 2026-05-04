@@ -75,7 +75,10 @@ const fetchGoogleClientId = async () => {
     if (!response.ok) {
       return '';
     }
-    const data = await response.json().catch(() => null) as { googleClientId?: string } | null;
+    const data = await response.json().catch(() => {
+      console.warn('[GCAL] Не удалось разобрать ответ /api/config.');
+      return null;
+    }) as { googleClientId?: string } | null;
     cachedClientId = data?.googleClientId || '';
     return cachedClientId;
   } catch {
@@ -235,7 +238,8 @@ const buildEventPayload = (task: Task) => {
   if (!task.time) {
     const [year, month, day] = task.date.split('-').map(Number);
     const startDate = new Date(year, month - 1, day);
-    const endDate = new Date(year, month - 1, day + 1);
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + 1);
     const pad = (value: number) => String(value).padStart(2, '0');
     const dateToString = (value: Date) =>
       `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
@@ -251,10 +255,9 @@ const buildEventPayload = (task: Task) => {
 
   const start = buildDateTime(task.date, task.time);
   const [hour, minute] = task.time.split(':').map(Number);
-  const endDate = new Date();
   const [year, month, day] = task.date.split('-').map(Number);
-  endDate.setFullYear(year, month - 1, day);
-  endDate.setHours(hour, minute + 60, 0, 0);
+  const endDate = new Date(year, month - 1, day, hour, minute, 0, 0);
+  endDate.setMinutes(endDate.getMinutes() + 60);
   const end = buildDateTime(
     `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`,
     `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`,
@@ -308,6 +311,10 @@ export const syncGoogleCalendarTask = async (task: Task): Promise<Task | null> =
     if (response.status === 401 || response.status === 403) {
       const userId = getCurrentUser()?.id;
       if (userId) clearToken(userId);
+    }
+
+    if (response.ok) {
+      return task;
     }
 
     return null;
