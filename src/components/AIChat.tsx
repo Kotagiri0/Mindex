@@ -487,23 +487,23 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   };
 
   const handleClose = () => {
+    // Fire-and-forget summarize if thread has enough content and no summary yet
     const userId = db.getUserId();
-    const threadSnapshot = thread;
-    if (userId && threadSnapshot && threadSnapshot.messages.some(m => m.role === 'user')) {
-      fetch('/api/classify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threadId: threadSnapshot.id, userId, messages: threadSnapshot.messages }),
-      })
-        .then(r => r.json())
-        .then(({ is_meaningful }) => {
-          if (is_meaningful !== undefined) {
+    if (userId && thread && !thread.summary) {
+      const userMsgs = thread.messages.filter(m => m.role === 'user');
+      if (userMsgs.length >= 2) {
+        fetch('/api/summarize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: thread.messages, threadId: thread.id, userId }),
+        }).then(r => r.json()).then(({ summary }) => {
+          if (summary) {
             setThreads((prev: Thread[]) => prev.map(t =>
-              t.id === threadSnapshot.id ? { ...t, is_meaningful } : t
+              t.id === thread.id ? { ...t, summary, is_meaningful: true } : t
             ));
           }
-        })
-        .catch(() => {});
+        }).catch(() => {});
+      }
     }
     onClose();
   };
@@ -589,18 +589,31 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           <ChevronLeft size={24} strokeWidth={1.75} color="#222224" />
         </motion.button>
 
-        <div className="flex items-center gap-0.5 rounded-full p-1" style={{ background: '#ffffff' }}>
+        <div className="flex items-center gap-0.5 rounded-full p-1" style={{ background: '#ffffff', position: 'relative' }}>
+          <motion.div
+            layoutId="aichat-tab-pill"
+            style={{
+              position: 'absolute',
+              top: 4,
+              width: 40, height: 40,
+              borderRadius: '50%',
+              background: 'rgba(34,34,36,0.08)',
+              left: !noteMode ? 4 : 46,
+              zIndex: 0,
+            }}
+            transition={{ type: 'spring', stiffness: 420, damping: 36 }}
+          />
           <button
             className="w-10 h-10 rounded-full flex items-center justify-center"
             onClick={() => setNoteMode(false)}
-            style={{ background: !noteMode ? 'rgba(34,34,36,0.08)' : 'transparent' }}
+            style={{ position: 'relative', zIndex: 1, background: 'transparent' }}
           >
-            <MessageCircle size={20} strokeWidth={1.75} color="#222224" />
+            <MessageCircle size={20} strokeWidth={1.75} color={!noteMode ? '#222224' : 'rgba(34,34,36,0.3)'} />
           </button>
           <button
             className="w-10 h-10 rounded-full flex items-center justify-center"
             onClick={() => setNoteMode(true)}
-            style={{ background: noteMode ? 'rgba(34,34,36,0.08)' : 'transparent' }}
+            style={{ position: 'relative', zIndex: 1, background: 'transparent' }}
           >
             <StickyNote size={20} strokeWidth={1.75} color={noteMode ? '#222224' : 'rgba(34,34,36,0.3)'} />
           </button>
@@ -616,7 +629,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       </div>
 
       {noteMode && threadId ? (
-        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col">
           <NoteView threadId={threadId} threads={threads} setThreads={setThreads} tasks={tasks} onSwitchToChat={() => setNoteMode(false)} />
         </div>
       ) : null}

@@ -591,10 +591,34 @@ function ChatView({
   const prevIsTypingRef = useRef(false);
 
   const thread = threads.find(t => t.id === threadId);
+  const threadRef = useRef(thread);
+  threadRef.current = thread;
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [thread?.messages, isTyping]);
+
+  // Summarize on unmount if thread has enough content and no summary
+  useEffect(() => {
+    return () => {
+      const t = threadRef.current;
+      const userId = db.getUserId();
+      if (!userId || !t || t.summary) return;
+      const userMsgs = t.messages.filter((m: any) => m.role === 'user');
+      if (userMsgs.length < 2) return;
+      fetch('/api/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: t.messages, threadId: t.id, userId }),
+      }).then(r => r.json()).then(({ summary }) => {
+        if (summary) {
+          setThreads((prev: Thread[]) => prev.map(p =>
+            p.id === t.id ? { ...p, summary, is_meaningful: true } : p
+          ));
+        }
+      }).catch(() => {});
+    };
+  }, []);
 
   useEffect(() => {
     if (initialMessage && !didAutoSend.current) {
@@ -1086,7 +1110,7 @@ function ThreadsView({
     t.title.toLowerCase().includes(search.toLowerCase()) ||
     t.preview.toLowerCase().includes(search.toLowerCase());
 
-  const thoughts = all.filter(t => t.source !== 'skill' && t.is_meaningful !== false && searchMatch(t));
+  const thoughts = all.filter(t => t.source !== 'skill' && t.source !== 'заметка' && searchMatch(t));
   const notes = all.filter(t => t.source !== 'skill' && searchMatch(t));
 
   const displayed = tab === 'thoughts' ? thoughts : notes;
@@ -1786,37 +1810,9 @@ export default function DesktopApp({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [calActive, setCalActive] = useState(false);
   const [noteMode, setNoteMode] = useState(false);
-  const prevCurThRef = useRef<string | null>(null);
-
   useEffect(() => {
     if (screen === 'ob') setScreen('dash');
   }, [screen]);
-
-  // Fire classify when navigating away from a thread that hasn't been classified yet
-  useEffect(() => {
-    const prevId = prevCurThRef.current;
-    prevCurThRef.current = curTh;
-    if (!prevId || prevId === curTh) return;
-    const prevThread = (Array.isArray(threads) ? threads : []).find(t => t.id === prevId);
-    const userId = db.getUserId();
-    if (!prevThread || !userId) return;
-    if (prevThread.is_meaningful !== null && prevThread.is_meaningful !== undefined) return;
-    if (!prevThread.messages.some((m: any) => m.role === 'user')) return;
-    fetch('/api/classify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId: prevId, userId, messages: prevThread.messages }),
-    })
-      .then(r => r.json())
-      .then(({ is_meaningful }) => {
-        if (is_meaningful !== undefined) {
-          setThreads((prev: Thread[]) => prev.map(t =>
-            t.id === prevId ? { ...t, is_meaningful } : t
-          ));
-        }
-      })
-      .catch(() => {});
-  }, [curTh]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);

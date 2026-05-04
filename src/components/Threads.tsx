@@ -13,12 +13,13 @@ interface ThreadsProps {
   onNavigate: (screen: Screen) => void;
   onOpenThread: (id: string) => void;
   onNewThread: () => void;
+  onSubScreenChange?: (active: boolean) => void;
 }
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
 
-export default function Threads({ threads, setThreads, tasks, onNavigate, onOpenThread }: ThreadsProps) {
+export default function Threads({ threads, setThreads, tasks, onNavigate, onOpenThread, onSubScreenChange }: ThreadsProps) {
   const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
@@ -50,11 +51,11 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
     t.title.toLowerCase().includes(search.toLowerCase()) ||
     t.preview.toLowerCase().includes(search.toLowerCase());
 
-  const filtered = threads.filter(t =>
-    t.source !== 'skill' &&
-    (activeTab === 'thoughts' ? t.is_meaningful !== false : true) &&
-    searchMatch(t)
-  );
+  const filtered = threads.filter(t => {
+    if (t.source === 'skill') return false;
+    if (activeTab === 'thoughts') return t.source !== 'заметка' && searchMatch(t);
+    return searchMatch(t); // notes tab shows all non-skill threads
+  });
 
   const handleRename = async (id: string) => {
     const val = renameValue.trim();
@@ -80,24 +81,26 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
 
   // ── Note editor ──────────────────────────────────────────────────────────────
   if (showNoteEditor) {
+    onSubScreenChange?.(true);
     return (
       <NoteEditor
         thread={editingNote}
-        onSaved={handleNoteSaved}
-        onClose={() => { setShowNoteEditor(false); setEditingNoteId(null); }}
+        onSaved={(saved) => { onSubScreenChange?.(false); handleNoteSaved(saved); }}
+        onClose={() => { onSubScreenChange?.(false); setShowNoteEditor(false); setEditingNoteId(null); }}
       />
     );
   }
 
   // ── Note detail view ─────────────────────────────────────────────────────────
   if (activeTab === 'notes' && openNoteId) {
+    onSubScreenChange?.(true);
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f0f0f0' }}>
         <div style={{ height: 'env(safe-area-inset-top, 0px)' }} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', flexShrink: 0 }}>
           <motion.button
             whileTap={{ scale: 0.88 }}
-            onClick={() => setOpenNoteId(null)}
+            onClick={() => { onSubScreenChange?.(false); setOpenNoteId(null); }}
             style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
           >
             <ChevronLeft size={22} strokeWidth={1.75} color="#222224" />
@@ -105,7 +108,7 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
           <span style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: '#111' }}>Заметка</span>
           <div style={{ width: 44 }} />
         </div>
-        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', background: '#fff', borderRadius: '20px 20px 0 0' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: '#fff', borderRadius: '20px 20px 0 0' }}>
           <NoteView
             threadId={openNoteId}
             threads={threads}
@@ -119,7 +122,7 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: activeTab === 'notes' ? '#ffffff' : '#f0f0f0' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: activeTab === 'thoughts' ? '#ffffff' : '#f0f0f0' }}>
       <div style={{ height: 'env(safe-area-inset-top, 0px)' }} />
 
       {/* Header */}

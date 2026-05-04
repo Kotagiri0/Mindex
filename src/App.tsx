@@ -31,8 +31,9 @@ export default function App() {
   const [curTh, setCurTh] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(getCurrentUser()));
   const [pendingMsg, setPendingMsg] = useState('');
+  const [threadsSubScreen, setThreadsSubScreen] = useState(false);
 
-  const navigateMobile = (next: Screen) => setScreen(next);
+  const navigateMobile = (next: Screen) => { setScreen(next); if (next !== 'threads') setThreadsSubScreen(false); };
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [isDesktopViewport, setIsDesktopViewport] = useState(
     typeof window !== 'undefined' ? window.innerWidth >= 1024 : false,
@@ -308,6 +309,7 @@ export default function App() {
                 setScreen('ai');
               }}
               onNewThread={startNewThread}
+              onSubScreenChange={setThreadsSubScreen}
             />
           </motion.div>
         )}
@@ -344,11 +346,13 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <BottomNav
-        activeScreen={screen}
-        onNavigate={navigateMobile}
-        onNewThread={startNewThread}
-      />
+      {!threadsSubScreen && (
+        <BottomNav
+          activeScreen={screen}
+          onNavigate={navigateMobile}
+          onNewThread={startNewThread}
+        />
+      )}
     </div>
   );
 }
