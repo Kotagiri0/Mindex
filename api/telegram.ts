@@ -3,6 +3,7 @@ import axios from "axios";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import Groq from "groq-sdk";
 import crypto from "crypto";
+import { BOT_COMMANDS } from "./bot-commands";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -322,9 +323,41 @@ async function tgApi(token: string, method: string, body: any) {
 
 async function handleStart(token: string, chatId: number, firstName: string, supabase: SupabaseClient, userId: number) {
   await ensureProfile(supabase, userId);
+  const miniAppUrl = process.env.MINI_APP_URL;
+  const reply_markup = miniAppUrl
+    ? { inline_keyboard: [[{ text: '📱 Открыть Mindex', web_app: { url: miniAppUrl } }]] }
+    : undefined;
   await tgApi(token, 'sendMessage', {
     chat_id: chatId,
-    text: `Привет, ${firstName}! Я Мысль — твой персональный помощник по планированию.\n\nПросто напиши что думаешь, и я помогу разобраться с задачами. Например:\n"Встреча с командой завтра в 10"\n"Что у меня на сегодня?"\n\n/tasks — показать задачи на сегодня`
+    text: `Привет, ${firstName}! Я Мысль — твой персональный помощник по планированию.\n\nПросто напиши что думаешь, и я помогу разобраться с задачами. Например:\n"Встреча с командой завтра в 10"\n"Что у меня на сегодня?"\n\n/tasks — задачи на сегодня\n/help — все команды`,
+    ...(reply_markup ? { reply_markup } : {}),
+  });
+}
+
+async function handleHelp(token: string, chatId: number) {
+  const lines = BOT_COMMANDS.map(c => `/${c.command} — ${c.description}`).join('\n');
+  await tgApi(token, 'sendMessage', { chat_id: chatId, text: `📋 Доступные команды:\n\n${lines}` });
+}
+
+async function handleClear(token: string, chatId: number, supabase: SupabaseClient, userId: number) {
+  const { error } = await supabase.from('threads').delete().eq('user_id', userId).eq('title', BOT_THREAD_TITLE);
+  if (error) {
+    await tgApi(token, 'sendMessage', { chat_id: chatId, text: 'Не удалось очистить историю. Попробуй ещё раз.' });
+    return;
+  }
+  await tgApi(token, 'sendMessage', { chat_id: chatId, text: '🗑 История диалога очищена.' });
+}
+
+async function handleApp(token: string, chatId: number) {
+  const miniAppUrl = process.env.MINI_APP_URL;
+  if (!miniAppUrl) {
+    await tgApi(token, 'sendMessage', { chat_id: chatId, text: 'Веб-версия временно недоступна. Используй команды бота.' });
+    return;
+  }
+  await tgApi(token, 'sendMessage', {
+    chat_id: chatId,
+    text: 'Открываю Mindex 👇',
+    reply_markup: { inline_keyboard: [[{ text: '📱 Открыть Mindex', web_app: { url: miniAppUrl } }]] },
   });
 }
 
@@ -431,9 +464,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).end();
     }
 
+    if (text === '/help') {
+      await handleHelp(BOT_TOKEN, chatId);
+      return res.status(200).end();
+    }
+
     if (text === '/tasks') {
       await ensureProfile(supabase, userId);
       await handleTasks(BOT_TOKEN, chatId, supabase, userId);
+      return res.status(200).end();
+    }
+
+    if (text === '/clear') {
+      await ensureProfile(supabase, userId);
+      await handleClear(BOT_TOKEN, chatId, supabase, userId);
+      return res.status(200).end();
+    }
+
+    if (text === '/app') {
+      await handleApp(BOT_TOKEN, chatId);
+      return res.status(200).end();
+    }
+
+    // /add <task text> — quick shortcut
+    if (text.startsWith('/add')) {
+      await ensureProfile(supabase, userId);
+      const taskName = text.startsWith('/add ') ? text.slice(5).trim() : '';
+      if (!taskName) {
+        await tgApi(BOT_TOKEN, 'sendMessage', { chat_id: chatId, text: 'Напиши название задачи после /add' });
+        return res.status(200).end();
+      }
+      const today = new Date().toISOString().split('T')[0];
+      const { error: insertErr } = await supabase.from('tasks').insert({ user_id: userId, name: taskName, date: today, done: false, type: 'regular' });
+      if (insertErr) {
+        await tgApi(BOT_TOKEN, 'sendMessage', { chat_id: chatId, text: 'Не удалось добавить задачу. Попробуй ещё раз.' });
+        return res.status(200).end();
+      }
+      await tgApi(BOT_TOKEN, 'sendMessage', { chat_id: chatId, text: `✅ Задача добавлена: ${taskName}` });
       return res.status(200).end();
     }
 
