@@ -18,6 +18,7 @@ import {
   collectDefaultMetrics,
 } from "prom-client";
 import { verifyGoogleIdToken } from './src/lib/google-auth.ts';
+import { registerBotRoutes } from './server-bot.ts';
 
 dotenv.config();
 
@@ -1066,6 +1067,9 @@ app.post("/api/chat", async (req, res) => {
     res.status(500).json({ error: msg });
   }
 });
+
+// ─── Telegram Bot ─────────────────────────────────────────────────────────────
+if (db) registerBotRoutes(app, db);
 
 const startServer = async () => {
   await ensureAuthSchema();
