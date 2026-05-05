@@ -34,6 +34,9 @@ export const SYSTEM_INSTRUCTION = `Ты — Мысль, личный ассис�
 — start_planning: когда задача сложная или многошаговая — запусти опросник для декомпозиции
 — save_as_note: когда пользователь просит сохранить что-то как заметку (своё сообщение, твой ответ, любой текст). Придумай подходящее название
 
+GOOGLE КАЛЕНДАРЬ
+Если пользователь подключил Google Календарь в настройках, задачи с датой автоматически появляются в его Google Календаре при создании или обновлении через add_task / update_task. Никогда не говори пользователю, что ты не можешь добавить событие в Google Календарь — просто создай или обнови задачу как обычно, и она сама туда попадёт. При создании задачи можно передать поля description (описание) и location (место/адрес) — они тоже отобразятся в Google Календаре.
+
 Сегодняшняя дата: ${_todayStr}`;
 
 export const tools: any[] = [
@@ -57,7 +60,7 @@ export const tools: any[] = [
     type: "function",
     function: {
       name: "add_task",
-      description: "Добавить новую задачу в календарь.",
+      description: "Добавить новую задачу в планировщик. Если подключён Google Календарь — задача автоматически появится там.",
       parameters: {
         type: "object",
         properties: {
@@ -73,6 +76,14 @@ export const tools: any[] = [
             type: "string",
             description: "Дата задачи в формате YYYY-MM-DD. По умолчанию — сегодня.",
           },
+          description: {
+            type: "string",
+            description: "Описание задачи (необязательно). Отображается в Google Календаре.",
+          },
+          location: {
+            type: "string",
+            description: "Место или адрес (необязательно). Отображается в Google Календаре.",
+          },
         },
         required: ["name"],
       },
@@ -82,7 +93,7 @@ export const tools: any[] = [
     type: "function",
     function: {
       name: "update_task",
-      description: "Обновить существующую задачу (например, отметить как выполненную или изменить время).",
+      description: "Обновить существующую задачу (например, отметить как выполненную или изменить время). Изменения автоматически синхронизируются с Google Календарём если он подключён.",
       parameters: {
         type: "object",
         properties: {
@@ -105,6 +116,14 @@ export const tools: any[] = [
           date: {
             type: "string",
             description: "Новая дата задачи в формате YYYY-MM-DD.",
+          },
+          description: {
+            type: "string",
+            description: "Описание задачи. Отображается в Google Календаре.",
+          },
+          location: {
+            type: "string",
+            description: "Место или адрес. Отображается в Google Календаре.",
           },
         },
         required: ["id"],

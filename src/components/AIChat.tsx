@@ -145,14 +145,16 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             const filtered = date ? tasks.filter(t => t.date === date) : tasks;
             result = filtered.length > 0 ? filtered : 'Задач не найдено.';
           } else if (name === 'add_task') {
-            const { name: taskName, time, date } = args;
+            const { name: taskName, time, date, description, location } = args;
             const newTask: Task = {
               id: uuid(),
               name: taskName,
               time: time || '',
               date: date || new Date().toISOString().split('T')[0],
               done: false,
-              threadId: threadId || undefined
+              threadId: threadId || undefined,
+              description: description || undefined,
+              location: location || undefined,
             };
             setTasks(prev => [...prev, newTask]);
             db.saveTask(newTask);
@@ -179,7 +181,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             setIsTyping(false);
             return;
           } else if (name === 'update_task') {
-            const { id: taskId, done, name: taskName, time, date } = args;
+            const { id: taskId, done, name: taskName, time, date, description, location } = args;
             setTasks(prev => prev.map(t => {
               if (t.id === taskId) {
                 const updated = {
@@ -187,7 +189,9 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                   done: done !== undefined ? done : t.done,
                   name: taskName || t.name,
                   time: time !== undefined ? time : t.time,
-                  date: date !== undefined ? date : t.date
+                  date: date !== undefined ? date : t.date,
+                  description: description !== undefined ? description : t.description,
+                  location: location !== undefined ? location : t.location,
                 };
                 db.saveTask(updated);
                 return updated;
