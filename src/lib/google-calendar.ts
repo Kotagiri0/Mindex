@@ -20,11 +20,21 @@ type TokenClient = {
 
 type GooglePrompt = 'consent' | 'none' | 'select_account';
 
-const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+export type GoogleCalendarItem = {
+  id: string;
+  summary: string;
+  primary?: boolean;
+  backgroundColor?: string;
+  selected?: boolean;
+};
+
+const CALENDAR_SCOPE =
+  'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly';
 const CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3';
 const TOKEN_TTL_BUFFER_MS = 60_000;
 const DEFAULT_EVENT_DURATION_MINUTES = 60;
 const TOKEN_STORAGE_PREFIX = 'mx_google_calendar_token_';
+const CALENDAR_ID_STORAGE_PREFIX = 'mx_google_calendar_id_';
 
 let googleScriptPromise: Promise<void> | null = null;
 let tokenClient: TokenClient | null = null;
@@ -178,6 +188,38 @@ export const connectGoogleCalendar = async () => {
   return Boolean(token);
 };
 
+export const disconnectGoogleCalendar = () => {
+  const userId = getCurrentUser()?.id;
+  if (!userId) return;
+  clearToken(userId);
+  localStorage.removeItem(`${CALENDAR_ID_STORAGE_PREFIX}${userId}`);
+  // Reset cached token client so next connect uses updated scopes
+  tokenClient = null;
+};
+
+export const getSelectedCalendarId = (): string => {
+  const userId = getCurrentUser()?.id;
+  if (!userId) return 'primary';
+  return localStorage.getItem(`${CALENDAR_ID_STORAGE_PREFIX}${userId}`) || 'primary';
+};
+
+export const setSelectedCalendarId = (calendarId: string) => {
+  const userId = getCurrentUser()?.id;
+  if (!userId) return;
+  localStorage.setItem(`${CALENDAR_ID_STORAGE_PREFIX}${userId}`, calendarId);
+};
+
+export const fetchCalendarList = async (): Promise<GoogleCalendarItem[]> => {
+  const accessToken = await ensureGoogleCalendarToken({ allowPrompt: false });
+  if (!accessToken) return [];
+
+  const response = await calendarRequest('/users/me/calendarList', 'GET', accessToken);
+  if (!response.ok) return [];
+
+  const data = await response.json().catch(() => null) as { items?: GoogleCalendarItem[] } | null;
+  return data?.items ?? [];
+};
+
 const ensureGoogleCalendarToken = async (options: { allowPrompt?: boolean } = {}): Promise<string | null> => {
   const userId = getCurrentUser()?.id;
   if (!userId) return null;
@@ -239,6 +281,8 @@ const buildEventPayload = (task: Task) => {
       `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
     return {
       summary: task.name,
+      description: task.description || undefined,
+      location: task.location || undefined,
       start: { date: dateToString(startDate) },
       end: { date: dateToString(endDate) },
       extendedProperties: {
@@ -259,6 +303,8 @@ const buildEventPayload = (task: Task) => {
 
   return {
     summary: task.name,
+    description: task.description || undefined,
+    location: task.location || undefined,
     start: { dateTime: start },
     end: { dateTime: end },
     extendedProperties: {
@@ -280,7 +326,8 @@ const calendarRequest = async (path: string, method: string, accessToken: string
 };
 
 const createCalendarEvent = async (accessToken: string, payload: object) => {
-  const response = await calendarRequest('/calendars/primary/events', 'POST', accessToken, payload);
+  const calendarId = getSelectedCalendarId();
+  const response = await calendarRequest(`/calendars/${encodeURIComponent(calendarId)}/events`, 'POST', accessToken, payload);
   if (response.status === 401 || response.status === 403) {
     const userId = getCurrentUser()?.id;
     if (userId) clearToken(userId);
@@ -306,9 +353,11 @@ export const syncGoogleCalendarTask = async (task: Task): Promise<Task | null> =
   const payload = buildEventPayload(task);
   if (!payload) return null;
 
+  const calendarId = getSelectedCalendarId();
+
   if (task.calendarEventId) {
     const response = await calendarRequest(
-      `/calendars/primary/events/${encodeURIComponent(task.calendarEventId)}`,
+      `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(task.calendarEventId)}`,
       'PATCH',
       accessToken,
       payload,
@@ -341,8 +390,9 @@ export const deleteGoogleCalendarEvent = async (eventId: string) => {
   const accessToken = await ensureGoogleCalendarToken({ allowPrompt: false });
   if (!accessToken) return;
 
+  const calendarId = getSelectedCalendarId();
   const response = await calendarRequest(
-    `/calendars/primary/events/${encodeURIComponent(eventId)}`,
+    `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
     'DELETE',
     accessToken,
   );

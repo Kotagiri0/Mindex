@@ -1971,9 +1971,9 @@ export default function DesktopApp({
     setIsAddModalOpen(false);
   };
 
-  const updateTask = async (id: string, name: string, time: string, date: string) => {
+  const updateTask = async (id: string, name: string, time: string, date: string, description: string, location: string) => {
     setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
-      if (t.id === id) { const u = { ...t, name, time, date }; db.saveTask(u); return u; }
+      if (t.id === id) { const u = { ...t, name, time, date, description, location }; db.saveTask(u); return u; }
       return t;
     }));
     setEditingTask(null);

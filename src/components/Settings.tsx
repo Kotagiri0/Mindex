@@ -1,8 +1,17 @@
-import { useState } from 'react';
-import { Pencil, ArrowLeft } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Pencil, ArrowLeft, ChevronDown, Check } from 'lucide-react';
 import { Settings } from '../types';
 import { getCurrentUser } from '../lib/auth';
 import { storage } from '../lib/storage';
+import {
+  isGoogleCalendarConnected,
+  connectGoogleCalendar,
+  disconnectGoogleCalendar,
+  fetchCalendarList,
+  getSelectedCalendarId,
+  setSelectedCalendarId,
+  type GoogleCalendarItem,
+} from '../lib/google-calendar';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
@@ -53,6 +62,161 @@ function IntegrationRow({ name, desc }: { name: string; desc: string }) {
           <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)' }}>{desc}</div>
         </div>
         <PillButton label="Подключить" onClick={() => alert('Скоро')} />
+      </div>
+    </div>
+  );
+}
+
+function GoogleCalendarRow() {
+  const [connected, setConnected] = useState(() => isGoogleCalendarConnected());
+  const [loading, setLoading] = useState(false);
+  const [calendars, setCalendars] = useState<GoogleCalendarItem[]>([]);
+  const [selectedId, setSelectedId] = useState(() => getSelectedCalendarId());
+  const [showPicker, setShowPicker] = useState(false);
+  const [loadingCalendars, setLoadingCalendars] = useState(false);
+
+  const loadCalendars = async () => {
+    setLoadingCalendars(true);
+    try {
+      const list = await fetchCalendarList();
+      setCalendars(list);
+    } finally {
+      setLoadingCalendars(false);
+    }
+  };
+
+  // Load calendar list on mount if already connected
+  useEffect(() => {
+    if (connected) {
+      loadCalendars();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleConnect = async () => {
+    setLoading(true);
+    try {
+      const ok = await connectGoogleCalendar();
+      if (ok) {
+        setConnected(true);
+        await loadCalendars();
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDisconnect = () => {
+    disconnectGoogleCalendar();
+    setConnected(false);
+    setCalendars([]);
+    setSelectedId('primary');
+    setShowPicker(false);
+  };
+
+  const handleSelectCalendar = (id: string) => {
+    setSelectedCalendarId(id);
+    setSelectedId(id);
+    setShowPicker(false);
+  };
+
+  const selectedCalendar = calendars.find(c => c.id === selectedId);
+  const displayName = loadingCalendars
+    ? 'Загружаем...'
+    : selectedCalendar?.summary || (selectedId === 'primary' ? 'Основной' : selectedId);
+
+  return (
+    <div>
+      <div style={{ height: 1, background: 'rgba(0,0,0,0.06)' }} />
+      <div style={{ padding: '18px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontFamily: M, fontSize: 15, color: 'var(--text-primary)', marginBottom: 3 }}>
+              Google Календарь
+            </div>
+            <div style={{ fontFamily: M, fontSize: 13, color: connected ? '#22c55e' : 'var(--text-muted)' }}>
+              {connected ? 'Подключён' : 'Синхронизация твоих событий и задач'}
+            </div>
+          </div>
+          {connected ? (
+            <PillButton label="Отключить" onClick={handleDisconnect} danger />
+          ) : (
+            <PillButton label={loading ? '...' : 'Подключить'} onClick={handleConnect} />
+          )}
+        </div>
+
+        {connected && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontFamily: M, fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>
+              Активный календарь
+            </div>
+            <button
+              onClick={() => setShowPicker(v => !v)}
+              style={{
+                width: '100%', padding: '10px 14px', borderRadius: 12,
+                border: '1px solid rgba(0,0,0,0.1)',
+                background: 'var(--surface2, rgba(0,0,0,0.03))',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                cursor: 'pointer', fontFamily: M, fontSize: 14, color: 'var(--text-primary)',
+                boxSizing: 'border-box' as const,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {selectedCalendar?.backgroundColor && (
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: selectedCalendar.backgroundColor, flexShrink: 0 }} />
+                )}
+                <span>{displayName}</span>
+              </div>
+              <ChevronDown
+                size={15}
+                style={{ transform: showPicker ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}
+              />
+            </button>
+
+            {showPicker && calendars.length > 0 && (
+              <div style={{
+                marginTop: 4, borderRadius: 12, overflow: 'hidden',
+                border: '1px solid rgba(0,0,0,0.08)',
+                background: 'var(--surface)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+              }}>
+                {calendars.map((cal, idx) => (
+                  <button
+                    key={cal.id}
+                    onClick={() => handleSelectCalendar(cal.id)}
+                    style={{
+                      width: '100%', padding: '11px 14px',
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      background: cal.id === selectedId ? 'rgba(99,102,241,0.06)' : 'transparent',
+                      border: 'none',
+                      borderBottom: idx < calendars.length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none',
+                      cursor: 'pointer', textAlign: 'left' as const,
+                    }}
+                  >
+                    <div style={{
+                      width: 10, height: 10, borderRadius: '50%',
+                      background: cal.backgroundColor || '#4285f4', flexShrink: 0,
+                    }} />
+                    <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-primary)', flex: 1 }}>
+                      {cal.summary}
+                    </span>
+                    {cal.primary && (
+                      <span style={{
+                        fontFamily: M, fontSize: 11, color: 'var(--text-muted)',
+                        background: 'rgba(0,0,0,0.06)', padding: '2px 8px', borderRadius: 20,
+                      }}>
+                        Основной
+                      </span>
+                    )}
+                    {cal.id === selectedId && (
+                      <Check size={14} color="var(--accent, #6366f1)" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -261,7 +425,7 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
           <div style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 4 }}>
             Интеграции
           </div>
-          <IntegrationRow name="Google Календарь" desc="Синхронизация твоих событий и задач" />
+          <GoogleCalendarRow />
           <IntegrationRow name="Яндекс Календарь" desc="Синхронизация твоих событий и задач" />
           <IntegrationRow name="Notion" desc="Импорт страниц как заметок" />
         </div>
