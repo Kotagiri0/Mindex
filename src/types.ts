@@ -14,6 +14,8 @@ export interface Task {
   type?: 'regular' | 'thought';
   subtasks?: SubTask[];
   calendarEventId?: string;
+  description?: string;
+  location?: string;
 }
 
 export interface Message {

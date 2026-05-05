@@ -6,7 +6,7 @@ import { Task } from '../types';
 interface EditTaskModalProps {
   task: Task | null;
   onClose: () => void;
-  onUpdate: (id: string, name: string, time: string, date: string) => void;
+  onUpdate: (id: string, name: string, time: string, date: string, description: string, location: string) => void;
   onDelete: (id: string) => void;
   onOpenThread?: (id: string) => void;
 }
@@ -15,18 +15,22 @@ export default function EditTaskModal({ task, onClose, onUpdate, onDelete, onOpe
   const [name, setName] = useState('');
   const [time, setTime] = useState('');
   const [date, setDate] = useState('');
+  const [description, setDescription] = useState('');
+  const [location, setLocation] = useState('');
 
   useEffect(() => {
     if (task) {
       setName(task.name);
       setTime(task.time || '');
       setDate(task.date || '');
+      setDescription(task.description || '');
+      setLocation(task.location || '');
     }
   }, [task]);
 
   const handleUpdate = () => {
     if (!task || !name.trim()) return;
-    onUpdate(task.id, name, time, date);
+    onUpdate(task.id, name, time, date, description, location);
   };
 
   const handleGoToChat = () => {
@@ -97,6 +101,27 @@ export default function EditTaskModal({ task, onClose, onUpdate, onDelete, onOpe
                   onChange={(e) => setDate(e.target.value)}
                 />
               </div>
+            </div>
+
+            <div className="mb-3">
+              <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Место</label>
+              <input
+                className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary"
+                placeholder="Адрес или название места"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+              />
+            </div>
+
+            <div className="mb-3">
+              <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Описание</label>
+              <textarea
+                className="w-full bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 py-3 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary resize-none"
+                placeholder="Доп. информация о задаче"
+                rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
             </div>
 
             <div className="flex gap-2.5 mt-2">
