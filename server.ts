@@ -732,6 +732,26 @@ app.delete("/api/data/thread/:id", async (req, res) => {
   }
 });
 
+app.patch("/api/data/thread/:id/archive", async (req, res) => {
+  if (!db) return res.status(500).json({ error: "База данных не настроена." });
+
+  const id = String(req.params.id || "").trim();
+  const { userId } = req.body || {};
+  if (!id || !userId) return res.status(400).json({ error: "id и userId обязательны." });
+
+  try {
+    const result = await db.query(
+      `UPDATE user_threads SET source = 'заметка', updated_at = NOW() WHERE id = $1 AND user_id = $2 RETURNING id`,
+      [id, String(userId)]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: "Тред не найден." });
+    return res.status(200).json({ success: true });
+  } catch (err: any) {
+    console.error('[archive]', err);
+    return res.status(500).json({ error: "Не удалось архивировать тред." });
+  }
+});
+
 app.get("/api/chat", (req, res) => {
   res.json({ status: "ok", message: "Local Chat API is running" });
 });
@@ -883,17 +903,27 @@ app.post("/api/summarize", async (req, res) => {
       messages: [
         {
           role: 'system',
-          content: `Ты — Мысль, персональный ИИ-ассистент. Структурированно изложи суть диалога в виде заметки.
-Формат:
+          content: `Ты — Мысль, персональный ИИ-ассистент. Проанализируй диалог и верни JSON-объект:
+{
+  "is_meaningful": true/false,
+  "summary": "..."
+}
+
+is_meaningful = true если диалог содержит: цели, планы, задачи, решения, важные мысли, информацию о пользователе, его проектах или приоритетах.
+is_meaningful = false если диалог: короткий small-talk, технические тесты, приветствия, бессодержательные реплики.
+
+Если is_meaningful = true, summary — структурированная заметка:
 **Суть:** одно предложение — о чём был разговор.
 **Ключевые тезисы:** 2–4 буллет-пункта с главными мыслями и решениями.
 **Задачи:** (только если были явно упомянуты) краткий список.
-Пиши по-русски, кратко, без воды.`,
+
+Если is_meaningful = false, summary = "".
+Пиши по-русски. Верни только валидный JSON, без markdown-обёртки.`,
         },
         { role: 'user', content: `Диалог:\n\n${dialogText}` },
       ],
-      max_tokens: 500,
-      temperature: 0.3,
+      max_tokens: 600,
+      temperature: 0.2,
       thinking: false,
     });
 
@@ -903,29 +933,44 @@ app.post("/api/summarize", async (req, res) => {
     }
 
     const data = await response.json();
-    const summary = data.choices?.[0]?.message?.content || '';
+    const rawContent = data.choices?.[0]?.message?.content || '';
 
-    if (summary && db && threadId && userId) {
+    let summary = '';
+    let isMeaningful = false;
+    try {
+      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+      const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : rawContent);
+      isMeaningful = Boolean(parsed.is_meaningful);
+      summary = isMeaningful ? (parsed.summary || '') : '';
+    } catch {
+      // Если модель не вернула JSON — считаем контент саммари, is_meaningful = true
+      summary = rawContent;
+      isMeaningful = rawContent.length > 20;
+    }
+
+    if (db && threadId && userId) {
       await db.query(
-        `UPDATE user_threads SET summary = $1, is_meaningful = true, updated_at = NOW() WHERE id = $2 AND user_id = $3`,
-        [summary, threadId, userId]
+        `UPDATE user_threads SET summary = $1, is_meaningful = $2, updated_at = NOW() WHERE id = $3 AND user_id = $4`,
+        [summary || null, isMeaningful, threadId, userId]
       );
 
-      const threadRes = await db.query(
-        `SELECT title FROM user_threads WHERE id = $1 AND user_id = $2 LIMIT 1`,
-        [threadId, userId]
-      );
-      const title = threadRes.rows?.[0]?.title || '';
-      const embedding = await generateEmbedding(`${title}\n${summary}`);
-      if (embedding) {
-        await db.query(
-          `UPDATE user_threads SET embedding = $1::vector WHERE id = $2 AND user_id = $3`,
-          [`[${embedding.join(',')}]`, threadId, userId]
+      if (isMeaningful && summary) {
+        const threadRes = await db.query(
+          `SELECT title FROM user_threads WHERE id = $1 AND user_id = $2 LIMIT 1`,
+          [threadId, userId]
         );
+        const title = threadRes.rows?.[0]?.title || '';
+        const embedding = await generateEmbedding(`${title}\n${summary}`);
+        if (embedding) {
+          await db.query(
+            `UPDATE user_threads SET embedding = $1::vector WHERE id = $2 AND user_id = $3`,
+            [`[${embedding.join(',')}]`, threadId, userId]
+          );
+        }
       }
     }
 
-    return res.status(200).json({ summary });
+    return res.status(200).json({ summary, is_meaningful: isMeaningful });
   } catch (err: any) {
     console.error('[summarize]', err);
     return res.status(500).json({ error: err.message || 'summarize failed' });
@@ -976,6 +1021,7 @@ app.post("/api/chat", async (req, res) => {
                    WHERE user_id = $1
                      AND summary IS NOT NULL
                      AND embedding IS NOT NULL
+                     AND is_meaningful IS NOT FALSE
                      AND label IS DISTINCT FROM 'skill:self_knowledge'
                      AND 1 - (embedding <=> $2::vector) > 0.65
                    ORDER BY embedding <=> $2::vector
@@ -996,7 +1042,7 @@ app.post("/api/chat", async (req, res) => {
                 const conditions = keywords.map((_: string, i: number) => `(title ILIKE $${i + 2} OR summary ILIKE $${i + 2})`).join(' OR ');
                 ragResult = await db.query(
                   `SELECT title, summary FROM user_threads
-                   WHERE user_id = $1 AND summary IS NOT NULL AND label IS DISTINCT FROM 'skill:self_knowledge'
+                   WHERE user_id = $1 AND summary IS NOT NULL AND is_meaningful IS NOT FALSE AND label IS DISTINCT FROM 'skill:self_knowledge'
                      AND (${conditions})
                    ORDER BY updated_at DESC LIMIT 3`,
                   [userId, ...keywords.map((k: string) => `%${k}%`)]
@@ -1007,7 +1053,7 @@ app.post("/api/chat", async (req, res) => {
               if (ragResult.rows.length === 0) {
                 ragResult = await db.query(
                   `SELECT title, summary FROM user_threads
-                   WHERE user_id = $1 AND summary IS NOT NULL AND label IS DISTINCT FROM 'skill:self_knowledge'
+                   WHERE user_id = $1 AND summary IS NOT NULL AND is_meaningful IS NOT FALSE AND label IS DISTINCT FROM 'skill:self_knowledge'
                    ORDER BY updated_at DESC LIMIT 3`,
                   [userId]
                 );

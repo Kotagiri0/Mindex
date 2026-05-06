@@ -143,7 +143,7 @@ export default function App() {
   const handleOnboardingComplete = async () => {
     setOnboardingComplete(true);
     await db.upsertProfile(true, settings);
-    setScreen('today');
+    setScreen(isDesktopViewport ? 'dash' : 'today');
   };
 
   const startNewThread = async () => {

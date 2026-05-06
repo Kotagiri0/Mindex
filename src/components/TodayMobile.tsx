@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Settings, ChevronLeft, ArrowUp, Plus, Mic } from 'lucide-react';
+import { Settings, ChevronLeft, ArrowUp, Plus, Mic, Loader } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Task, Screen } from '../types';
 import TaskItem from './TaskItem';
 import { db } from '../lib/db';
+import { useVoiceInput } from '../lib/useVoiceInput';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
@@ -26,6 +27,9 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
   const [input, setInput] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const touchStartX = useRef(0);
+  const { state: voiceState, startRecording, stopRecording } = useVoiceInput((text: string) => {
+    setInput(prev => prev ? prev + ' ' + text : text);
+  });
 
   useEffect(() => {
     if (inputRef.current) {
@@ -164,9 +168,22 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
                 <ArrowUp size={16} color="#fff" strokeWidth={2} />
               </motion.button>
             ) : (
-              <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(34,34,36,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Mic size={15} strokeWidth={1.75} color="rgba(34,34,36,0.35)" />
-              </div>
+              <motion.button
+                onPointerDown={e => { e.preventDefault(); startRecording(); }}
+                onPointerUp={e => { e.preventDefault(); stopRecording(); }}
+                onPointerCancel={stopRecording}
+                style={{
+                  width: 36, height: 36, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: voiceState === 'recording' ? '#c0392b' : 'rgba(34,34,36,0.1)',
+                  transition: 'background 0.15s',
+                }}
+              >
+                {voiceState === 'processing'
+                  ? <Loader size={15} strokeWidth={2} color="#222224" className="animate-spin" />
+                  : <Mic size={15} strokeWidth={1.75} color={voiceState === 'recording' ? '#fff' : 'rgba(34,34,36,0.35)'} />
+                }
+              </motion.button>
             )}
           </div>
         </div>

@@ -49,7 +49,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
         fetch('/api/summarize', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: thread.messages, threadId, userId }),
+          body: JSON.stringify({ messages: thread.messages, threadId, userId, raw: true, rawSummary: content }),
         }).catch(() => {});
       }
     } catch (e) {
@@ -83,7 +83,13 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
               width: 34, height: 34, borderRadius: '50%', background: '#0B0D10', flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <span style={{ color: '#fff', fontSize: 15 }}>✳</span>
+              <svg width="18" height="18" viewBox="0 0 156 156" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="2" y="2" width="152" height="152" rx="76" stroke="white" strokeWidth="14"/>
+                <path d="M126 78H30" stroke="white" strokeWidth="14"/>
+                <path d="M101 55L55 101" stroke="white" strokeWidth="14"/>
+                <path d="M101 101L55 55" stroke="white" strokeWidth="14"/>
+                <path d="M78 126V30" stroke="white" strokeWidth="14"/>
+              </svg>
             </div>
             <div style={{ fontFamily: M, fontSize: 15, color: '#222224', lineHeight: 1.65 }}>
               Я Мысль — помогаю с задачами, заметками и планами. Всё что ты обсуждаешь со мной — сохраняется и помогает мне понимать тебя лучше со временем. Можешь добавлять задачи голосом, выгружать хаос из головы или просто думать вслух.
@@ -124,7 +130,13 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
         >
-          <span style={{ color: '#fff', fontSize: 28 }}>✳</span>
+          <svg width="34" height="34" viewBox="0 0 156 156" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="2" width="152" height="152" rx="76" stroke="white" strokeWidth="11"/>
+            <path d="M126 78H30" stroke="white" strokeWidth="11"/>
+            <path d="M101 55L55 101" stroke="white" strokeWidth="11"/>
+            <path d="M101 101L55 55" stroke="white" strokeWidth="11"/>
+            <path d="M78 126V30" stroke="white" strokeWidth="11"/>
+          </svg>
         </motion.div>
       </div>
 
@@ -135,11 +147,11 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
         transition={{ delay: 0.1 }}
         style={{ textAlign: 'center', padding: '0 28px', marginBottom: 8 }}
       >
-        <div style={{ fontFamily: F, fontSize: 26, color: '#222224', lineHeight: 1.15, marginBottom: 8 }}>
-          Скажи пару слов о себе
+        <div style={{ fontFamily: F, fontSize: 26, color: '#222224', lineHeight: 1.15, marginBottom: 10 }}>
+          Привет, я Мысль
         </div>
-        <div style={{ fontFamily: M, fontSize: 15, color: 'rgba(34,34,36,0.45)' }}>
-          Расскажи о себе — буду помогать точнее
+        <div style={{ fontFamily: M, fontSize: 15, color: 'rgba(34,34,36,0.55)', lineHeight: 1.6 }}>
+          Помогаю думать, планировать и не забывать важное. Чем больше ты расскажешь о себе — тем точнее буду помогать.
         </div>
       </motion.div>
 
@@ -193,7 +205,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           onKeyDown={e => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmit();
           }}
-          placeholder="Напиши пару слов о себе..."
+          placeholder="Чем занимаешься, какие цели сейчас, что беспокоит..."
           rows={4}
           style={{
             width: '100%', border: 'none', outline: 'none', background: 'transparent',

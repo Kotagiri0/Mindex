@@ -113,6 +113,21 @@ export const db = {
     }
   },
   
+  archiveThread: async (id: string) => {
+    const userId = getUserId();
+    if (!userId) return;
+
+    try {
+      await request<{ success: boolean }>(`${apiBase()}/thread/${encodeURIComponent(id)}/archive`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+    } catch {
+      // Local fallback not needed — source update is server-side only
+    }
+  },
+
   deleteThread: async (id: string) => {
     const userId = getUserId();
     if (!userId) {

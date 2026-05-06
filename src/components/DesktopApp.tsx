@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Sun, Calendar, MessageCircle, Settings as SettingsIcon,
   Plus, ChevronDown, ArrowUp, Search, Check, Mic, Loader,
-  PanelLeftOpen, PanelLeftClose, Pencil, Copy, MoreHorizontal, X,
+  PanelLeftOpen, PanelLeftClose, Pencil, Copy, MoreHorizontal, X, StickyNote, BookOpen, ChevronRight,
 } from 'lucide-react';
 import { Task, Thread, Message, Settings as SettingsType, Screen } from '../types';
 import AddTaskModal from './AddTaskModal';
@@ -198,32 +198,35 @@ function ChatInputBar({
           <Plus size={20} strokeWidth={1.5} color="var(--text-30)" />
         </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <motion.button
-            onPointerDown={e => { e.preventDefault(); startRecording(); }}
-            onPointerUp={e => { e.preventDefault(); stopRecording(); }}
-            onPointerCancel={stopRecording}
-            title={isRecording ? 'Отпусти для завершения' : 'Удерживай для записи'}
-            style={{
-              width: 32, height: 32, borderRadius: '50%', border: 'none', cursor: 'pointer',
+          {canSend ? (
+            <motion.button whileTap={{ scale: 0.9 }} onClick={onSend} style={{
+              width: 36, height: 36, borderRadius: '50%',
+              background: 'var(--accent)',
+              border: 'none', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: isRecording ? '#c0392b' : isProcessing ? 'var(--accent)' : 'rgba(9,14,23,0.08)',
-              transition: 'background 0.15s',
-            }}
-          >
-            {isProcessing
-              ? <Loader size={15} strokeWidth={2} color="#fff" className="animate-spin" />
-              : <Mic size={15} strokeWidth={1.75} color={isRecording ? '#fff' : 'var(--text-40)'} />
-            }
-          </motion.button>
-          <button onClick={onSend} disabled={!canSend} style={{
-            width: 36, height: 36, borderRadius: '50%',
-            background: canSend ? 'var(--accent)' : 'rgba(9,14,23,0.1)',
-            border: 'none', cursor: canSend ? 'pointer' : 'default',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transition: 'background 0.15s', flexShrink: 0,
-          }}>
-            <ArrowUp size={16} strokeWidth={2} color="var(--accent-text)" />
-          </button>
+              transition: 'background 0.15s', flexShrink: 0,
+            }}>
+              <ArrowUp size={16} strokeWidth={2} color="var(--accent-text)" />
+            </motion.button>
+          ) : (
+            <motion.button
+              onPointerDown={e => { e.preventDefault(); startRecording(); }}
+              onPointerUp={e => { e.preventDefault(); stopRecording(); }}
+              onPointerCancel={stopRecording}
+              title={isRecording ? 'Отпусти для завершения' : 'Удерживай для записи'}
+              style={{
+                width: 32, height: 32, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: isRecording ? '#c0392b' : isProcessing ? 'var(--accent)' : 'rgba(9,14,23,0.08)',
+                transition: 'background 0.15s',
+              }}
+            >
+              {isProcessing
+                ? <Loader size={15} strokeWidth={2} color="#fff" className="animate-spin" />
+                : <Mic size={15} strokeWidth={1.75} color={isRecording ? '#fff' : 'var(--text-40)'} />
+              }
+            </motion.button>
+          )}
         </div>
       </div>
     </div>
@@ -479,13 +482,22 @@ function TodayScreen({
                 placeholder="Спроси у мысли..."
                 style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 14, color: 'var(--text-primary)' }}
               />
-              <button
-                onPointerDown={e => { e.preventDefault(); startRecTd(); }}
-                onPointerUp={e => { e.preventDefault(); stopRecTd(); }}
-                onPointerCancel={stopRecTd}
-                style={{ background: voiceStateTd === 'recording' ? '#c0392b' : 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: '50%', display: 'flex', flexShrink: 0, transition: 'background 0.15s' }}>
-                <Mic size={17} strokeWidth={1.5} color={voiceStateTd === 'recording' ? '#fff' : '#bbb'} />
-              </button>
+              {chatInput.trim() ? (
+                <motion.button whileTap={{ scale: 0.9 }} onClick={handleChat} style={{
+                  width: 32, height: 32, borderRadius: '50%', background: '#111',
+                  border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  <ArrowUp size={15} strokeWidth={2} color="#fff" />
+                </motion.button>
+              ) : (
+                <button
+                  onPointerDown={e => { e.preventDefault(); startRecTd(); }}
+                  onPointerUp={e => { e.preventDefault(); stopRecTd(); }}
+                  onPointerCancel={stopRecTd}
+                  style={{ background: voiceStateTd === 'recording' ? '#c0392b' : 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: '50%', display: 'flex', flexShrink: 0, transition: 'background 0.15s' }}>
+                  <Mic size={17} strokeWidth={1.5} color={voiceStateTd === 'recording' ? '#fff' : '#bbb'} />
+                </button>
+              )}
             </div>
           </div>
 
@@ -542,6 +554,7 @@ function ChatView({
   const [replyQuote, setReplyQuote] = useState<string | null>(null);
   const [openMsgMenuIdx, setOpenMsgMenuIdx] = useState<number | null>(null);
   const [hoveredMsgIdx, setHoveredMsgIdx] = useState<number | null>(null);
+  const [openSourcesIdx, setOpenSourcesIdx] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const didAutoSend = useRef(false);
   const animIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -919,8 +932,8 @@ function ChatView({
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', paddingTop: 32, paddingBottom: 16 }}>
         <div style={{ ...CC, display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {openMsgMenuIdx !== null && (
-            <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => setOpenMsgMenuIdx(null)} />
+          {(openMsgMenuIdx !== null || openSourcesIdx !== null) && (
+            <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => { setOpenMsgMenuIdx(null); setOpenSourcesIdx(null); }} />
           )}
 
           {visible.map((m, i) => {
@@ -1012,23 +1025,6 @@ function ChatView({
                         </div>
                       </div>
                     )}
-                    {m.sources && m.sources.length > 0 && !showAnimated && (
-                      <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-                        <div style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)', marginBottom: 6, letterSpacing: '0.05em', textTransform: 'uppercase' as const }}>
-                          Из архива
-                        </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                          {m.sources.map((s: { title: string }, si: number) => (
-                            <span key={si} style={{
-                              fontFamily: M, fontSize: 12, color: 'var(--text-muted)',
-                              background: 'rgba(0,0,0,0.05)', borderRadius: 6, padding: '3px 8px',
-                            }}>
-                              {s.title}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
                 <span style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)' }}>{m.time}</span>
@@ -1042,14 +1038,94 @@ function ChatView({
                     transition: 'opacity 0.15s',
                     position: 'relative',
                   }}>
-                    <button
-                      onClick={() => navigator.clipboard?.writeText(m.content)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#bbb', display: 'flex', alignItems: 'center', transition: 'color 0.12s' }}
-                      onMouseEnter={e => (e.currentTarget.style.color = '#555')}
-                      onMouseLeave={e => (e.currentTarget.style.color = '#bbb')}
-                    >
-                      <Copy size={14} strokeWidth={1.5} />
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <button
+                        onClick={() => navigator.clipboard?.writeText(m.content)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#bbb', display: 'flex', alignItems: 'center', transition: 'color 0.12s' }}
+                        onMouseEnter={e => (e.currentTarget.style.color = '#555')}
+                        onMouseLeave={e => (e.currentTarget.style.color = '#bbb')}
+                      >
+                        <Copy size={14} strokeWidth={1.5} />
+                      </button>
+
+                      {m.sources && m.sources.length > 0 && (
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            onClick={() => setOpenSourcesIdx(openSourcesIdx === i ? null : i)}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 4,
+                              background: openSourcesIdx === i ? 'rgba(0,0,0,0.06)' : 'none',
+                              border: 'none', cursor: 'pointer', padding: '2px 8px', borderRadius: 20,
+                              fontFamily: M, fontSize: 12, color: openSourcesIdx === i ? '#333' : '#bbb',
+                              transition: 'color 0.12s, background 0.12s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.color = '#555'; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = openSourcesIdx === i ? '#333' : '#bbb'; }}
+                          >
+                            <BookOpen size={13} strokeWidth={1.5} />
+                            Источники
+                          </button>
+
+                          <AnimatePresence>
+                            {openSourcesIdx === i && (
+                              <motion.div
+                                initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: 6, scale: 0.97 }}
+                                transition={{ duration: 0.14 }}
+                                style={{
+                                  position: 'absolute', left: 0, top: '100%', marginTop: 6,
+                                  background: '#fff', border: '1px solid #ebebeb',
+                                  borderRadius: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
+                                  padding: '6px 0', zIndex: 30, minWidth: 240,
+                                }}
+                              >
+                                <div style={{ padding: '4px 14px 8px', fontFamily: M, fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase' as const, color: 'var(--text-30)' }}>
+                                  Из архива · {m.sources.length}
+                                </div>
+                                {m.sources.map((s: { title: string }, si: number) => {
+                                  const thr = threads.find(t => t.title === s.title);
+                                  return (
+                                    <button
+                                      key={si}
+                                      onClick={() => { setOpenSourcesIdx(null); }}
+                                      style={{
+                                        width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                                        padding: '8px 14px', background: 'none', border: 'none',
+                                        cursor: 'pointer', textAlign: 'left',
+                                        borderTop: si > 0 ? '1px solid #f0f0f0' : undefined,
+                                      }}
+                                      onMouseEnter={e => (e.currentTarget.style.background = '#f7f7f7')}
+                                      onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                                    >
+                                      <div style={{
+                                        width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                                        background: 'rgba(0,0,0,0.06)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        fontFamily: M, fontSize: 10, fontWeight: 600, color: 'var(--text-30)',
+                                      }}>
+                                        {si + 1}
+                                      </div>
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                          {s.title}
+                                        </div>
+                                        {thr?.preview && (
+                                          <div style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
+                                            {thr.preview}
+                                          </div>
+                                        )}
+                                      </div>
+                                      {thr && <ChevronRight size={13} strokeWidth={1.5} color="var(--text-30)" />}
+                                    </button>
+                                  );
+                                })}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      )}
+                    </div>
 
                     <div style={{ position: 'relative' }}>
                       <button
@@ -2015,14 +2091,49 @@ export default function DesktopApp({
           )}
 
           {screen === 'ai' && (
-            <motion.div key="ai" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.13 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+            <motion.div key="ai" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.13 }} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              {/* Chat/Note toggle header */}
+              {curTh && (
+                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '14px 0 0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 0, background: 'rgba(9,14,23,0.06)', borderRadius: 40, padding: 4, position: 'relative' }}>
+                    <motion.div
+                      layout
+                      style={{
+                        position: 'absolute',
+                        top: 4, left: noteMode ? 'calc(50%)' : 4,
+                        width: 'calc(50% - 4px)', height: 32,
+                        borderRadius: 32,
+                        background: '#ffffff',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.10)',
+                        zIndex: 0,
+                      }}
+                      transition={{ type: 'spring', stiffness: 420, damping: 36 }}
+                    />
+                    <button
+                      onClick={() => setNoteMode(false)}
+                      style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 16px', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 32, fontFamily: M, fontSize: 13, fontWeight: 500, color: !noteMode ? 'var(--text-primary)' : 'var(--text-30)', transition: 'color 0.15s', whiteSpace: 'nowrap' }}
+                    >
+                      <MessageCircle size={14} strokeWidth={1.75} />
+                      Чат
+                    </button>
+                    <button
+                      onClick={() => setNoteMode(true)}
+                      style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 16px', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 32, fontFamily: M, fontSize: 13, fontWeight: 500, color: noteMode ? 'var(--text-primary)' : 'var(--text-30)', transition: 'color 0.15s', whiteSpace: 'nowrap' }}
+                    >
+                      <StickyNote size={14} strokeWidth={1.75} />
+                      Заметка
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {curTh && noteMode ? (
                 <NoteView
                   threadId={curTh}
                   threads={threads}
                   setThreads={setThreads}
                   tasks={tasks}
-                  onSwitchToChat={() => handleOpenThread(curTh)}
+                  onSwitchToChat={() => setNoteMode(false)}
                 />
               ) : curTh ? (
                 <ChatView
