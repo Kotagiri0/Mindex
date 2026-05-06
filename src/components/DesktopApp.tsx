@@ -523,7 +523,7 @@ function TodayScreen({
                 onChange={e => setChatInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleChat()}
                 placeholder="Спроси у мысли..."
-                style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 14, color: 'var(--text-primary)' }}
+                style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 14, color: 'var(--text-primary)' }}
               />
               <button
                 onPointerDown={e => { e.preventDefault(); startRecTd(); }}

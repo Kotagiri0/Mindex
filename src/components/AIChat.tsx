@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, Settings, Star, Plus, ArrowUp, MessageCircle, StickyNote, Mic, Loader, Copy, MoreHorizontal, X } from 'lucide-react';
+import { MysliThinking } from './MysliThinking';
 import NoteView from './NoteView';
 import { Thread, Screen, Message, Task, SubTask } from '../types';
 import { generateResponse } from '../lib/groq';
@@ -24,7 +25,6 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [noteMode, setNoteMode] = useState(false);
-  const [thinkingIdx, setThinkingIdx] = useState(0);
   const [animatingContent, setAnimatingContent] = useState<string | null>(null);
   const [replyQuote, setReplyQuote] = useState<string | null>(null);
   const [openMsgMenuIdx, setOpenMsgMenuIdx] = useState<number | null>(null);
@@ -36,13 +36,6 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   const animIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevIsTypingRef = useRef(false);
 
-  const THINKING_PHRASES = ['Думаю...', 'Анализирую...', 'Ищу в архиве...', 'Формулирую...', 'Пишу ответ...'];
-
-  useEffect(() => {
-    if (!isTyping) return;
-    const iv = setInterval(() => setThinkingIdx(p => (p + 1) % THINKING_PHRASES.length), 1800);
-    return () => clearInterval(iv);
-  }, [isTyping]);
 
   useEffect(() => {
     if (prevIsTypingRef.current && !isTyping) {
@@ -74,8 +67,6 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   );
 
   const thread = threads.find(t => t.id === threadId);
-
-  if (!thread) return null;
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -618,6 +609,8 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     return <div>{nodes}</div>;
   };
 
+  if (!thread) return null;
+
   return (
     <div className="flex flex-col h-full" style={{ background: '#f0f0f0' }}>
       <div
@@ -901,12 +894,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
 
         {isTyping && (
           <div style={{ alignSelf: 'flex-start', paddingLeft: 2, paddingBottom: 4 }}>
-            <span style={{
-              fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
-              fontSize: 14, color: 'rgba(34,34,36,0.4)', fontStyle: 'italic',
-            }}>
-              {THINKING_PHRASES[thinkingIdx]}
-            </span>
+            <MysliThinking />
           </div>
         )}
       </div>
@@ -954,7 +942,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             placeholder="Есть мысли?"
             value={input}
             onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
+            onKeyDown={e => !isTouchDevice && e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
           />
           <div className="flex items-center justify-between mt-3">
             <button

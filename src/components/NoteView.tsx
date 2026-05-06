@@ -223,7 +223,7 @@ export default function NoteView({ threadId, threads, setThreads, tasks, onSwitc
           )}
 
           {/* Switch to chat */}
-          {thread.source !== 'text' && thread.source !== 'заметка' && (
+          {thread.source !== 'text' && (
             <button
               onClick={onSwitchToChat}
               style={{

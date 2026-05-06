@@ -137,3 +137,68 @@ input, textarea, button {
 .dot-bounce {
   animation: bounce-dot 1.2s ease-in-out infinite;
 }
+
+/* ─── MysliThinking ──────────────────────────────────────────────────────── */
+
+.mysli-thinking {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mysli-thinking svg {
+  width: 20px;
+  height: 20px;
+  overflow: visible;
+}
+
+.mysli-thinking .outer-circle {
+  animation: outerPulse 1.4s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.mysli-thinking .inner-ellipse {
+  animation: ellipseRotate 1.8s linear infinite;
+  transform-origin: center;
+}
+
+.mysli-thinking .inner-ellipse-2 {
+  animation: ellipseRotate2 2.2s linear infinite;
+  transform-origin: center;
+}
+
+.mysli-thinking .pupil {
+  animation: pupilBreath 1.4s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.mysli-thinking .center-dot {
+  animation: dotBlink 1.4s ease-in-out infinite;
+}
+
+@keyframes outerPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.6; transform: scale(0.96); }
+}
+
+@keyframes ellipseRotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes ellipseRotate2 {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-360deg); }
+}
+
+@keyframes pupilBreath {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%       { transform: scale(0.85); opacity: 0.7; }
+}
+
+@keyframes dotBlink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
