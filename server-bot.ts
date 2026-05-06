@@ -430,6 +430,104 @@ async function handleCallback(cq: TgCallbackQuery, token: string, db: Pool) {
   }).catch(() => {});
 }
 
+// ─── Long-polling (local dev) ─────────────────────────────────────────────────
+
+async function processUpdate(update: any, token: string, db: Pool, groq: Groq) {
+  if (update.callback_query) {
+    await handleCallback(update.callback_query as TgCallbackQuery, token, db);
+    return;
+  }
+
+  const message: TgMessage = update.message;
+  if (!message?.from || !message.text) return;
+
+  const { id: telegramId, first_name } = message.from;
+  const chatId = message.chat.id;
+  const text = message.text;
+  const userId = `tg_${telegramId}`;
+  const groqKey = process.env.GROQ_API_KEY;
+
+  try {
+    if (text === '/start') { await handleStart(token, chatId, first_name, db, userId); return; }
+    if (text === '/help')  { await handleHelp(token, chatId); return; }
+    if (text === '/tasks') { await ensureProfile(db, userId); await handleTasks(token, chatId, db, userId); return; }
+    if (text === '/clear') { await ensureProfile(db, userId); await handleClear(token, chatId, db, userId); return; }
+    if (text === '/app')   { await handleApp(token, chatId); return; }
+
+    if (text.startsWith('/add')) {
+      await ensureProfile(db, userId);
+      const taskName = text.startsWith('/add ') ? text.slice(5).trim() : '';
+      if (!taskName) {
+        await tgApi(token, 'sendMessage', { chat_id: chatId, text: 'Напиши название задачи после /add' });
+        return;
+      }
+      const today = new Date().toISOString().split('T')[0];
+      const id = crypto.randomUUID();
+      const { rowCount } = await db.query(
+        `INSERT INTO user_tasks (id, user_id, name, time, date, done, type) VALUES ($1, $2, $3, '', $4, false, 'regular')`,
+        [id, userId, taskName, today]
+      );
+      if (!rowCount) {
+        await tgApi(token, 'sendMessage', { chat_id: chatId, text: 'Не удалось добавить задачу. Попробуй ещё раз.' });
+        return;
+      }
+      await tgApi(token, 'sendMessage', { chat_id: chatId, text: `✅ Задача добавлена: ${taskName}` });
+      return;
+    }
+
+    if (!groqKey) {
+      await tgApi(token, 'sendMessage', { chat_id: chatId, text: 'GROQ_API_KEY не задан.' });
+      return;
+    }
+
+    await ensureProfile(db, userId);
+    const thread = await loadBotThread(db, userId);
+    const existingMessages = thread?.messages ?? [];
+    const { aiResponse, newMessages } = await processWithAI(text, existingMessages, db, userId, groq);
+    await saveBotThread(db, userId, thread?.id ?? null, [...existingMessages, ...newMessages]);
+    await tgApi(token, 'sendMessage', { chat_id: chatId, text: aiResponse });
+  } catch (e) {
+    console.error(`[Bot] Error processing message from ${userId}:`, e);
+    tgApi(token, 'sendMessage', { chat_id: chatId, text: 'Что-то пошло не так. Попробуй ещё раз.' }).catch(() => {});
+  }
+}
+
+async function startPolling(token: string, db: Pool, groq: Groq) {
+  // Clear any existing webhook so polling can work
+  try {
+    await axios.post(`https://api.telegram.org/bot${token}/deleteWebhook`, { drop_pending_updates: true });
+    console.log('[Bot] Polling mode: webhook cleared, starting long-poll loop...');
+  } catch {
+    console.warn('[Bot] Could not clear webhook — polling may not receive updates if a webhook is set.');
+  }
+
+  let offset = 0;
+  const poll = async () => {
+    try {
+      const res = await axios.get(`https://api.telegram.org/bot${token}/getUpdates`, {
+        params: { offset, timeout: 30, allowed_updates: ['message', 'callback_query'] },
+        timeout: 40_000,
+      });
+      const updates: any[] = res.data.result ?? [];
+      for (const upd of updates) {
+        offset = upd.update_id + 1;
+        processUpdate(upd, token, db, groq).catch(e =>
+          console.error(`[Bot] Update error (ID: ${upd.update_id}):`, e)
+        );
+      }
+    } catch (e: any) {
+      const isTimeout = axios.isAxiosError(e) && (e.code === 'ECONNABORTED' || e.code === 'ETIMEDOUT');
+      if (!isTimeout) {
+        console.error('[Bot] Poll error:', e.message);
+        await new Promise(r => setTimeout(r, 5_000));
+      }
+    }
+    setImmediate(poll);
+  };
+
+  poll();
+}
+
 // ─── Route registration ───────────────────────────────────────────────────────
 
 export function registerBotRoutes(app: Application, db: Pool): void {
@@ -443,109 +541,21 @@ export function registerBotRoutes(app: Application, db: Pool): void {
 
   const groq = new Groq({ apiKey: groqKey ?? '' });
 
+  // Auto-start polling when running locally (no public URL configured)
+  const isLocal = !process.env.APP_URL && !process.env.RAILWAY_PUBLIC_DOMAIN;
+  if (isLocal) {
+    console.log('[Bot] No APP_URL/RAILWAY_PUBLIC_DOMAIN detected — starting long-poll mode for local dev.');
+    startPolling(BOT_TOKEN, db, groq);
+  }
+
   // ── Webhook handler ────────────────────────────────────────────────────────
-  app.post('/api/telegram', async (req: Request, res: Response) => {
+  app.post('/api/telegram', (req: Request, res: Response) => {
     // Respond immediately — Telegram retries if it doesn't receive 200 within ~10s.
     // All processing happens asynchronously below.
     res.status(200).end();
-
-    if (!groqKey) {
-      console.error('[Bot] GROQ_API_KEY not set');
-      return;
-    }
-
-    const update = req.body;
-
-    if (update.callback_query) {
-      handleCallback(update.callback_query as TgCallbackQuery, BOT_TOKEN, db)
-        .catch(e => console.error('[Bot] Callback error:', e));
-      return;
-    }
-
-    const message: TgMessage = update.message;
-    if (!message?.from || !message.text) return;
-
-    const { id: telegramId, first_name } = message.from;
-    const chatId = message.chat.id;
-    const text = message.text;
-    const userId = `tg_${telegramId}`;
-
-    (async () => {
-      try {
-        if (text === '/start') {
-          await handleStart(BOT_TOKEN, chatId, first_name, db, userId);
-          return;
-        }
-
-        if (text === '/help') {
-          await handleHelp(BOT_TOKEN, chatId);
-          return;
-        }
-
-        if (text === '/tasks') {
-          await ensureProfile(db, userId);
-          await handleTasks(BOT_TOKEN, chatId, db, userId);
-          return;
-        }
-
-        if (text === '/clear') {
-          await ensureProfile(db, userId);
-          await handleClear(BOT_TOKEN, chatId, db, userId);
-          return;
-        }
-
-        if (text === '/app') {
-          await handleApp(BOT_TOKEN, chatId);
-          return;
-        }
-
-        // /add <task text> — quick shortcut
-        if (text.startsWith('/add')) {
-          await ensureProfile(db, userId);
-          const taskName = text.startsWith('/add ') ? text.slice(5).trim() : '';
-          if (!taskName) {
-            await tgApi(BOT_TOKEN, 'sendMessage', { chat_id: chatId, text: 'Напиши название задачи после /add' });
-            return;
-          }
-          const today = new Date().toISOString().split('T')[0];
-          const id = crypto.randomUUID();
-          const { rowCount } = await db.query(
-            `INSERT INTO user_tasks (id, user_id, name, time, date, done, type)
-             VALUES ($1, $2, $3, '', $4, false, 'regular')`,
-            [id, userId, taskName, today]
-          );
-          if (!rowCount) {
-            await tgApi(BOT_TOKEN, 'sendMessage', { chat_id: chatId, text: 'Не удалось добавить задачу. Попробуй ещё раз.' });
-            return;
-          }
-          await tgApi(BOT_TOKEN, 'sendMessage', { chat_id: chatId, text: `✅ Задача добавлена: ${taskName}` });
-          return;
-        }
-
-        // All other messages → AI (Мысль)
-        await ensureProfile(db, userId);
-
-        const thread = await loadBotThread(db, userId);
-        const existingMessages = thread?.messages ?? [];
-
-        const { aiResponse, newMessages } = await processWithAI(
-          text,
-          existingMessages,
-          db,
-          userId,
-          groq
-        );
-
-        await saveBotThread(db, userId, thread?.id ?? null, [...existingMessages, ...newMessages]);
-        await tgApi(BOT_TOKEN, 'sendMessage', { chat_id: chatId, text: aiResponse });
-      } catch (e) {
-        console.error('[Bot] Handler error:', e);
-        tgApi(BOT_TOKEN, 'sendMessage', {
-          chat_id: chatId,
-          text: 'Что-то пошло не так. Попробуй ещё раз.'
-        }).catch(() => {});
-      }
-    })();
+    processUpdate(req.body, BOT_TOKEN, db, groq).catch(e =>
+      console.error('[Bot] Webhook handler error:', e)
+    );
   });
 
   // ── Setup endpoint ─────────────────────────────────────────────────────────
