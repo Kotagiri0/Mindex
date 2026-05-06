@@ -368,8 +368,6 @@ function ThreadMenu({ onDelete, onRename }: { onDelete: () => void; onRename: ()
 
 // ─── Today screen ──────────────────────────────────────────────────────────────
 
-const PREVIEW_COUNT = 3;
-
 function TodayScreen({
   tasks, setTasks, onQuickChat, onAddTask, onEditTask,
 }: {
@@ -380,7 +378,6 @@ function TodayScreen({
   onEditTask: (t: Task) => void;
 }) {
   const [chatInput, setChatInput] = useState('');
-  const [expanded, setExpanded] = useState(true);
   const today = todayStr();
   const { state: voiceStateTd, startRecording: startRecTd, stopRecording: stopRecTd } = useVoiceInput(text => setChatInput(v => v ? v + ' ' + text : text));
   const now = new Date();
@@ -419,23 +416,7 @@ function TodayScreen({
     setChatInput('');
   };
 
-  const taskWord = (n: number) => {
-    if (n % 10 === 1 && n % 100 !== 11) return 'дело';
-    if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return 'дела';
-    return 'дел';
-  };
-
   const total = todayTasks.length;
-  const hiddenCount = Math.max(0, total - PREVIEW_COUNT);
-  const visibleTasks = expanded ? todayTasks : todayTasks.slice(0, PREVIEW_COUNT);
-
-  const headerText = total === 0
-    ? 'Нет дел на сегодня'
-    : !expanded && hiddenCount > 0
-      ? `Ещё ${hiddenCount} ${taskWord(hiddenCount)}`
-      : `${total} ${taskWord(total)}`;
-
-  const chevronUp = total === 0 || expanded || hiddenCount === 0;
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0' }}>
@@ -451,6 +432,16 @@ function TodayScreen({
           </div>
         </div>
 
+        {/* Add task button */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <button
+            onClick={onAddTask}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', color: '#aaa' }}
+          >
+            <Plus size={20} strokeWidth={1.75} />
+          </button>
+        </div>
+
         {/* Unified card */}
         <div style={{
           background: 'var(--surface)', borderRadius: 20,
@@ -458,37 +449,11 @@ function TodayScreen({
           overflow: 'hidden',
         }}>
 
-          {/* Header row: chevron + count + add button */}
-          <div
-            onClick={() => total > 0 && setExpanded(v => !v)}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '16px 20px',
-              borderBottom: expanded && total > 0 ? '1px solid #f5f5f5' : undefined,
-              cursor: total > 0 ? 'pointer' : 'default',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ transition: 'transform 0.2s', transform: chevronUp ? 'rotate(0deg)' : 'rotate(180deg)' }}>
-                <path d="M2 9l5-5 5 5" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <span style={{ fontFamily: M, fontSize: 14, color: total === 0 ? '#aaa' : '#333' }}>
-                {headerText}
-              </span>
-            </div>
-            <button
-              onClick={e => { e.stopPropagation(); onAddTask(); }}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', color: '#aaa' }}
-            >
-              <Plus size={18} strokeWidth={1.75} />
-            </button>
-          </div>
-
           {/* Task list */}
-          {expanded && total > 0 && (
+          {total > 0 && (
             <div>
-              {visibleTasks.map((task, idx) => (
-                <div key={task.id} style={{ borderBottom: idx < visibleTasks.length - 1 ? '1px solid #f5f5f5' : undefined }}>
+              {todayTasks.map((task, idx) => (
+                <div key={task.id} style={{ borderBottom: idx < todayTasks.length - 1 ? '1px solid #f5f5f5' : undefined }}>
                   <TaskRow
                     task={task}
                     onToggle={() => toggleTask(task.id)}
@@ -497,22 +462,11 @@ function TodayScreen({
                   />
                 </div>
               ))}
-              {hiddenCount > 0 && (
-                <button
-                  onClick={() => setExpanded(true)}
-                  style={{ width: '100%', padding: '11px 20px', background: 'none', border: 'none', borderTop: '1px solid #f5f5f5', cursor: 'pointer', fontFamily: M, fontSize: 13, color: '#aaa', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6 }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none" style={{ transform: 'rotate(180deg)' }}>
-                    <path d="M2 9l5-5 5 5" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  Ещё {hiddenCount} {taskWord(hiddenCount)}
-                </button>
-              )}
             </div>
           )}
 
           {/* Input */}
-          <div style={{ borderTop: expanded && total > 0 ? '1px solid #f5f5f5' : undefined, padding: '13px 20px' }}>
+          <div style={{ borderTop: total > 0 ? '1px solid #f5f5f5' : undefined, padding: '13px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}
                 onClick={() => alert('Вложения — скоро')}>
@@ -1957,7 +1911,7 @@ export default function DesktopApp({
   const [calActive, setCalActive] = useState(false);
   const [noteMode, setNoteMode] = useState(false);
   useEffect(() => {
-    if (screen === 'ob') setScreen('dash');
+    if (screen === 'ob' || screen === 'today') setScreen('dash');
   }, [screen]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);

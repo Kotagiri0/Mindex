@@ -9,6 +9,24 @@ import { uuid } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useVoiceInput } from '../lib/useVoiceInput';
 
+const THINKING_PHRASES = ['Думаю...', 'Анализирую...', 'Ищу в архиве...', 'Формулирую...', 'Пишу ответ...'];
+
+function ThinkingPhrase() {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    const iv = setInterval(() => setIdx((p: number) => (p + 1) % THINKING_PHRASES.length), 1800);
+    return () => clearInterval(iv);
+  }, []);
+  return (
+    <span style={{
+      fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+      fontSize: 14, color: 'rgba(34,34,36,0.4)', fontStyle: 'italic',
+    }}>
+      {THINKING_PHRASES[idx]}
+    </span>
+  );
+}
+
 interface AIChatProps {
   threadId: string | null;
   threads: Thread[];
@@ -526,7 +544,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       fetch('/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId }),
+        body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId, raw: true, rawSummary: content.trim() }),
       }).catch(() => {});
     }
   };
@@ -691,7 +709,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           const msgs = visibleMsgs.map((m, i) => {
             const isLast = i === visibleMsgs.length - 1;
             const showAnimated = isLast && m.role === 'assistant' && animatingContent !== null;
-            const showActions = isTouchDevice || hoveredMsgIdx === i;
+            const showActions = isTouchDevice || hoveredMsgIdx === i || openMsgMenuIdx === i;
             return (
             <div key={i}
               onMouseEnter={() => m.role === 'assistant' && setHoveredMsgIdx(i)}
@@ -824,6 +842,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   width: '100%', marginTop: 2,
                   opacity: showActions ? 1 : 0,
+                  pointerEvents: showActions ? 'auto' : 'none',
                   transition: 'opacity 0.15s',
                   position: 'relative',
                 }}>
@@ -893,8 +912,9 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         })()}
 
         {isTyping && (
-          <div style={{ alignSelf: 'flex-start', paddingLeft: 2, paddingBottom: 4 }}>
+          <div style={{ alignSelf: 'flex-start', paddingLeft: 2, paddingBottom: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
             <MysliThinking />
+            <ThinkingPhrase />
           </div>
         )}
       </div>

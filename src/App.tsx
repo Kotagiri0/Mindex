@@ -87,7 +87,7 @@ export default function App() {
         const profileSettings = profile?.settings || defaultSettings;
         setSettings(profileSettings);
         setOnboardingComplete(Boolean(profile?.onboarding_complete));
-        setScreen(profile?.onboarding_complete ? 'today' : 'ob');
+        setScreen(profile?.onboarding_complete ? 'dash' : 'ob');
         setTasks(fetchedTasks);
         setThreads(fetchedThreads);
       } catch (error) {

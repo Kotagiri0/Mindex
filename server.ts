@@ -159,22 +159,20 @@ app.get('/api/config', (_req, res) => {
   });
 });
 
-const SELF_KNOWLEDGE_TEXT = `Я — Мысль, ассистент внутри Mindex. Не универсальный чат-бот — фокус на личной эффективности: мысли, заметки и задачи в одном месте.
-
-Большинство людей используют нейронку для всего подряд, а планировщик отдельно. Здесь всё связано — заметки и задачи читаются как контекст, не нужно переключаться между приложениями. Планировщик с агентом, а не агент с планировщиком. Один из немногих агентных планировщиков — на таком уровне внедрения вообще первый.
-
-Работаю на мощной современной модели. Если спросят напрямую какой — отвечу честно.
+const SELF_KNOWLEDGE_TEXT = `Я — Мысль, личный ассистент по организации мышления и дел. Не универсальный чат-бот — фокус на личной эффективности: мысли, заметки и задачи в одном месте.
 
 Что умею:
-Надиктовал задачу голосом — получил структурированный список. Никакой формы, никаких полей.
-Управление задачами через разговор — перенести, изменить, удалить прямо в чате.
-Brain dump — выгружаешь всё подряд одним сообщением, я структурирую.
-Живая беседа → заметка → действие. Обсуждаешь идеи свободно — открываешь заметку, там всё структурировано. В новом треде просишь раскидать задачи — я уже знаю контекст.
-Архив который думает. Чем дольше пользуешься — тем точнее понимаю тебя.
+— Голосовой ввод задач — надиктовал, получил структурированный список
+— Управление задачами через разговор — перенести, изменить, удалить прямо в чате
+— Brain dump — выгружаешь всё подряд одним сообщением, я структурирую
+— Заметки и архив — прошлые разговоры сохраняются, я их помню и использую в новых беседах
+— Контекст между сессиями — чем дольше пользуешься, тем точнее понимаю тебя
 
-Что пока не умею: работать с файлами, искать в интернете, интегрироваться с внешними сервисами автоматически.
+Память: у меня есть доступ к архиву твоих прошлых разговоров и заметок. Если в системном блоке "Из архива пользователя" есть данные — я их вижу и использую. Если блок пустой — значит подходящего контекста пока нет или история ещё не накоплена.
 
-Конфиденциальность: твои данные хранятся только у тебя.`;
+Что пока не умею: работать с файлами, искать в интернете, интегрироваться с внешними сервисами.
+
+Конфиденциальность: твои данные хранятся только у тебя. Работаю на мощной современной модели.`;
 
 async function createSelfKnowledgeSkill(userId: string) {
   if (!db) return;
@@ -839,12 +837,40 @@ async function callRouterAI(apiKey: string, body: object, attempt = 0): Promise<
 }
 
 app.post("/api/summarize", async (req, res) => {
-  const { messages, threadId, userId } = req.body || {};
+  const { messages, threadId, userId, raw, rawSummary } = req.body || {};
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'messages required' });
   }
   const apiKey = process.env.ROUTERAI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'ROUTERAI_API_KEY not set' });
+
+  // raw=true: заметка создана вручную — не переформатируем через LLM, используем текст как есть
+  if (raw && rawSummary) {
+    try {
+      if (db && threadId && userId) {
+        await db.query(
+          `UPDATE user_threads SET summary = $1, is_meaningful = true, updated_at = NOW() WHERE id = $2 AND user_id = $3`,
+          [String(rawSummary), threadId, userId]
+        );
+        const threadRes = await db.query(
+          `SELECT title FROM user_threads WHERE id = $1 AND user_id = $2 LIMIT 1`,
+          [threadId, userId]
+        );
+        const title = threadRes.rows?.[0]?.title || '';
+        const embedding = await generateEmbedding(`${title}\n${rawSummary}`);
+        if (embedding) {
+          await db.query(
+            `UPDATE user_threads SET embedding = $1::vector WHERE id = $2 AND user_id = $3`,
+            [`[${embedding.join(',')}]`, threadId, userId]
+          );
+        }
+      }
+      return res.status(200).json({ summary: rawSummary });
+    } catch (err: any) {
+      console.error('[summarize/raw]', err);
+      return res.status(500).json({ error: err.message || 'embed failed' });
+    }
+  }
 
   const dialogText = messages
     .filter((m: any) => m.role === 'user' || m.role === 'assistant')
@@ -930,6 +956,9 @@ app.post("/api/chat", async (req, res) => {
       }).catch(() => {});
     }
 
+    if (!db) console.warn('[RAG] db=null, skipping — DATABASE_URL not set?');
+    if (!userId) console.warn('[RAG] userId=null, skipping — client did not send userId');
+
     if (db && userId) {
 
       if (Array.isArray(messages) && messages.length > 0) {
@@ -989,8 +1018,12 @@ app.post("/api/chat", async (req, res) => {
               const contextBlock = ragResult.rows
                 .map((r: any) => `[${r.title}]\n${r.summary}`)
                 .join('\n---\n');
-              finalSystemInstruction = `## Контекст из архива пользователя\n${contextBlock}\n\n---\n\n${finalSystemInstruction}`;
+              const ragBlock = `## Из архива пользователя\nНиже — фрагменты из заметок и прошлых разговоров пользователя. Используй их как контекст при ответе. Не упоминай сам факт наличия архива, если пользователь не спрашивает.\n\n${contextBlock}`;
+              finalSystemInstruction = `${finalSystemInstruction}\n\n${ragBlock}`;
               ragSources = ragResult.rows.map((r: any) => ({ title: r.title }));
+              console.log('[RAG] injected:', ragSources.map(s => s.title));
+            } else {
+              console.log('[RAG] no matching context found for userId:', userId);
             }
           }
         } catch (ragErr) {

@@ -56,7 +56,7 @@ export default function NoteEditor({ thread, onSaved, onClose }: NoteEditorProps
         fetch('/api/summarize', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId, userId }),
+          body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId, userId, raw: true, rawSummary: content.trim() }),
         }).catch(() => {});
       }
 
