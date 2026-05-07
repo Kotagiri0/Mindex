@@ -12,13 +12,20 @@ if (import.meta.env.PROD) {
 
   if (isStandalone && document.fullscreenEnabled) {
     const requestFullscreen = () => {
+      window.removeEventListener('pointerdown', requestFullscreen);
+      window.removeEventListener('keydown', requestFullscreen);
+
       if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => undefined);
+        document.documentElement.requestFullscreen().catch((error) => {
+          if (import.meta.env.DEV) {
+            console.error('Fullscreen request failed:', error);
+          }
+        });
       }
     };
 
-    window.addEventListener('pointerdown', requestFullscreen, { once: true });
-    window.addEventListener('keydown', requestFullscreen, { once: true });
+    window.addEventListener('pointerdown', requestFullscreen);
+    window.addEventListener('keydown', requestFullscreen);
   }
 }
 
