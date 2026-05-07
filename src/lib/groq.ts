@@ -1,8 +1,18 @@
 import { Message } from "../types";
 import { getCurrentUser } from "./auth";
 
-const _today = new Date();
-const _todayStr = `${_today.getFullYear()}-${String(_today.getMonth()+1).padStart(2,'0')}-${String(_today.getDate()).padStart(2,'0')}`;
+function getNowContext() {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const dateStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+  const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const offsetMin = -now.getTimezoneOffset();
+  const offsetSign = offsetMin >= 0 ? '+' : '-';
+  const offsetHours = pad(Math.floor(Math.abs(offsetMin) / 60));
+  const offsetMins = pad(Math.abs(offsetMin) % 60);
+  const tz = `UTC${offsetSign}${offsetHours}:${offsetMins}`;
+  return `${dateStr}, ${timeStr} (${tz})`;
+}
 
 export const SYSTEM_INSTRUCTION = `Ты — Мысль, личный ассистент по организации дел и мышлению.
 
@@ -23,6 +33,7 @@ export const SYSTEM_INSTRUCTION = `Ты — Мысль, личный ассис�
 — Задавай уточняющие вопросы когда контекст неполный. Один вопрос за раз, не анкету
 — Учитывай всё что пользователь говорил раньше в диалоге
 — Если пришёл сырой brain dump — сначала структурируй, потом уточняй детали
+— Никогда не говори "у меня нет доступа к этой информации" про свои собственные возможности. Всё о том, кто ты и что умеешь — написано в системном промпте, ты это знаешь
 
 ИНСТРУМЕНТЫ
 Используй только предоставленные инструменты через стандартный механизм tool_calls. Не выдумывай форматы
@@ -34,7 +45,7 @@ export const SYSTEM_INSTRUCTION = `Ты — Мысль, личный ассис�
 — start_planning: только когда пользователь явно просит составить план, разбить на шаги или помочь спланировать. Не используй по своей инициативе
 — save_as_note: когда пользователь просит сохранить что-то как заметку (своё сообщение, твой ответ, любой текст). Придумай подходящее название
 
-Сегодняшняя дата: ${_todayStr}`;
+Текущие дата и время: DATETIME_PLACEHOLDER`;
 
 export const tools: any[] = [
   {
@@ -208,7 +219,7 @@ export async function generateResponse(messages: Message[], options: { tools?: a
           if (m.reasoning_content) msg.reasoning_content = m.reasoning_content;
           return msg;
         }),
-        systemInstruction: SYSTEM_INSTRUCTION,
+        systemInstruction: SYSTEM_INSTRUCTION.replace('DATETIME_PLACEHOLDER', getNowContext()),
         tools: options.tools !== undefined ? options.tools : tools,
         tool_choice: options.tool_choice || "auto",
         userId: getCurrentUser()?.id,

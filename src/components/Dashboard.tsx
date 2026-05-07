@@ -145,6 +145,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const touchStartX = useRef(0);
   const suppressClickRef = useRef(false);
   const [miniCalOpen, setMiniCalOpen] = useState(false);
   const [addInput, setAddInput] = useState('');
@@ -202,14 +203,14 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
   };
 
   const toggleTask = async (id: string) => {
-    setTasks(tasks.map(t => {
+    setTasks(prev => prev.map(t => {
       if (t.id === id) { const u = { ...t, done: !t.done }; db.saveTask(u); return u; }
       return t;
     }));
   };
 
   const toggleSubtask = async (taskId: string, subtaskId: string) => {
-    setTasks(tasks.map(t => {
+    setTasks(prev => prev.map(t => {
       if (t.id === taskId && t.subtasks) {
         const u = { ...t, subtasks: t.subtasks.map(st => st.id === subtaskId ? { ...st, done: !st.done } : st) };
         db.saveTask(u);
@@ -220,7 +221,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
   };
 
   const updateTask = async (id: string, name: string, time: string, date: string) => {
-    setTasks(tasks.map(t => {
+    setTasks(prev => prev.map(t => {
       if (t.id === id) { const u = { ...t, name, time, date }; db.saveTask(u); return u; }
       return t;
     }));
@@ -228,7 +229,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
   };
 
   const deleteTask = async (id: string) => {
-    setTasks(tasks.filter(t => t.id !== id));
+    setTasks(prev => prev.filter(t => t.id !== id));
     await db.deleteTask(id);
     setEditingTask(null);
   };

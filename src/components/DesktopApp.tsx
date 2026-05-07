@@ -828,7 +828,7 @@ function ChatView({
       const msg = { ...msgs[idx] };
       if (msg.planning_data) {
         msg.planning_data = { ...msg.planning_data, answers: { ...msg.planning_data.answers, [questionId]: answer } };
-        const allAnswered = msg.planning_data.questions.every((q: any) => msg.planning_data?.answers?.[q.id]);
+        const allAnswered = msg.planning_data.questions.every((q: any) => msg.planning_data?.answers?.[q.id] !== undefined);
         if (allAnswered) {
           msg.planning_data.status = 'plan_generated';
           setTimeout(() => generatePlan(t, msg.planning_data!), 100);
@@ -1726,9 +1726,18 @@ function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
           <div style={{ height: 1, background: 'var(--border)' }} />
           <div
             style={{ overflow: 'hidden', position: 'relative', touchAction: 'pan-y' }}
-            onPointerDown={e => { if (e.pointerType === 'mouse' && e.button !== 0) return; swipeDragStart.current = e.clientX; }}
-            onPointerUp={e => {
+            onTouchStart={e => { swipeDragStart.current = e.touches[0].clientX; }}
+            onTouchEnd={e => {
               if (swipeDragStart.current === null) return;
+              const dx = e.changedTouches[0].clientX - swipeDragStart.current;
+              swipeDragStart.current = null;
+              if (Math.abs(dx) < 40) return;
+              goWeek(dx < 0 ? 1 : -1);
+            }}
+            onTouchCancel={() => { swipeDragStart.current = null; }}
+            onPointerDown={e => { if (e.pointerType !== 'touch') swipeDragStart.current = e.clientX; }}
+            onPointerUp={e => {
+              if (e.pointerType === 'touch' || swipeDragStart.current === null) return;
               const dx = e.clientX - swipeDragStart.current;
               swipeDragStart.current = null;
               if (Math.abs(dx) < 40) return;
@@ -1736,19 +1745,19 @@ function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
             }}
             onPointerCancel={() => { swipeDragStart.current = null; }}
           >
-            <AnimatePresence mode="wait" initial={false} custom={slideDir}>
+            <AnimatePresence mode="popLayout" initial={false} custom={slideDir}>
               <motion.div
                 key={weekOffset}
                 custom={slideDir}
                 variants={{
-                  enter: (dir: number) => ({ x: dir > 0 ? '100%' : '-100%', opacity: 0 }),
-                  center: { x: '0%', opacity: 1 },
-                  exit: (dir: number) => ({ x: dir > 0 ? '-100%' : '100%', opacity: 0 }),
+                  enter: (dir: number) => ({ x: dir > 0 ? '100%' : '-100%' }),
+                  center: { x: '0%' },
+                  exit: (dir: number) => ({ x: dir > 0 ? '-100%' : '100%' }),
                 }}
                 initial="enter"
                 animate="center"
                 exit="exit"
-                transition={{ type: 'spring', stiffness: 340, damping: 34, mass: 0.9 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 40, mass: 0.7 }}
               >
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', paddingTop: 4, paddingBottom: 4 }}>
                   {weekDays.map((d, i) => {

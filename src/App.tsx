@@ -144,6 +144,8 @@ export default function App() {
     setOnboardingComplete(true);
     await db.upsertProfile(true, settings);
     if (threadId) {
+      const freshThreads = await db.getThreads();
+      setThreads(freshThreads);
       setCurTh(threadId);
       setScreen('ai');
     } else {

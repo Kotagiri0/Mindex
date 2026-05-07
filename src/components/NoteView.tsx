@@ -109,7 +109,7 @@ export default function NoteView({ threadId, threads, setThreads, tasks, onSwitc
 
   const threadTasks = (Array.isArray(tasks) ? tasks : []).filter(t => t.threadId === threadId);
   const dateStr = thread ? new Date(thread.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
-  const sourceTag = thread?.source === 'text' ? 'Текст' : 'Мысль';
+  const sourceTag = thread?.source === 'text' ? 'Текст' : thread?.source === 'заметка' ? 'Заметка' : thread?.source === 'skill' ? 'Скилл' : 'Мысль';
 
   if (!thread) return null;
 

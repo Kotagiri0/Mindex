@@ -159,20 +159,22 @@ app.get('/api/config', (_req, res) => {
   });
 });
 
-const SELF_KNOWLEDGE_TEXT = `Я — Мысль, личный ассистент по организации мышления и дел. Не универсальный чат-бот — фокус на личной эффективности: мысли, заметки и задачи в одном месте.
+const SELF_KNOWLEDGE_TEXT = `Твоё имя — Мысль. Ты — личный ассистент по организации мышления и дел. Не универсальный чат-бот — фокус на личной эффективности: мысли, заметки и задачи в одном месте.
 
-Что умею:
-— Голосовой ввод задач — надиктовал, получил структурированный список
-— Управление задачами через разговор — перенести, изменить, удалить прямо в чате
-— Brain dump — выгружаешь всё подряд одним сообщением, я структурирую
-— Заметки и архив — прошлые разговоры сохраняются, я их помню и использую в новых беседах
-— Контекст между сессиями — чем дольше пользуешься, тем точнее понимаю тебя
+Когда пользователь спрашивает "что ты умеешь", "кто ты", "расскажи о себе", "чем можешь помочь" и подобное — отвечай именно этим, своими словами, не говори "у меня нет доступа к этой информации":
 
-Память: у меня есть доступ к архиву твоих прошлых разговоров и заметок. Если в системном блоке "Из архива пользователя" есть данные — я их вижу и использую. Если блок пустой — значит подходящего контекста пока нет или история ещё не накоплена.
+Что умеешь:
+— Управлять задачами через разговор — добавить, перенести, изменить, удалить прямо в чате
+— Голосовой ввод — пользователь надиктовывает, ты структурируешь
+— Brain dump — пользователь выгружает всё подряд, ты разбираешь и структурируешь
+— Заметки и архив — прошлые разговоры сохраняются, ты их помнишь и используешь в новых беседах
+— Контекст между сессиями — чем дольше пользуешься, тем точнее понимаешь человека
 
-Что пока не умею: работать с файлами, искать в интернете, интегрироваться с внешними сервисами.
+Память: у тебя есть доступ к архиву прошлых разговоров и заметок пользователя. Если в системном блоке "Из архива пользователя" есть данные — ты их видишь и используешь. Если блок пустой — подходящего контекста пока нет.
 
-Конфиденциальность: твои данные хранятся только у тебя. Работаю на мощной современной модели.`;
+Чего пока не умеешь: работать с файлами, искать в интернете, интегрироваться с внешними сервисами.
+
+Конфиденциальность: данные пользователя хранятся только у него. Работаешь на мощной современной модели.`;
 
 async function createSelfKnowledgeSkill(userId: string) {
   if (!db) return;
@@ -988,10 +990,36 @@ app.post("/api/chat", async (req, res) => {
       return res.status(500).json({ error: "ROUTERAI_API_KEY не найден в .env" });
     }
 
-    // RAG: inject relevant notes as context + always inject self-knowledge
-    // Self-knowledge is injected directly from the constant — no DB dependency
+    // Build system prompt: base → personal profile → rag context
     let finalSystemInstruction = `${systemInstruction}\n\n## О себе\n${SELF_KNOWLEDGE_TEXT}`;
     let ragSources: { title: string }[] = [];
+
+    // Always inject personal user profile — onboarding note + any self-description notes
+    // This is NOT RAG (no keyword matching) — always present so model knows who it's talking to
+    if (db && userId) {
+      try {
+        const profileRes = await db.query(
+          `SELECT title, summary FROM user_threads
+           WHERE user_id = $1
+             AND summary IS NOT NULL
+             AND is_meaningful IS NOT FALSE
+             AND (
+               title = 'О себе'
+               OR label = 'profile'
+               OR (source = 'заметка' AND title ILIKE '%себ%')
+             )
+           ORDER BY created_at ASC
+           LIMIT 3`,
+          [userId]
+        );
+        if (profileRes.rows.length > 0) {
+          const profileText = profileRes.rows.map((r: any) => r.summary).join('\n\n');
+          finalSystemInstruction += `\n\n## Что пользователь рассказал о себе\n${profileText}`;
+        }
+      } catch (e) {
+        console.warn('[CHAT] profile inject failed:', e);
+      }
+    }
 
     // Ensure DB skill thread exists for vector search (fire-and-forget for new users)
     if (db && userId) {
@@ -1026,6 +1054,7 @@ app.post("/api/chat", async (req, res) => {
                      AND embedding IS NOT NULL
                      AND is_meaningful IS NOT FALSE
                      AND label IS DISTINCT FROM 'skill:self_knowledge'
+                     AND title IS DISTINCT FROM 'О себе'
                      AND 1 - (embedding <=> $2::vector) > 0.65
                    ORDER BY embedding <=> $2::vector
                    LIMIT 3`,
@@ -1047,6 +1076,7 @@ app.post("/api/chat", async (req, res) => {
                 ragResult = await db.query(
                   `SELECT title, summary FROM user_threads
                    WHERE user_id = $1 AND summary IS NOT NULL AND is_meaningful IS NOT FALSE AND label IS DISTINCT FROM 'skill:self_knowledge'
+                     AND title IS DISTINCT FROM 'О себе'
                      AND (${conditions})
                    ORDER BY updated_at DESC LIMIT 3`,
                   [userId, ...keywords.map((k: string) => `%${k}%`)]
@@ -1058,7 +1088,9 @@ app.post("/api/chat", async (req, res) => {
               if (ragResult.rows.length === 0) {
                 ragResult = await db.query(
                   `SELECT title, summary FROM user_threads
-                   WHERE user_id = $1 AND summary IS NOT NULL AND is_meaningful IS NOT FALSE AND label IS DISTINCT FROM 'skill:self_knowledge'
+                   WHERE user_id = $1 AND summary IS NOT NULL AND is_meaningful IS NOT FALSE
+                     AND label IS DISTINCT FROM 'skill:self_knowledge'
+                     AND title IS DISTINCT FROM 'О себе'
                    ORDER BY updated_at DESC LIMIT 3`,
                   [userId]
                 );

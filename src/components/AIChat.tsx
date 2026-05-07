@@ -343,8 +343,9 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             answers: { ...msg.planning_data.answers, [questionId]: answer }
           };
 
+          const updatedAnswers = msg.planning_data.answers;
           const allAnswered = msg.planning_data.questions.every(q =>
-            msg.planning_data?.answers?.[q.id] || q.id === questionId
+            updatedAnswers?.[q.id] !== undefined
           );
 
           if (allAnswered) {
