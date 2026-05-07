@@ -1,10 +1,31 @@
 const CACHE_NAME = 'mindex-cache-v1';
-const URLS_TO_CACHE = ['/', '/manifest.webmanifest', '/icons/icon.svg'];
+const URLS_TO_CACHE = [
+  '/',
+  '/index.html',
+  '/offline.html',
+  '/manifest.webmanifest',
+  '/icons/icon.svg',
+  '/icons/icon-180.png',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(URLS_TO_CACHE)),
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      await cache.addAll(URLS_TO_CACHE);
+
+      try {
+        const response = await fetch('/', { cache: 'no-store' });
+        const html = await response.text();
+        const assetMatches = html.match(/\/assets\/[^"' )]+\.(?:js|css)/g) || [];
+        const uniqueAssets = [...new Set(assetMatches)];
+        await cache.addAll(uniqueAssets);
+      } catch (_) {}
+    })(),
   );
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -17,6 +38,7 @@ self.addEventListener('activate', (event) => {
       ),
     ),
   );
+  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
@@ -30,13 +52,21 @@ self.addEventListener('fetch', (event) => {
         cachedResponse ||
         fetch(event.request)
           .then((response) => {
+            if (!response || response.status !== 200 || response.type !== 'basic') {
+              return response;
+            }
             const responseToCache = response.clone();
             caches
               .open(CACHE_NAME)
               .then((cache) => cache.put(event.request, responseToCache));
             return response;
           })
-          .catch(() => caches.match('/')),
+          .catch(async () => {
+            if (event.request.mode === 'navigate') {
+              return (await caches.match('/offline.html')) || (await caches.match('/'));
+            }
+            return cachedResponse;
+          }),
     ),
   );
 });
