@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowUp, Copy, Check } from 'lucide-react';
 import { db } from '../lib/db';
@@ -10,8 +10,11 @@ const F = "'Random Grotesque', sans-serif";
 
 const AI_PROMPT = `Опиши меня в свободной форме: чем занимаюсь, какие проекты веду, главные цели сейчас, что меня беспокоит, как я принимаю решения. 150-200 слов, без списков, как будто рассказываешь о человеке другу.`;
 
+const MIN_ROWS_HEIGHT = 80;
+const MAX_HEIGHT = 220;
+
 interface OnboardingProps {
-  onComplete: () => void;
+  onComplete: (threadId?: string) => void;
 }
 
 export default function Onboarding({ onComplete }: OnboardingProps) {
@@ -20,6 +23,15 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const [skipped, setSkipped] = useState(false);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, MAX_HEIGHT) + 'px';
+  }, [text]);
 
   const handleSubmit = async () => {
     const content = text.trim();
@@ -52,11 +64,13 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           body: JSON.stringify({ messages: thread.messages, threadId, userId, raw: true, rawSummary: content }),
         }).catch(() => {});
       }
+
+      onComplete(threadId);
     } catch (e) {
       console.error('[onboarding]', e);
+      onComplete();
     } finally {
       setLoading(false);
-      onComplete();
     }
   };
 
@@ -67,7 +81,17 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     }).catch(() => {});
   };
 
-  // Path C — skip view
+  const MysliLogo = ({ size = 34, strokeWidth = 11 }: { size?: number; strokeWidth?: number }) => (
+    <svg width={size} height={size} viewBox="0 0 156 156" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="152" height="152" rx="76" stroke="white" strokeWidth={strokeWidth}/>
+      <path d="M126 78H30" stroke="white" strokeWidth={strokeWidth}/>
+      <path d="M101 55L55 101" stroke="white" strokeWidth={strokeWidth}/>
+      <path d="M101 101L55 55" stroke="white" strokeWidth={strokeWidth}/>
+      <path d="M78 126V30" stroke="white" strokeWidth={strokeWidth}/>
+    </svg>
+  );
+
+  // Path C — skip view (unchanged)
   if (skipped) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f0f0f0', alignItems: 'center', justifyContent: 'center', padding: '0 28px' }}>
@@ -79,17 +103,8 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           style={{ background: '#ffffff', borderRadius: 20, padding: '20px 20px 16px', width: '100%', maxWidth: 400 }}
         >
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 18 }}>
-            <div style={{
-              width: 34, height: 34, borderRadius: '50%', background: '#0B0D10', flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <svg width="18" height="18" viewBox="0 0 156 156" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="2" y="2" width="152" height="152" rx="76" stroke="white" strokeWidth="14"/>
-                <path d="M126 78H30" stroke="white" strokeWidth="14"/>
-                <path d="M101 55L55 101" stroke="white" strokeWidth="14"/>
-                <path d="M101 101L55 55" stroke="white" strokeWidth="14"/>
-                <path d="M78 126V30" stroke="white" strokeWidth="14"/>
-              </svg>
+            <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#0B0D10', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <MysliLogo size={18} strokeWidth={14} />
             </div>
             <div style={{ fontFamily: M, fontSize: 15, color: '#222224', lineHeight: 1.65 }}>
               Я Мысль — помогаю с задачами, заметками и планами. Всё что ты обсуждаешь со мной — сохраняется и помогает мне понимать тебя лучше со временем. Можешь добавлять задачи голосом, выгружать хаос из головы или просто думать вслух.
@@ -97,12 +112,8 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           </div>
           <motion.button
             whileTap={{ scale: 0.96 }}
-            onClick={onComplete}
-            style={{
-              width: '100%', padding: '13px 0', background: '#0B0D10', color: '#ffffff',
-              border: 'none', borderRadius: 13, fontFamily: M, fontSize: 15, fontWeight: 500,
-              cursor: 'pointer',
-            }}
+            onClick={() => onComplete()}
+            style={{ width: '100%', padding: '13px 0', background: '#0B0D10', color: '#ffffff', border: 'none', borderRadius: 13, fontFamily: M, fontSize: 15, fontWeight: 500, cursor: 'pointer' }}
           >
             Продолжить
           </motion.button>
@@ -116,7 +127,6 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f0f0f0' }}>
       <div style={{ height: 'env(safe-area-inset-top, 0px)' }} />
 
-      {/* Upper spacer */}
       <div style={{ flex: '0 0 16%' }} />
 
       {/* Logo */}
@@ -125,18 +135,9 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           initial={{ scale: 0.7, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: 'spring', stiffness: 380, damping: 28 }}
-          style={{
-            width: 64, height: 64, borderRadius: '50%', background: '#0B0D10',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
+          style={{ width: 64, height: 64, borderRadius: '50%', background: '#0B0D10', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
-          <svg width="34" height="34" viewBox="0 0 156 156" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="2" y="2" width="152" height="152" rx="76" stroke="white" strokeWidth="11"/>
-            <path d="M126 78H30" stroke="white" strokeWidth="11"/>
-            <path d="M101 55L55 101" stroke="white" strokeWidth="11"/>
-            <path d="M101 101L55 55" stroke="white" strokeWidth="11"/>
-            <path d="M78 126V30" stroke="white" strokeWidth="11"/>
-          </svg>
+          <MysliLogo size={34} strokeWidth={11} />
         </motion.div>
       </div>
 
@@ -164,7 +165,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
         transition={{ delay: 0.18 }}
         style={{ background: '#ffffff', borderRadius: '20px 20px 0 0', padding: '18px 20px 0' }}
       >
-        {/* Path B — AI prompt block */}
+        {/* AI prompt block */}
         <AnimatePresence>
           {showAiPrompt && (
             <motion.div
@@ -180,11 +181,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 </div>
                 <button
                   onClick={handleCopy}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                    background: 'none', border: '1px solid rgba(34,34,36,0.15)', borderRadius: 8,
-                    padding: '6px 12px', cursor: 'pointer', fontFamily: M, fontSize: 13, color: '#444',
-                  }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: '1px solid rgba(34,34,36,0.15)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontFamily: M, fontSize: 13, color: '#444' }}
                 >
                   {copied ? <Check size={13} /> : <Copy size={13} />}
                   {copied ? 'Скопировано' : 'Скопировать'}
@@ -197,8 +194,9 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           )}
         </AnimatePresence>
 
-        {/* Textarea */}
+        {/* Auto-resizing textarea */}
         <textarea
+          ref={textareaRef}
           autoFocus
           value={text}
           onChange={e => setText(e.target.value)}
@@ -206,26 +204,35 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmit();
           }}
           placeholder="Чем занимаешься, какие цели сейчас, что беспокоит..."
-          rows={4}
           style={{
             width: '100%', border: 'none', outline: 'none', background: 'transparent',
             fontFamily: M, fontSize: 15, color: '#222224', lineHeight: 1.65,
             resize: 'none', display: 'block', boxSizing: 'border-box',
+            minHeight: MIN_ROWS_HEIGHT, maxHeight: MAX_HEIGHT, overflowY: 'auto',
+            transition: 'height 0.1s ease',
           }}
         />
 
         {/* Actions row */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0 4px' }}>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-            <button
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0 4px' }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <motion.button
+              whileTap={{ scale: 0.96 }}
               onClick={() => setShowAiPrompt(v => !v)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: M, fontSize: 13, color: 'rgba(34,34,36,0.4)', padding: 0 }}
+              style={{
+                background: showAiPrompt ? '#0B0D10' : 'rgba(34,34,36,0.08)',
+                border: 'none', cursor: 'pointer',
+                fontFamily: M, fontSize: 13, fontWeight: 500,
+                color: showAiPrompt ? '#fff' : '#222224',
+                padding: '8px 16px', borderRadius: 40,
+                transition: 'background 0.15s, color 0.15s',
+              }}
             >
-              Пусть нейронка расскажет
-            </button>
+              Импорт контекста
+            </motion.button>
             <button
               onClick={() => setSkipped(true)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: M, fontSize: 13, color: 'rgba(34,34,36,0.3)', padding: 0 }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: M, fontSize: 13, color: 'rgba(34,34,36,0.35)', padding: '8px 4px' }}
             >
               Пропустить
             </button>

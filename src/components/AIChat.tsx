@@ -35,11 +35,12 @@ interface AIChatProps {
   setTasks: (tasks: Task[] | ((prev: Task[]) => Task[])) => void;
   onClose: () => void;
   onNavigate: (screen: Screen) => void;
+  onOpenThread?: (id: string) => void;
   autoSend?: string;
   onAutoSentClear?: () => void;
 }
 
-export default function AIChat({ threadId, threads, setThreads, tasks, setTasks, onClose, onNavigate, autoSend, onAutoSentClear }: AIChatProps) {
+export default function AIChat({ threadId, threads, setThreads, tasks, setTasks, onClose, onNavigate, onOpenThread, autoSend, onAutoSentClear }: AIChatProps) {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [noteMode, setNoteMode] = useState(false);
@@ -961,7 +962,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                       key={si}
                       onClick={() => {
                         setOpenSourcesIdx(null);
-                        if (thr) { onNavigate('threads'); }
+                        if (thr) { onOpenThread ? onOpenThread(thr.id) : onNavigate('threads'); }
                       }}
                       style={{
                         width: '100%', display: 'flex', alignItems: 'center', gap: 14,

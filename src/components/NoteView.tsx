@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { MessageCircle, Check, BookmarkPlus } from 'lucide-react';
+import { MessageCircle, Check } from 'lucide-react';
 import { Thread, Task } from '../types';
 import { db } from '../lib/db';
 import { getCurrentUser } from '../lib/auth';
@@ -78,8 +78,6 @@ export default function NoteView({ threadId, threads, setThreads, tasks, onSwitc
   const thread = threads.find(t => t.id === threadId);
   const [loading, setLoading] = useState(false);
   const [summaryReady, setSummaryReady] = useState(Boolean(thread?.summary));
-  const [archiving, setArchiving] = useState(false);
-  const isArchived = thread?.source === 'заметка';
 
   useEffect(() => {
     if (!thread) return;
@@ -108,16 +106,6 @@ export default function NoteView({ threadId, threads, setThreads, tasks, onSwitc
       .catch(() => setSummaryReady(true))
       .finally(() => setLoading(false));
   }, [threadId]);
-
-  const handleArchive = async () => {
-    if (archiving || isArchived || !thread) return;
-    setArchiving(true);
-    await db.archiveThread(threadId);
-    setThreads(prev => (Array.isArray(prev) ? prev : []).map(t =>
-      t.id === threadId ? { ...t, source: 'заметка' as const } : t
-    ));
-    setArchiving(false);
-  };
 
   const threadTasks = (Array.isArray(tasks) ? tasks : []).filter(t => t.threadId === threadId);
   const dateStr = thread ? new Date(thread.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
@@ -233,56 +221,23 @@ export default function NoteView({ threadId, threads, setThreads, tasks, onSwitc
             </div>
           )}
 
-          {/* Actions row */}
+          {/* Switch to chat */}
           {thread.source !== 'text' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <button
-                onClick={onSwitchToChat}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 8,
-                  fontFamily: M, fontSize: 14, color: 'var(--text-primary)',
-                  background: 'none', border: '1px solid rgba(0,0,0,0.12)',
-                  borderRadius: 40, padding: '9px 20px', cursor: 'pointer',
-                  transition: 'border-color 0.15s',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(0,0,0,0.3)')}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(0,0,0,0.12)')}
-              >
-                <MessageCircle size={15} strokeWidth={1.5} />
-                Открыть диалог
-              </button>
-
-              {!isArchived && (
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  onClick={handleArchive}
-                  disabled={archiving}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 8,
-                    fontFamily: M, fontSize: 14, color: 'var(--text-primary)',
-                    background: 'none', border: '1px solid rgba(0,0,0,0.12)',
-                    borderRadius: 40, padding: '9px 20px', cursor: archiving ? 'default' : 'pointer',
-                    transition: 'border-color 0.15s', opacity: archiving ? 0.6 : 1,
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(0,0,0,0.3)')}
-                  onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(0,0,0,0.12)')}
-                >
-                  <BookmarkPlus size={15} strokeWidth={1.5} />
-                  {archiving ? 'Сохранение...' : 'Сохранить в архив'}
-                </motion.button>
-              )}
-
-              {isArchived && (
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 8,
-                  fontFamily: M, fontSize: 14, color: 'var(--text-30)',
-                  padding: '9px 20px',
-                }}>
-                  <Check size={15} strokeWidth={1.5} />
-                  В архиве
-                </span>
-              )}
-            </div>
+            <button
+              onClick={onSwitchToChat}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                fontFamily: M, fontSize: 14, color: 'var(--text-primary)',
+                background: 'none', border: '1px solid rgba(0,0,0,0.12)',
+                borderRadius: 40, padding: '9px 20px', cursor: 'pointer',
+                transition: 'border-color 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(0,0,0,0.3)')}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(0,0,0,0.12)')}
+            >
+              <MessageCircle size={15} strokeWidth={1.5} />
+              Открыть диалог
+            </button>
           )}
 
         </div>

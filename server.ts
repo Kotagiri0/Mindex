@@ -1011,6 +1011,7 @@ app.post("/api/chat", async (req, res) => {
           const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user');
           if (lastUserMsg?.content) {
             let ragResult: any = { rows: [] };
+            let isExplicitMatch = false; // true только при реальном совпадении, не fallback
 
             if (vectorEnabled) {
               const queryEmbedding = await generateEmbedding(String(lastUserMsg.content));
@@ -1028,9 +1029,10 @@ app.post("/api/chat", async (req, res) => {
                    LIMIT 3`,
                   [userId, `[${queryEmbedding.join(',')}]`]
                 );
+                if (ragResult.rows.length > 0) isExplicitMatch = true;
               }
             } else {
-              // Text-based fallback: keyword matching on summary/title
+              // Text-based: keyword matching on summary/title
               const keywords = String(lastUserMsg.content)
                 .toLowerCase()
                 .replace(/[^\wа-яё\s]/gi, '')
@@ -1047,9 +1049,10 @@ app.post("/api/chat", async (req, res) => {
                    ORDER BY updated_at DESC LIMIT 3`,
                   [userId, ...keywords.map((k: string) => `%${k}%`)]
                 );
+                if (ragResult.rows.length > 0) isExplicitMatch = true;
               }
 
-              // Fallback: most recent summarized threads
+              // Fallback: recent threads for context only, no sources shown
               if (ragResult.rows.length === 0) {
                 ragResult = await db.query(
                   `SELECT title, summary FROM user_threads
@@ -1066,8 +1069,11 @@ app.post("/api/chat", async (req, res) => {
                 .join('\n---\n');
               const ragBlock = `## Из архива пользователя\nНиже — фрагменты из заметок и прошлых разговоров пользователя. Используй их как контекст при ответе. Не упоминай сам факт наличия архива, если пользователь не спрашивает.\n\n${contextBlock}`;
               finalSystemInstruction = `${finalSystemInstruction}\n\n${ragBlock}`;
-              ragSources = ragResult.rows.map((r: any) => ({ title: r.title }));
-              console.log('[RAG] injected:', ragSources.map(s => s.title));
+              // Источники показываем только при явном совпадении
+              if (isExplicitMatch) {
+                ragSources = ragResult.rows.map((r: any) => ({ title: r.title }));
+              }
+              console.log('[RAG] injected:', ragResult.rows.map((r: any) => r.title), isExplicitMatch ? '(explicit)' : '(fallback, no sources)');
             } else {
               console.log('[RAG] no matching context found for userId:', userId);
             }

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { MysliThinking } from './MysliThinking';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Sun, Calendar, MessageCircle, Settings as SettingsIcon,
@@ -533,7 +534,7 @@ function EmptyChatScreen({ onSend }: { onSend: (msg: string) => void }) {
 // ─── Chat view ──────────────────────────────────────────────────────────────────
 
 function ChatView({
-  threadId, threads, setThreads, tasks, setTasks, initialMessage, onInitialConsumed, onNetworkError,
+  threadId, threads, setThreads, tasks, setTasks, initialMessage, onInitialConsumed, onNetworkError, onOpenThread,
 }: {
   key?: React.Key;
   threadId: string;
@@ -544,6 +545,7 @@ function ChatView({
   initialMessage?: string | null;
   onInitialConsumed?: () => void;
   onNetworkError?: () => void;
+  onOpenThread?: (id: string) => void;
 }) {
   const THINKING_PHRASES = ['Думаю...', 'Анализирую...', 'Ищу в архиве...', 'Формулирую...', 'Пишу ответ...'];
 
@@ -940,7 +942,7 @@ function ChatView({
             const realIdx = thread.messages.indexOf(m);
             const isLast = i === visible.length - 1;
             const showAnimated = isLast && m.role === 'assistant' && animatingContent !== null;
-            const showActions = hoveredMsgIdx === i;
+            const showActions = hoveredMsgIdx === i || openMsgMenuIdx === i || openSourcesIdx === i;
             return (
               <div key={i}
                 onMouseEnter={() => m.role === 'assistant' && setHoveredMsgIdx(i)}
@@ -1088,7 +1090,7 @@ function ChatView({
                                   return (
                                     <button
                                       key={si}
-                                      onClick={() => { setOpenSourcesIdx(null); }}
+                                      onClick={() => { setOpenSourcesIdx(null); if (thr && onOpenThread) onOpenThread(thr.id); }}
                                       style={{
                                         width: '100%', display: 'flex', alignItems: 'center', gap: 10,
                                         padding: '8px 14px', background: 'none', border: 'none',
@@ -1180,7 +1182,8 @@ function ChatView({
             );
           })}
           {isTyping && (
-            <div style={{ alignSelf: 'flex-start', paddingLeft: 2 }}>
+            <div style={{ alignSelf: 'flex-start', paddingLeft: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <MysliThinking />
               <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', fontStyle: 'italic' }}>
                 {THINKING_PHRASES[thinkingIdx]}
               </span>
@@ -1287,7 +1290,7 @@ function ThreadsView({
     t.preview.toLowerCase().includes(search.toLowerCase());
 
   const thoughts = all.filter(t => t.source !== 'skill' && t.source !== 'заметка' && searchMatch(t));
-  const notes = all.filter(t => t.source !== 'skill' && searchMatch(t));
+  const notes = all.filter(t => t.source === 'заметка' && searchMatch(t));
 
   const displayed = tab === 'thoughts' ? thoughts : notes;
 
@@ -2111,16 +2114,14 @@ export default function DesktopApp({
                     />
                     <button
                       onClick={() => setNoteMode(false)}
-                      style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 16px', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 32, fontFamily: M, fontSize: 13, fontWeight: 500, color: !noteMode ? 'var(--text-primary)' : 'var(--text-30)', transition: 'color 0.15s', whiteSpace: 'nowrap' }}
+                      style={{ position: 'relative', zIndex: 1, padding: '6px 20px', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 32, fontFamily: M, fontSize: 13, fontWeight: 500, color: !noteMode ? 'var(--text-primary)' : 'var(--text-30)', transition: 'color 0.15s', whiteSpace: 'nowrap' }}
                     >
-                      <MessageCircle size={14} strokeWidth={1.75} />
                       Чат
                     </button>
                     <button
                       onClick={() => setNoteMode(true)}
-                      style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 16px', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 32, fontFamily: M, fontSize: 13, fontWeight: 500, color: noteMode ? 'var(--text-primary)' : 'var(--text-30)', transition: 'color 0.15s', whiteSpace: 'nowrap' }}
+                      style={{ position: 'relative', zIndex: 1, padding: '6px 20px', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 32, fontFamily: M, fontSize: 13, fontWeight: 500, color: noteMode ? 'var(--text-primary)' : 'var(--text-30)', transition: 'color 0.15s', whiteSpace: 'nowrap' }}
                     >
-                      <StickyNote size={14} strokeWidth={1.75} />
                       Заметка
                     </button>
                   </div>
@@ -2146,6 +2147,7 @@ export default function DesktopApp({
                   initialMessage={pendingMessage}
                   onInitialConsumed={() => setPendingMessage(null)}
                   onNetworkError={() => setNoInternet(true)}
+                  onOpenThread={handleOpenThread}
                 />
               ) : (
                 <EmptyChatScreen onSend={startNewThreadWithMessage} />

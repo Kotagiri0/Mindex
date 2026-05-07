@@ -140,10 +140,15 @@ export default function App() {
     await db.upsertProfile(onboardingComplete, newSettings);
   };
 
-  const handleOnboardingComplete = async () => {
+  const handleOnboardingComplete = async (threadId?: string) => {
     setOnboardingComplete(true);
     await db.upsertProfile(true, settings);
-    setScreen(isDesktopViewport ? 'dash' : 'today');
+    if (threadId) {
+      setCurTh(threadId);
+      setScreen('ai');
+    } else {
+      setScreen(isDesktopViewport ? 'dash' : 'today');
+    }
   };
 
   const startNewThread = async () => {
@@ -285,6 +290,7 @@ export default function App() {
                 navigateMobile('threads');
               }}
               onNavigate={navigateMobile}
+              onOpenThread={(id) => { setCurTh(id); setScreen('ai'); }}
               autoSend={pendingMsg}
               onAutoSentClear={() => setPendingMsg('')}
             />
