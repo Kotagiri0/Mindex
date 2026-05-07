@@ -858,13 +858,7 @@ async function callRouterAI(apiKey: string, body: object, attempt = 0): Promise<
 
 app.post("/api/summarize", async (req, res) => {
   const { messages, threadId, userId, raw, rawSummary } = req.body || {};
-  if (!messages || !Array.isArray(messages) || messages.length === 0) {
-    return res.status(400).json({ error: 'messages required' });
-  }
-  const apiKey = process.env.ROUTERAI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'ROUTERAI_API_KEY not set' });
-
-  // raw=true: заметка создана вручную — не переформатируем через LLM, используем текст как есть
+  // raw=true: заметка создана вручную — не нужен LLM, только DB write
   if (raw && rawSummary) {
     try {
       if (db && threadId && userId) {
@@ -872,18 +866,20 @@ app.post("/api/summarize", async (req, res) => {
           `UPDATE user_threads SET summary = $1, is_meaningful = true, updated_at = NOW() WHERE id = $2 AND user_id = $3`,
           [String(rawSummary), threadId, userId]
         );
+        // Embedding — fire-and-forget, не блокируем ответ если pgvector недоступен
         const threadRes = await db.query(
           `SELECT title FROM user_threads WHERE id = $1 AND user_id = $2 LIMIT 1`,
           [threadId, userId]
         );
         const title = threadRes.rows?.[0]?.title || '';
-        const embedding = await generateEmbedding(`${title}\n${rawSummary}`);
-        if (embedding) {
-          await db.query(
-            `UPDATE user_threads SET embedding = $1::vector WHERE id = $2 AND user_id = $3`,
-            [`[${embedding.join(',')}]`, threadId, userId]
-          );
-        }
+        generateEmbedding(`${title}\n${rawSummary}`).then(embedding => {
+          if (embedding && db) {
+            db.query(
+              `UPDATE user_threads SET embedding = $1::vector WHERE id = $2 AND user_id = $3`,
+              [`[${embedding.join(',')}]`, threadId, userId]
+            ).catch(e => console.warn('[summarize/raw embed]', e.message));
+          }
+        }).catch(() => {});
       }
       return res.status(200).json({ summary: rawSummary });
     } catch (err: any) {
@@ -891,6 +887,12 @@ app.post("/api/summarize", async (req, res) => {
       return res.status(500).json({ error: err.message || 'embed failed' });
     }
   }
+
+  if (!messages || !Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'messages required' });
+  }
+  const apiKey = process.env.ROUTERAI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'ROUTERAI_API_KEY not set' });
 
   const dialogText = messages
     .filter((m: any) => m.role === 'user' || m.role === 'assistant')

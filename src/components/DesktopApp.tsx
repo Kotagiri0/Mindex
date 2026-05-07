@@ -1723,9 +1723,16 @@ function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
 
           {/* Day strip with slide animation */}
           <div style={{ height: 1, background: 'var(--border)' }} />
-          <div>
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div key={weekOffset}>
+          <div style={{ overflow: 'hidden' }}>
+          <AnimatePresence mode="popLayout" initial={false} custom={slideDir}>
+            <motion.div
+              key={weekOffset}
+              custom={slideDir}
+              initial={{ x: slideDir === 1 ? '60%' : '-60%', opacity: 0 }}
+              animate={{ x: '0%', opacity: 1 }}
+              exit={{ x: slideDir === 1 ? '-60%' : '60%', opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 36, mass: 0.85 }}
+            >
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', paddingTop: 4, paddingBottom: 4 }}>
                 {weekDays.map((d, i) => {
                   const ds = dateToStr(d);
