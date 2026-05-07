@@ -22,7 +22,9 @@ self.addEventListener('install', (event) => {
         const assetMatches = html.match(/\/assets\/[^"' )]+\.(?:js|css)/g) || [];
         const uniqueAssets = [...new Set(assetMatches)];
         await cache.addAll(uniqueAssets);
-      } catch (_) {}
+      } catch (error) {
+        console.warn('Failed to cache dynamic assets:', error);
+      }
     })(),
   );
   self.skipWaiting();
@@ -65,7 +67,7 @@ self.addEventListener('fetch', (event) => {
             if (event.request.mode === 'navigate') {
               return (await caches.match('/offline.html')) || (await caches.match('/'));
             }
-            return cachedResponse;
+            return new Response('Offline', { status: 503, statusText: 'Offline' });
           }),
     ),
   );

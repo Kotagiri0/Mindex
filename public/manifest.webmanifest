@@ -1,7 +1,7 @@
 {
   "name": "Mindex",
   "short_name": "Mindex",
-  "description": "AI-powered task management app",
+  "description": "Персональный ИИ-ассистент для планирования",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
