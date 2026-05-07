@@ -1572,6 +1572,7 @@ function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const tooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const miniCalRef = useRef<HTMLDivElement>(null);
+  const swipeDragStart = useRef<number | null>(null);
   const today = todayStr();
 
   const weekDays = useMemo(() => {
@@ -1723,36 +1724,52 @@ function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
 
           {/* Day strip with slide animation */}
           <div style={{ height: 1, background: 'var(--border)' }} />
-          <div style={{ overflow: 'hidden' }}>
-          <AnimatePresence mode="popLayout" initial={false} custom={slideDir}>
-            <motion.div
-              key={weekOffset}
-              custom={slideDir}
-              initial={{ x: slideDir === 1 ? '60%' : '-60%', opacity: 0 }}
-              animate={{ x: '0%', opacity: 1 }}
-              exit={{ x: slideDir === 1 ? '-60%' : '60%', opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 380, damping: 36, mass: 0.85 }}
-            >
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', paddingTop: 4, paddingBottom: 4 }}>
-                {weekDays.map((d, i) => {
-                  const ds = dateToStr(d);
-                  const isSelected = ds === selectedDate;
-                  const isToday = ds === today;
-                  const isWeekend = i >= 5;
-                  return (
-                    <button key={ds} onClick={() => setSelectedDate(ds)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '8px 4px', border: 'none', background: 'transparent', cursor: 'pointer' }}>
-                      <span style={{ fontFamily: M, fontSize: 16, fontWeight: 500, color: isWeekend ? 'rgba(0,0,0,0.22)' : 'var(--text-30)', letterSpacing: '0.02em' }}>{WEEK_DAYS[i].toLowerCase()}</span>
-                      <div style={{ width: 38, height: 38, borderRadius: '50%', background: isSelected ? '#0B0D10' : isToday ? 'rgba(11,13,16,0.3)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontSize: 18, fontFamily: "'Helvetica Neue', Helvetica, sans-serif", fontWeight: isSelected || isToday ? 700 : 400, color: isSelected || isToday ? '#fff' : isWeekend ? 'rgba(0,0,0,0.28)' : '#999B9E' }}>
-                          {d.getDate()}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </motion.div>
-          </AnimatePresence>
+          <div
+            style={{ overflow: 'hidden', position: 'relative', touchAction: 'pan-y' }}
+            onPointerDown={e => { if (e.pointerType === 'mouse' && e.button !== 0) return; swipeDragStart.current = e.clientX; }}
+            onPointerUp={e => {
+              if (swipeDragStart.current === null) return;
+              const dx = e.clientX - swipeDragStart.current;
+              swipeDragStart.current = null;
+              if (Math.abs(dx) < 40) return;
+              goWeek(dx < 0 ? 1 : -1);
+            }}
+            onPointerCancel={() => { swipeDragStart.current = null; }}
+          >
+            <AnimatePresence mode="wait" initial={false} custom={slideDir}>
+              <motion.div
+                key={weekOffset}
+                custom={slideDir}
+                variants={{
+                  enter: (dir: number) => ({ x: dir > 0 ? '100%' : '-100%', opacity: 0 }),
+                  center: { x: '0%', opacity: 1 },
+                  exit: (dir: number) => ({ x: dir > 0 ? '-100%' : '100%', opacity: 0 }),
+                }}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ type: 'spring', stiffness: 340, damping: 34, mass: 0.9 }}
+              >
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', paddingTop: 4, paddingBottom: 4 }}>
+                  {weekDays.map((d, i) => {
+                    const ds = dateToStr(d);
+                    const isSelected = ds === selectedDate;
+                    const isToday = ds === today;
+                    const isWeekend = i >= 5;
+                    return (
+                      <button key={ds} onClick={() => setSelectedDate(ds)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '8px 4px', border: 'none', background: 'transparent', cursor: 'pointer' }}>
+                        <span style={{ fontFamily: M, fontSize: 16, fontWeight: 500, color: isWeekend ? 'rgba(0,0,0,0.22)' : 'var(--text-30)', letterSpacing: '0.02em' }}>{WEEK_DAYS[i].toLowerCase()}</span>
+                        <div style={{ width: 38, height: 38, borderRadius: '50%', background: isSelected ? '#0B0D10' : isToday ? 'rgba(11,13,16,0.3)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ fontSize: 18, fontFamily: "'Helvetica Neue', Helvetica, sans-serif", fontWeight: isSelected || isToday ? 700 : 400, color: isSelected || isToday ? '#fff' : isWeekend ? 'rgba(0,0,0,0.28)' : '#999B9E' }}>
+                            {d.getDate()}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            </AnimatePresence>
           </div>
           <div style={{ height: 1, background: 'var(--border)', marginBottom: 16 }} />
 
