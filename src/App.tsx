@@ -190,22 +190,20 @@ export default function App() {
 
   if (isDesktopViewport) {
     return (
-      <div className="safe-area-container">
-        <DesktopApp
-          tasks={tasks}
-          setTasks={updateTasks}
-          threads={threads}
-          setThreads={updateThreads}
-          settings={settings}
-          setSettings={updateSettings}
-          screen={screen}
-          setScreen={setScreen}
-          curTh={curTh}
-          setCurTh={setCurTh}
-          startNewThread={startNewThread}
-          handleLogout={handleLogout}
-        />
-      </div>
+      <DesktopApp
+        tasks={tasks}
+        setTasks={updateTasks}
+        threads={threads}
+        setThreads={updateThreads}
+        settings={settings}
+        setSettings={updateSettings}
+        screen={screen}
+        setScreen={setScreen}
+        curTh={curTh}
+        setCurTh={setCurTh}
+        startNewThread={startNewThread}
+        handleLogout={handleLogout}
+      />
     );
   }
 
