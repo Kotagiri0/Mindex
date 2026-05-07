@@ -10,17 +10,26 @@ const isStandalone =
   (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
 
 if (isStandalone && document.fullscreenEnabled) {
-  const requestFullscreen = () => {
+  const cleanupFullscreenListeners = () => {
     window.removeEventListener('pointerdown', requestFullscreen);
     window.removeEventListener('keydown', requestFullscreen);
+  };
 
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch((error) => {
+  const requestFullscreen = () => {
+    if (document.fullscreenElement) {
+      cleanupFullscreenListeners();
+      return;
+    }
+
+    document.documentElement.requestFullscreen()
+      .then(() => {
+        cleanupFullscreenListeners();
+      })
+      .catch((error) => {
         if (import.meta.env.DEV) {
           console.error('Fullscreen request failed:', error);
         }
       });
-    }
   };
 
   window.addEventListener('pointerdown', requestFullscreen);
