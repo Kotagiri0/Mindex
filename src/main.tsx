@@ -4,29 +4,27 @@ import App from './App.tsx';
 import { ThemeProvider } from './lib/theme';
 import './index.css';
 
-if (import.meta.env.PROD) {
-  const isStandalone =
-    window.matchMedia('(display-mode: standalone)').matches ||
-    window.matchMedia('(display-mode: fullscreen)').matches ||
-    (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+const isStandalone =
+  window.matchMedia('(display-mode: standalone)').matches ||
+  window.matchMedia('(display-mode: fullscreen)').matches ||
+  (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
 
-  if (isStandalone && document.fullscreenEnabled) {
-    const requestFullscreen = () => {
-      window.removeEventListener('pointerdown', requestFullscreen);
-      window.removeEventListener('keydown', requestFullscreen);
+if (isStandalone && document.fullscreenEnabled) {
+  const requestFullscreen = () => {
+    window.removeEventListener('pointerdown', requestFullscreen);
+    window.removeEventListener('keydown', requestFullscreen);
 
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch((error) => {
-          if (import.meta.env.DEV) {
-            console.error('Fullscreen request failed:', error);
-          }
-        });
-      }
-    };
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch((error) => {
+        if (import.meta.env.DEV) {
+          console.error('Fullscreen request failed:', error);
+        }
+      });
+    }
+  };
 
-    window.addEventListener('pointerdown', requestFullscreen);
-    window.addEventListener('keydown', requestFullscreen);
-  }
+  window.addEventListener('pointerdown', requestFullscreen);
+  window.addEventListener('keydown', requestFullscreen);
 }
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
