@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { MysliThinking } from './MysliThinking';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Sun, Calendar, MessageCircle, Settings as SettingsIcon,
   Plus, ChevronDown, ArrowUp, Search, Check, Mic, Loader,
-  PanelLeftOpen, PanelLeftClose, Pencil, Copy, MoreHorizontal, X,
+  PanelLeftOpen, PanelLeftClose, Pencil, Copy, MoreHorizontal, X, StickyNote, BookOpen, ChevronRight,
 } from 'lucide-react';
 import { Task, Thread, Message, Settings as SettingsType, Screen } from '../types';
 import AddTaskModal from './AddTaskModal';
@@ -198,32 +199,35 @@ function ChatInputBar({
           <Plus size={20} strokeWidth={1.5} color="var(--text-30)" />
         </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <motion.button
-            onPointerDown={e => { e.preventDefault(); startRecording(); }}
-            onPointerUp={e => { e.preventDefault(); stopRecording(); }}
-            onPointerCancel={stopRecording}
-            title={isRecording ? 'Отпусти для завершения' : 'Удерживай для записи'}
-            style={{
-              width: 32, height: 32, borderRadius: '50%', border: 'none', cursor: 'pointer',
+          {canSend ? (
+            <motion.button whileTap={{ scale: 0.9 }} onClick={onSend} style={{
+              width: 36, height: 36, borderRadius: '50%',
+              background: 'var(--accent)',
+              border: 'none', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: isRecording ? '#c0392b' : isProcessing ? 'var(--accent)' : 'rgba(9,14,23,0.08)',
-              transition: 'background 0.15s',
-            }}
-          >
-            {isProcessing
-              ? <Loader size={15} strokeWidth={2} color="#fff" className="animate-spin" />
-              : <Mic size={15} strokeWidth={1.75} color={isRecording ? '#fff' : 'var(--text-40)'} />
-            }
-          </motion.button>
-          <button onClick={onSend} disabled={!canSend} style={{
-            width: 36, height: 36, borderRadius: '50%',
-            background: canSend ? 'var(--accent)' : 'rgba(9,14,23,0.1)',
-            border: 'none', cursor: canSend ? 'pointer' : 'default',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transition: 'background 0.15s', flexShrink: 0,
-          }}>
-            <ArrowUp size={16} strokeWidth={2} color="var(--accent-text)" />
-          </button>
+              transition: 'background 0.15s', flexShrink: 0,
+            }}>
+              <ArrowUp size={16} strokeWidth={2} color="var(--accent-text)" />
+            </motion.button>
+          ) : (
+            <motion.button
+              onPointerDown={e => { e.preventDefault(); startRecording(); }}
+              onPointerUp={e => { e.preventDefault(); stopRecording(); }}
+              onPointerCancel={stopRecording}
+              title={isRecording ? 'Отпусти для завершения' : 'Удерживай для записи'}
+              style={{
+                width: 32, height: 32, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: isRecording ? '#c0392b' : isProcessing ? 'var(--accent)' : 'rgba(9,14,23,0.08)',
+                transition: 'background 0.15s',
+              }}
+            >
+              {isProcessing
+                ? <Loader size={15} strokeWidth={2} color="#fff" className="animate-spin" />
+                : <Mic size={15} strokeWidth={1.75} color={isRecording ? '#fff' : 'var(--text-40)'} />
+              }
+            </motion.button>
+          )}
         </div>
       </div>
     </div>
@@ -368,8 +372,6 @@ function ThreadMenu({ onDelete, onRename }: { onDelete: () => void; onRename: ()
 
 // ─── Today screen ──────────────────────────────────────────────────────────────
 
-const PREVIEW_COUNT = 3;
-
 function TodayScreen({
   tasks, setTasks, onQuickChat, onAddTask, onEditTask,
 }: {
@@ -380,7 +382,6 @@ function TodayScreen({
   onEditTask: (t: Task) => void;
 }) {
   const [chatInput, setChatInput] = useState('');
-  const [expanded, setExpanded] = useState(true);
   const today = todayStr();
   const { state: voiceStateTd, startRecording: startRecTd, stopRecording: stopRecTd } = useVoiceInput(text => setChatInput(v => v ? v + ' ' + text : text));
   const now = new Date();
@@ -419,23 +420,7 @@ function TodayScreen({
     setChatInput('');
   };
 
-  const taskWord = (n: number) => {
-    if (n % 10 === 1 && n % 100 !== 11) return 'дело';
-    if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return 'дела';
-    return 'дел';
-  };
-
   const total = todayTasks.length;
-  const hiddenCount = Math.max(0, total - PREVIEW_COUNT);
-  const visibleTasks = expanded ? todayTasks : todayTasks.slice(0, PREVIEW_COUNT);
-
-  const headerText = total === 0
-    ? 'Нет дел на сегодня'
-    : !expanded && hiddenCount > 0
-      ? `Ещё ${hiddenCount} ${taskWord(hiddenCount)}`
-      : `${total} ${taskWord(total)}`;
-
-  const chevronUp = total === 0 || expanded || hiddenCount === 0;
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0' }}>
@@ -451,6 +436,16 @@ function TodayScreen({
           </div>
         </div>
 
+        {/* Add task button */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <button
+            onClick={onAddTask}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', color: '#aaa' }}
+          >
+            <Plus size={20} strokeWidth={1.75} />
+          </button>
+        </div>
+
         {/* Unified card */}
         <div style={{
           background: 'var(--surface)', borderRadius: 20,
@@ -458,37 +453,11 @@ function TodayScreen({
           overflow: 'hidden',
         }}>
 
-          {/* Header row: chevron + count + add button */}
-          <div
-            onClick={() => total > 0 && setExpanded(v => !v)}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '16px 20px',
-              borderBottom: expanded && total > 0 ? '1px solid #f5f5f5' : undefined,
-              cursor: total > 0 ? 'pointer' : 'default',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ transition: 'transform 0.2s', transform: chevronUp ? 'rotate(0deg)' : 'rotate(180deg)' }}>
-                <path d="M2 9l5-5 5 5" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <span style={{ fontFamily: M, fontSize: 14, color: total === 0 ? '#aaa' : '#333' }}>
-                {headerText}
-              </span>
-            </div>
-            <button
-              onClick={e => { e.stopPropagation(); onAddTask(); }}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', color: '#aaa' }}
-            >
-              <Plus size={18} strokeWidth={1.75} />
-            </button>
-          </div>
-
           {/* Task list */}
-          {expanded && total > 0 && (
+          {total > 0 && (
             <div>
-              {visibleTasks.map((task, idx) => (
-                <div key={task.id} style={{ borderBottom: idx < visibleTasks.length - 1 ? '1px solid #f5f5f5' : undefined }}>
+              {todayTasks.map((task, idx) => (
+                <div key={task.id} style={{ borderBottom: idx < todayTasks.length - 1 ? '1px solid #f5f5f5' : undefined }}>
                   <TaskRow
                     task={task}
                     onToggle={() => toggleTask(task.id)}
@@ -497,22 +466,11 @@ function TodayScreen({
                   />
                 </div>
               ))}
-              {hiddenCount > 0 && (
-                <button
-                  onClick={() => setExpanded(true)}
-                  style={{ width: '100%', padding: '11px 20px', background: 'none', border: 'none', borderTop: '1px solid #f5f5f5', cursor: 'pointer', fontFamily: M, fontSize: 13, color: '#aaa', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6 }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none" style={{ transform: 'rotate(180deg)' }}>
-                    <path d="M2 9l5-5 5 5" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  Ещё {hiddenCount} {taskWord(hiddenCount)}
-                </button>
-              )}
             </div>
           )}
 
           {/* Input */}
-          <div style={{ borderTop: expanded && total > 0 ? '1px solid #f5f5f5' : undefined, padding: '13px 20px' }}>
+          <div style={{ borderTop: total > 0 ? '1px solid #f5f5f5' : undefined, padding: '13px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}
                 onClick={() => alert('Вложения — скоро')}>
@@ -523,15 +481,24 @@ function TodayScreen({
                 onChange={e => setChatInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleChat()}
                 placeholder="Спроси у мысли..."
-                style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 14, color: 'var(--text-primary)' }}
+                style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 14, color: 'var(--text-primary)' }}
               />
-              <button
-                onPointerDown={e => { e.preventDefault(); startRecTd(); }}
-                onPointerUp={e => { e.preventDefault(); stopRecTd(); }}
-                onPointerCancel={stopRecTd}
-                style={{ background: voiceStateTd === 'recording' ? '#c0392b' : 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: '50%', display: 'flex', flexShrink: 0, transition: 'background 0.15s' }}>
-                <Mic size={17} strokeWidth={1.5} color={voiceStateTd === 'recording' ? '#fff' : '#bbb'} />
-              </button>
+              {chatInput.trim() ? (
+                <motion.button whileTap={{ scale: 0.9 }} onClick={handleChat} style={{
+                  width: 32, height: 32, borderRadius: '50%', background: '#111',
+                  border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  <ArrowUp size={15} strokeWidth={2} color="#fff" />
+                </motion.button>
+              ) : (
+                <button
+                  onPointerDown={e => { e.preventDefault(); startRecTd(); }}
+                  onPointerUp={e => { e.preventDefault(); stopRecTd(); }}
+                  onPointerCancel={stopRecTd}
+                  style={{ background: voiceStateTd === 'recording' ? '#c0392b' : 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: '50%', display: 'flex', flexShrink: 0, transition: 'background 0.15s' }}>
+                  <Mic size={17} strokeWidth={1.5} color={voiceStateTd === 'recording' ? '#fff' : '#bbb'} />
+                </button>
+              )}
             </div>
           </div>
 
@@ -567,7 +534,7 @@ function EmptyChatScreen({ onSend }: { onSend: (msg: string) => void }) {
 // ─── Chat view ──────────────────────────────────────────────────────────────────
 
 function ChatView({
-  threadId, threads, setThreads, tasks, setTasks, initialMessage, onInitialConsumed, onNetworkError,
+  threadId, threads, setThreads, tasks, setTasks, initialMessage, onInitialConsumed, onNetworkError, onOpenThread,
 }: {
   key?: React.Key;
   threadId: string;
@@ -578,6 +545,7 @@ function ChatView({
   initialMessage?: string | null;
   onInitialConsumed?: () => void;
   onNetworkError?: () => void;
+  onOpenThread?: (id: string) => void;
 }) {
   const THINKING_PHRASES = ['Думаю...', 'Анализирую...', 'Ищу в архиве...', 'Формулирую...', 'Пишу ответ...'];
 
@@ -588,6 +556,7 @@ function ChatView({
   const [replyQuote, setReplyQuote] = useState<string | null>(null);
   const [openMsgMenuIdx, setOpenMsgMenuIdx] = useState<number | null>(null);
   const [hoveredMsgIdx, setHoveredMsgIdx] = useState<number | null>(null);
+  const [openSourcesIdx, setOpenSourcesIdx] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const didAutoSend = useRef(false);
   const animIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -859,7 +828,7 @@ function ChatView({
       const msg = { ...msgs[idx] };
       if (msg.planning_data) {
         msg.planning_data = { ...msg.planning_data, answers: { ...msg.planning_data.answers, [questionId]: answer } };
-        const allAnswered = msg.planning_data.questions.every((q: any) => msg.planning_data?.answers?.[q.id]);
+        const allAnswered = msg.planning_data.questions.every((q: any) => msg.planning_data?.answers?.[q.id] !== undefined);
         if (allAnswered) {
           msg.planning_data.status = 'plan_generated';
           setTimeout(() => generatePlan(t, msg.planning_data!), 100);
@@ -965,15 +934,15 @@ function ChatView({
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', paddingTop: 32, paddingBottom: 16 }}>
         <div style={{ ...CC, display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {openMsgMenuIdx !== null && (
-            <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => setOpenMsgMenuIdx(null)} />
+          {(openMsgMenuIdx !== null || openSourcesIdx !== null) && (
+            <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => { setOpenMsgMenuIdx(null); setOpenSourcesIdx(null); }} />
           )}
 
           {visible.map((m, i) => {
             const realIdx = thread.messages.indexOf(m);
             const isLast = i === visible.length - 1;
             const showAnimated = isLast && m.role === 'assistant' && animatingContent !== null;
-            const showActions = hoveredMsgIdx === i;
+            const showActions = hoveredMsgIdx === i || openMsgMenuIdx === i || openSourcesIdx === i;
             return (
               <div key={i}
                 onMouseEnter={() => m.role === 'assistant' && setHoveredMsgIdx(i)}
@@ -1058,23 +1027,6 @@ function ChatView({
                         </div>
                       </div>
                     )}
-                    {m.sources && m.sources.length > 0 && !showAnimated && (
-                      <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-                        <div style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)', marginBottom: 6, letterSpacing: '0.05em', textTransform: 'uppercase' as const }}>
-                          Из архива
-                        </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                          {m.sources.map((s: { title: string }, si: number) => (
-                            <span key={si} style={{
-                              fontFamily: M, fontSize: 12, color: 'var(--text-muted)',
-                              background: 'rgba(0,0,0,0.05)', borderRadius: 6, padding: '3px 8px',
-                            }}>
-                              {s.title}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
                 <span style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)' }}>{m.time}</span>
@@ -1088,14 +1040,94 @@ function ChatView({
                     transition: 'opacity 0.15s',
                     position: 'relative',
                   }}>
-                    <button
-                      onClick={() => navigator.clipboard?.writeText(m.content)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#bbb', display: 'flex', alignItems: 'center', transition: 'color 0.12s' }}
-                      onMouseEnter={e => (e.currentTarget.style.color = '#555')}
-                      onMouseLeave={e => (e.currentTarget.style.color = '#bbb')}
-                    >
-                      <Copy size={14} strokeWidth={1.5} />
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <button
+                        onClick={() => navigator.clipboard?.writeText(m.content)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#bbb', display: 'flex', alignItems: 'center', transition: 'color 0.12s' }}
+                        onMouseEnter={e => (e.currentTarget.style.color = '#555')}
+                        onMouseLeave={e => (e.currentTarget.style.color = '#bbb')}
+                      >
+                        <Copy size={14} strokeWidth={1.5} />
+                      </button>
+
+                      {m.sources && m.sources.length > 0 && (
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            onClick={() => setOpenSourcesIdx(openSourcesIdx === i ? null : i)}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 4,
+                              background: openSourcesIdx === i ? 'rgba(0,0,0,0.06)' : 'none',
+                              border: 'none', cursor: 'pointer', padding: '2px 8px', borderRadius: 20,
+                              fontFamily: M, fontSize: 12, color: openSourcesIdx === i ? '#333' : '#bbb',
+                              transition: 'color 0.12s, background 0.12s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.color = '#555'; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = openSourcesIdx === i ? '#333' : '#bbb'; }}
+                          >
+                            <BookOpen size={13} strokeWidth={1.5} />
+                            Источники
+                          </button>
+
+                          <AnimatePresence>
+                            {openSourcesIdx === i && (
+                              <motion.div
+                                initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: 6, scale: 0.97 }}
+                                transition={{ duration: 0.14 }}
+                                style={{
+                                  position: 'absolute', left: 0, top: '100%', marginTop: 6,
+                                  background: '#fff', border: '1px solid #ebebeb',
+                                  borderRadius: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
+                                  padding: '6px 0', zIndex: 30, minWidth: 240,
+                                }}
+                              >
+                                <div style={{ padding: '4px 14px 8px', fontFamily: M, fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase' as const, color: 'var(--text-30)' }}>
+                                  Из архива · {m.sources.length}
+                                </div>
+                                {m.sources.map((s: { title: string }, si: number) => {
+                                  const thr = threads.find(t => t.title === s.title);
+                                  return (
+                                    <button
+                                      key={si}
+                                      onClick={() => { setOpenSourcesIdx(null); if (thr && onOpenThread) onOpenThread(thr.id); }}
+                                      style={{
+                                        width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                                        padding: '8px 14px', background: 'none', border: 'none',
+                                        cursor: 'pointer', textAlign: 'left',
+                                        borderTop: si > 0 ? '1px solid #f0f0f0' : undefined,
+                                      }}
+                                      onMouseEnter={e => (e.currentTarget.style.background = '#f7f7f7')}
+                                      onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                                    >
+                                      <div style={{
+                                        width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                                        background: 'rgba(0,0,0,0.06)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        fontFamily: M, fontSize: 10, fontWeight: 600, color: 'var(--text-30)',
+                                      }}>
+                                        {si + 1}
+                                      </div>
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                          {s.title}
+                                        </div>
+                                        {thr?.preview && (
+                                          <div style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
+                                            {thr.preview}
+                                          </div>
+                                        )}
+                                      </div>
+                                      {thr && <ChevronRight size={13} strokeWidth={1.5} color="var(--text-30)" />}
+                                    </button>
+                                  );
+                                })}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      )}
+                    </div>
 
                     <div style={{ position: 'relative' }}>
                       <button
@@ -1150,7 +1182,8 @@ function ChatView({
             );
           })}
           {isTyping && (
-            <div style={{ alignSelf: 'flex-start', paddingLeft: 2 }}>
+            <div style={{ alignSelf: 'flex-start', paddingLeft: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <MysliThinking />
               <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', fontStyle: 'italic' }}>
                 {THINKING_PHRASES[thinkingIdx]}
               </span>
@@ -1257,7 +1290,7 @@ function ThreadsView({
     t.preview.toLowerCase().includes(search.toLowerCase());
 
   const thoughts = all.filter(t => t.source !== 'skill' && t.source !== 'заметка' && searchMatch(t));
-  const notes = all.filter(t => t.source !== 'skill' && searchMatch(t));
+  const notes = all.filter(t => t.source === 'заметка' && searchMatch(t));
 
   const displayed = tab === 'thoughts' ? thoughts : notes;
 
@@ -1539,6 +1572,7 @@ function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const tooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const miniCalRef = useRef<HTMLDivElement>(null);
+  const swipeDragStart = useRef<number | null>(null);
   const today = todayStr();
 
   const weekDays = useMemo(() => {
@@ -1690,29 +1724,61 @@ function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
 
           {/* Day strip with slide animation */}
           <div style={{ height: 1, background: 'var(--border)' }} />
-          <div>
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div key={weekOffset}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', paddingTop: 4, paddingBottom: 4 }}>
-                {weekDays.map((d, i) => {
-                  const ds = dateToStr(d);
-                  const isSelected = ds === selectedDate;
-                  const isToday = ds === today;
-                  const isWeekend = i >= 5;
-                  return (
-                    <button key={ds} onClick={() => setSelectedDate(ds)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '8px 4px', border: 'none', background: 'transparent', cursor: 'pointer' }}>
-                      <span style={{ fontFamily: M, fontSize: 16, fontWeight: 500, color: isWeekend ? 'rgba(0,0,0,0.22)' : 'var(--text-30)', letterSpacing: '0.02em' }}>{WEEK_DAYS[i].toLowerCase()}</span>
-                      <div style={{ width: 38, height: 38, borderRadius: '50%', background: isSelected ? '#0B0D10' : isToday ? 'rgba(11,13,16,0.3)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontSize: 18, fontFamily: "'Helvetica Neue', Helvetica, sans-serif", fontWeight: isSelected || isToday ? 700 : 400, color: isSelected || isToday ? '#fff' : isWeekend ? 'rgba(0,0,0,0.28)' : '#999B9E' }}>
-                          {d.getDate()}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </motion.div>
-          </AnimatePresence>
+          <div
+            style={{ overflow: 'hidden', position: 'relative', touchAction: 'pan-y' }}
+            onTouchStart={e => { swipeDragStart.current = e.touches[0].clientX; }}
+            onTouchEnd={e => {
+              if (swipeDragStart.current === null) return;
+              const dx = e.changedTouches[0].clientX - swipeDragStart.current;
+              swipeDragStart.current = null;
+              if (Math.abs(dx) < 40) return;
+              goWeek(dx < 0 ? 1 : -1);
+            }}
+            onTouchCancel={() => { swipeDragStart.current = null; }}
+            onPointerDown={e => { if (e.pointerType !== 'touch') swipeDragStart.current = e.clientX; }}
+            onPointerUp={e => {
+              if (e.pointerType === 'touch' || swipeDragStart.current === null) return;
+              const dx = e.clientX - swipeDragStart.current;
+              swipeDragStart.current = null;
+              if (Math.abs(dx) < 40) return;
+              goWeek(dx < 0 ? 1 : -1);
+            }}
+            onPointerCancel={() => { swipeDragStart.current = null; }}
+          >
+            <AnimatePresence mode="popLayout" initial={false} custom={slideDir}>
+              <motion.div
+                key={weekOffset}
+                custom={slideDir}
+                variants={{
+                  enter: (dir: number) => ({ x: dir > 0 ? '100%' : '-100%' }),
+                  center: { x: '0%' },
+                  exit: (dir: number) => ({ x: dir > 0 ? '-100%' : '100%' }),
+                }}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ type: 'spring', stiffness: 500, damping: 40, mass: 0.7 }}
+              >
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', paddingTop: 4, paddingBottom: 4 }}>
+                  {weekDays.map((d, i) => {
+                    const ds = dateToStr(d);
+                    const isSelected = ds === selectedDate;
+                    const isToday = ds === today;
+                    const isWeekend = i >= 5;
+                    return (
+                      <button key={ds} onClick={() => setSelectedDate(ds)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '8px 4px', border: 'none', background: 'transparent', cursor: 'pointer' }}>
+                        <span style={{ fontFamily: M, fontSize: 16, fontWeight: 500, color: isWeekend ? 'rgba(0,0,0,0.22)' : 'var(--text-30)', letterSpacing: '0.02em' }}>{WEEK_DAYS[i].toLowerCase()}</span>
+                        <div style={{ width: 38, height: 38, borderRadius: '50%', background: isSelected ? '#0B0D10' : isToday ? 'rgba(11,13,16,0.3)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ fontSize: 18, fontFamily: "'Helvetica Neue', Helvetica, sans-serif", fontWeight: isSelected || isToday ? 700 : 400, color: isSelected || isToday ? '#fff' : isWeekend ? 'rgba(0,0,0,0.28)' : '#999B9E' }}>
+                            {d.getDate()}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            </AnimatePresence>
           </div>
           <div style={{ height: 1, background: 'var(--border)', marginBottom: 16 }} />
 
@@ -1957,7 +2023,7 @@ export default function DesktopApp({
   const [calActive, setCalActive] = useState(false);
   const [noteMode, setNoteMode] = useState(false);
   useEffect(() => {
-    if (screen === 'ob') setScreen('dash');
+    if (screen === 'ob' || screen === 'today') setScreen('dash');
   }, [screen]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -2061,14 +2127,47 @@ export default function DesktopApp({
           )}
 
           {screen === 'ai' && (
-            <motion.div key="ai" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.13 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+            <motion.div key="ai" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.13 }} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              {/* Chat/Note toggle header */}
+              {curTh && (
+                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '14px 0 0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 0, background: 'rgba(9,14,23,0.06)', borderRadius: 40, padding: 4, position: 'relative' }}>
+                    <motion.div
+                      layout
+                      style={{
+                        position: 'absolute',
+                        top: 4, left: noteMode ? 'calc(50%)' : 4,
+                        width: 'calc(50% - 4px)', height: 32,
+                        borderRadius: 32,
+                        background: '#ffffff',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.10)',
+                        zIndex: 0,
+                      }}
+                      transition={{ type: 'spring', stiffness: 420, damping: 36 }}
+                    />
+                    <button
+                      onClick={() => setNoteMode(false)}
+                      style={{ position: 'relative', zIndex: 1, padding: '6px 20px', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 32, fontFamily: M, fontSize: 13, fontWeight: 500, color: !noteMode ? 'var(--text-primary)' : 'var(--text-30)', transition: 'color 0.15s', whiteSpace: 'nowrap' }}
+                    >
+                      Чат
+                    </button>
+                    <button
+                      onClick={() => setNoteMode(true)}
+                      style={{ position: 'relative', zIndex: 1, padding: '6px 20px', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 32, fontFamily: M, fontSize: 13, fontWeight: 500, color: noteMode ? 'var(--text-primary)' : 'var(--text-30)', transition: 'color 0.15s', whiteSpace: 'nowrap' }}
+                    >
+                      Заметка
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {curTh && noteMode ? (
                 <NoteView
                   threadId={curTh}
                   threads={threads}
                   setThreads={setThreads}
                   tasks={tasks}
-                  onSwitchToChat={() => handleOpenThread(curTh)}
+                  onSwitchToChat={() => setNoteMode(false)}
                 />
               ) : curTh ? (
                 <ChatView
@@ -2081,6 +2180,7 @@ export default function DesktopApp({
                   initialMessage={pendingMessage}
                   onInitialConsumed={() => setPendingMessage(null)}
                   onNetworkError={() => setNoInternet(true)}
+                  onOpenThread={handleOpenThread}
                 />
               ) : (
                 <EmptyChatScreen onSend={startNewThreadWithMessage} />

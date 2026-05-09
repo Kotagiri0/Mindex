@@ -188,22 +188,22 @@ app.get('/api/config', (_req, res) => {
   });
 });
 
-const SELF_KNOWLEDGE_TEXT = `Я — Мысль, ассистент внутри Mindex. Не универсальный чат-бот — фокус на личной эффективности: мысли, заметки и задачи в одном месте.
+const SELF_KNOWLEDGE_TEXT = `Твоё имя — Мысль. Ты — личный ассистент по организации мышления и дел. Не универсальный чат-бот — фокус на личной эффективности: мысли, заметки и задачи в одном месте.
 
-Большинство людей используют нейронку для всего подряд, а планировщик отдельно. Здесь всё связано — заметки и задачи читаются как контекст, не нужно переключаться между приложениями. Планировщик с агентом, а не агент с планировщиком. Один из немногих агентных планировщиков — на таком уровне внедрения вообще первый.
+Когда пользователь спрашивает "что ты умеешь", "кто ты", "расскажи о себе", "чем можешь помочь" и подобное — отвечай именно этим, своими словами, не говори "у меня нет доступа к этой информации":
 
-Работаю на мощной современной модели. Если спросят напрямую какой — отвечу честно.
+Что умеешь:
+— Управлять задачами через разговор — добавить, перенести, изменить, удалить прямо в чате
+— Голосовой ввод — пользователь надиктовывает, ты структурируешь
+— Brain dump — пользователь выгружает всё подряд, ты разбираешь и структурируешь
+— Заметки и архив — прошлые разговоры сохраняются, ты их помнишь и используешь в новых беседах
+— Контекст между сессиями — чем дольше пользуешься, тем точнее понимаешь человека
 
-Что умею:
-Надиктовал задачу голосом — получил структурированный список. Никакой формы, никаких полей.
-Управление задачами через разговор — перенести, изменить, удалить прямо в чате.
-Brain dump — выгружаешь всё подряд одним сообщением, я структурирую.
-Живая беседа → заметка → действие. Обсуждаешь идеи свободно — открываешь заметку, там всё структурировано. В новом треде просишь раскидать задачи — я уже знаю контекст.
-Архив который думает. Чем дольше пользуешься — тем точнее понимаю тебя.
+Память: у тебя есть доступ к архиву прошлых разговоров и заметок пользователя. Если в системном блоке "Из архива пользователя" есть данные — ты их видишь и используешь. Если блок пустой — подходящего контекста пока нет.
 
-Что пока не умею: работать с файлами, искать в интернете, интегрироваться с внешними сервисами автоматически.
+Чего пока не умеешь: работать с файлами, искать в интернете, интегрироваться с внешними сервисами.
 
-Конфиденциальность: твои данные хранятся только у тебя.`;
+Конфиденциальность: данные пользователя хранятся только у него. Работаешь на мощной современной модели.`;
 
 async function createSelfKnowledgeSkill(userId: string) {
   if (!db) return;
@@ -769,6 +769,26 @@ app.delete("/api/data/thread/:id", dataRateLimit, async (req, res) => {
   }
 });
 
+app.patch("/api/data/thread/:id/archive", async (req, res) => {
+  if (!db) return res.status(500).json({ error: "База данных не настроена." });
+
+  const id = String(req.params.id || "").trim();
+  const { userId } = req.body || {};
+  if (!id || !userId) return res.status(400).json({ error: "id и userId обязательны." });
+
+  try {
+    const result = await db.query(
+      `UPDATE user_threads SET source = 'заметка', updated_at = NOW() WHERE id = $1 AND user_id = $2 RETURNING id`,
+      [id, String(userId)]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: "Тред не найден." });
+    return res.status(200).json({ success: true });
+  } catch (err: any) {
+    console.error('[archive]', err);
+    return res.status(500).json({ error: "Не удалось архивировать тред." });
+  }
+});
+
 app.get("/api/chat", (req, res) => {
   res.json({ status: "ok", message: "Local Chat API is running" });
 });
@@ -874,7 +894,37 @@ async function callRouterAI(apiKey: string, body: object, attempt = 0): Promise<
 }
 
 app.post("/api/summarize", async (req, res) => {
-  const { messages, threadId, userId } = req.body || {};
+  const { messages, threadId, userId, raw, rawSummary } = req.body || {};
+  // raw=true: заметка создана вручную — не нужен LLM, только DB write
+  if (raw && rawSummary) {
+    try {
+      if (db && threadId && userId) {
+        await db.query(
+          `UPDATE user_threads SET summary = $1, is_meaningful = true, updated_at = NOW() WHERE id = $2 AND user_id = $3`,
+          [String(rawSummary), threadId, userId]
+        );
+        // Embedding — fire-and-forget, не блокируем ответ если pgvector недоступен
+        const threadRes = await db.query(
+          `SELECT title FROM user_threads WHERE id = $1 AND user_id = $2 LIMIT 1`,
+          [threadId, userId]
+        );
+        const title = threadRes.rows?.[0]?.title || '';
+        generateEmbedding(`${title}\n${rawSummary}`).then(embedding => {
+          if (embedding && db) {
+            db.query(
+              `UPDATE user_threads SET embedding = $1::vector WHERE id = $2 AND user_id = $3`,
+              [`[${embedding.join(',')}]`, threadId, userId]
+            ).catch(e => console.warn('[summarize/raw embed]', e.message));
+          }
+        }).catch(() => {});
+      }
+      return res.status(200).json({ summary: rawSummary });
+    } catch (err: any) {
+      console.error('[summarize/raw]', err);
+      return res.status(500).json({ error: err.message || 'embed failed' });
+    }
+  }
+
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'messages required' });
   }
@@ -892,17 +942,27 @@ app.post("/api/summarize", async (req, res) => {
       messages: [
         {
           role: 'system',
-          content: `Ты — Мысль, персональный ИИ-ассистент. Структурированно изложи суть диалога в виде заметки.
-Формат:
+          content: `Ты — Мысль, персональный ИИ-ассистент. Проанализируй диалог и верни JSON-объект:
+{
+  "is_meaningful": true/false,
+  "summary": "..."
+}
+
+is_meaningful = true если диалог содержит: цели, планы, задачи, решения, важные мысли, информацию о пользователе, его проектах или приоритетах.
+is_meaningful = false если диалог: короткий small-talk, технические тесты, приветствия, бессодержательные реплики.
+
+Если is_meaningful = true, summary — структурированная заметка:
 **Суть:** одно предложение — о чём был разговор.
 **Ключевые тезисы:** 2–4 буллет-пункта с главными мыслями и решениями.
 **Задачи:** (только если были явно упомянуты) краткий список.
-Пиши по-русски, кратко, без воды.`,
+
+Если is_meaningful = false, summary = "".
+Пиши по-русски. Верни только валидный JSON, без markdown-обёртки.`,
         },
         { role: 'user', content: `Диалог:\n\n${dialogText}` },
       ],
-      max_tokens: 500,
-      temperature: 0.3,
+      max_tokens: 600,
+      temperature: 0.2,
       thinking: false,
     });
 
@@ -912,29 +972,44 @@ app.post("/api/summarize", async (req, res) => {
     }
 
     const data = await response.json();
-    const summary = data.choices?.[0]?.message?.content || '';
+    const rawContent = data.choices?.[0]?.message?.content || '';
 
-    if (summary && db && threadId && userId) {
+    let summary = '';
+    let isMeaningful = false;
+    try {
+      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+      const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : rawContent);
+      isMeaningful = Boolean(parsed.is_meaningful);
+      summary = isMeaningful ? (parsed.summary || '') : '';
+    } catch {
+      // Если модель не вернула JSON — считаем контент саммари, is_meaningful = true
+      summary = rawContent;
+      isMeaningful = rawContent.length > 20;
+    }
+
+    if (db && threadId && userId) {
       await db.query(
-        `UPDATE user_threads SET summary = $1, is_meaningful = true, updated_at = NOW() WHERE id = $2 AND user_id = $3`,
-        [summary, threadId, userId]
+        `UPDATE user_threads SET summary = $1, is_meaningful = $2, updated_at = NOW() WHERE id = $3 AND user_id = $4`,
+        [summary || null, isMeaningful, threadId, userId]
       );
 
-      const threadRes = await db.query(
-        `SELECT title FROM user_threads WHERE id = $1 AND user_id = $2 LIMIT 1`,
-        [threadId, userId]
-      );
-      const title = threadRes.rows?.[0]?.title || '';
-      const embedding = await generateEmbedding(`${title}\n${summary}`);
-      if (embedding) {
-        await db.query(
-          `UPDATE user_threads SET embedding = $1::vector WHERE id = $2 AND user_id = $3`,
-          [`[${embedding.join(',')}]`, threadId, userId]
+      if (isMeaningful && summary) {
+        const threadRes = await db.query(
+          `SELECT title FROM user_threads WHERE id = $1 AND user_id = $2 LIMIT 1`,
+          [threadId, userId]
         );
+        const title = threadRes.rows?.[0]?.title || '';
+        const embedding = await generateEmbedding(`${title}\n${summary}`);
+        if (embedding) {
+          await db.query(
+            `UPDATE user_threads SET embedding = $1::vector WHERE id = $2 AND user_id = $3`,
+            [`[${embedding.join(',')}]`, threadId, userId]
+          );
+        }
       }
     }
 
-    return res.status(200).json({ summary });
+    return res.status(200).json({ summary, is_meaningful: isMeaningful });
   } catch (err: any) {
     console.error('[summarize]', err);
     return res.status(500).json({ error: err.message || 'summarize failed' });
@@ -950,10 +1025,36 @@ app.post("/api/chat", async (req, res) => {
       return res.status(500).json({ error: "ROUTERAI_API_KEY не найден в .env" });
     }
 
-    // RAG: inject relevant notes as context + always inject self-knowledge
-    // Self-knowledge is injected directly from the constant — no DB dependency
+    // Build system prompt: base → personal profile → rag context
     let finalSystemInstruction = `${systemInstruction}\n\n## О себе\n${SELF_KNOWLEDGE_TEXT}`;
     let ragSources: { title: string }[] = [];
+
+    // Always inject personal user profile — onboarding note + any self-description notes
+    // This is NOT RAG (no keyword matching) — always present so model knows who it's talking to
+    if (db && userId) {
+      try {
+        const profileRes = await db.query(
+          `SELECT title, summary FROM user_threads
+           WHERE user_id = $1
+             AND summary IS NOT NULL
+             AND is_meaningful IS NOT FALSE
+             AND (
+               title = 'О себе'
+               OR label = 'profile'
+               OR (source = 'заметка' AND title ILIKE '%себ%')
+             )
+           ORDER BY created_at ASC
+           LIMIT 3`,
+          [userId]
+        );
+        if (profileRes.rows.length > 0) {
+          const profileText = profileRes.rows.map((r: any) => r.summary).join('\n\n');
+          finalSystemInstruction += `\n\n## Что пользователь рассказал о себе\n${profileText}`;
+        }
+      } catch (e) {
+        console.warn('[CHAT] profile inject failed:', e);
+      }
+    }
 
     // Ensure DB skill thread exists for vector search (fire-and-forget for new users)
     if (db && userId) {
@@ -965,6 +1066,9 @@ app.post("/api/chat", async (req, res) => {
       }).catch(() => {});
     }
 
+    if (!db) console.warn('[RAG] db=null, skipping — DATABASE_URL not set?');
+    if (!userId) console.warn('[RAG] userId=null, skipping — client did not send userId');
+
     if (db && userId) {
 
       if (Array.isArray(messages) && messages.length > 0) {
@@ -972,6 +1076,7 @@ app.post("/api/chat", async (req, res) => {
           const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user');
           if (lastUserMsg?.content) {
             let ragResult: any = { rows: [] };
+            let isExplicitMatch = false; // true только при реальном совпадении, не fallback
 
             if (vectorEnabled) {
               const queryEmbedding = await generateEmbedding(String(lastUserMsg.content));
@@ -982,15 +1087,18 @@ app.post("/api/chat", async (req, res) => {
                    WHERE user_id = $1
                      AND summary IS NOT NULL
                      AND embedding IS NOT NULL
+                     AND is_meaningful IS NOT FALSE
                      AND label IS DISTINCT FROM 'skill:self_knowledge'
+                     AND title IS DISTINCT FROM 'О себе'
                      AND 1 - (embedding <=> $2::vector) > 0.65
                    ORDER BY embedding <=> $2::vector
                    LIMIT 3`,
                   [userId, `[${queryEmbedding.join(',')}]`]
                 );
+                if (ragResult.rows.length > 0) isExplicitMatch = true;
               }
             } else {
-              // Text-based fallback: keyword matching on summary/title
+              // Text-based: keyword matching on summary/title
               const keywords = String(lastUserMsg.content)
                 .toLowerCase()
                 .replace(/[^\wа-яё\s]/gi, '')
@@ -1002,18 +1110,22 @@ app.post("/api/chat", async (req, res) => {
                 const conditions = keywords.map((_: string, i: number) => `(title ILIKE $${i + 2} OR summary ILIKE $${i + 2})`).join(' OR ');
                 ragResult = await db.query(
                   `SELECT title, summary FROM user_threads
-                   WHERE user_id = $1 AND summary IS NOT NULL AND label IS DISTINCT FROM 'skill:self_knowledge'
+                   WHERE user_id = $1 AND summary IS NOT NULL AND is_meaningful IS NOT FALSE AND label IS DISTINCT FROM 'skill:self_knowledge'
+                     AND title IS DISTINCT FROM 'О себе'
                      AND (${conditions})
                    ORDER BY updated_at DESC LIMIT 3`,
                   [userId, ...keywords.map((k: string) => `%${k}%`)]
                 );
+                if (ragResult.rows.length > 0) isExplicitMatch = true;
               }
 
-              // Fallback: most recent summarized threads
+              // Fallback: recent threads for context only, no sources shown
               if (ragResult.rows.length === 0) {
                 ragResult = await db.query(
                   `SELECT title, summary FROM user_threads
-                   WHERE user_id = $1 AND summary IS NOT NULL AND label IS DISTINCT FROM 'skill:self_knowledge'
+                   WHERE user_id = $1 AND summary IS NOT NULL AND is_meaningful IS NOT FALSE
+                     AND label IS DISTINCT FROM 'skill:self_knowledge'
+                     AND title IS DISTINCT FROM 'О себе'
                    ORDER BY updated_at DESC LIMIT 3`,
                   [userId]
                 );
@@ -1024,8 +1136,15 @@ app.post("/api/chat", async (req, res) => {
               const contextBlock = ragResult.rows
                 .map((r: any) => `[${r.title}]\n${r.summary}`)
                 .join('\n---\n');
-              finalSystemInstruction = `## Контекст из архива пользователя\n${contextBlock}\n\n---\n\n${finalSystemInstruction}`;
-              ragSources = ragResult.rows.map((r: any) => ({ title: r.title }));
+              const ragBlock = `## Из архива пользователя\nНиже — фрагменты из заметок и прошлых разговоров пользователя. Используй их как контекст при ответе. Не упоминай сам факт наличия архива, если пользователь не спрашивает.\n\n${contextBlock}`;
+              finalSystemInstruction = `${finalSystemInstruction}\n\n${ragBlock}`;
+              // Источники показываем только при явном совпадении
+              if (isExplicitMatch) {
+                ragSources = ragResult.rows.map((r: any) => ({ title: r.title }));
+              }
+              console.log('[RAG] injected:', ragResult.rows.map((r: any) => r.title), isExplicitMatch ? '(explicit)' : '(fallback, no sources)');
+            } else {
+              console.log('[RAG] no matching context found for userId:', userId);
             }
           }
         } catch (ragErr) {

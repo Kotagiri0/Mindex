@@ -1,9 +1,10 @@
-import React, { useState, useRef } from 'react';
-import { Settings, ChevronLeft, ChevronUp, ArrowUp, Plus, Mic } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Settings, ChevronLeft, ArrowUp, Plus, Mic, Loader } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Task, Screen } from '../types';
 import TaskItem from './TaskItem';
 import { db } from '../lib/db';
+import { useVoiceInput } from '../lib/useVoiceInput';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
@@ -24,7 +25,18 @@ interface TodayMobileProps {
 
 export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWithMessage }: TodayMobileProps) {
   const [input, setInput] = useState('');
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const touchStartX = useRef(0);
+  const { state: voiceState, startRecording, stopRecording } = useVoiceInput((text: string) => {
+    setInput(prev => prev ? prev + ' ' + text : text);
+  });
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 120) + 'px';
+    }
+  }, [input]);
 
   const today = todayStr();
   const dayName = DAY_NAMES[new Date().getDay()];
@@ -59,7 +71,6 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
   };
 
   const hasTasks = todayTasks.length > 0;
-  const taskWord = todayTasks.length === 1 ? 'дело' : todayTasks.length < 5 ? 'дела' : 'дел';
 
   return (
     <div
@@ -101,22 +112,7 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
         {/* Tasks section */}
         {hasTasks && (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <ChevronUp size={14} strokeWidth={1.75} color="rgba(34,34,36,0.4)" />
-                <span style={{ fontFamily: M, fontSize: 14, color: 'rgba(34,34,36,0.45)' }}>
-                  Ещё {todayTasks.length} {taskWord}
-                </span>
-              </div>
-              <button
-                onClick={() => onNavigate('dash')}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
-              >
-                <Plus size={18} strokeWidth={1.75} color="rgba(34,34,36,0.4)" />
-              </button>
-            </div>
-
-            <div style={{ maxHeight: '40vh', overflowY: 'auto', padding: '0 20px' }}>
+            <div style={{ maxHeight: '40vh', overflowY: 'auto', padding: '14px 20px 0' }}>
               {todayTasks.map(t => (
                 <TaskItem
                   key={t.id}
@@ -144,15 +140,16 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
 
         {/* Chat input area */}
         <div style={{ padding: '14px 20px', background: hasTasks ? 'rgba(0,0,0,0.02)' : 'transparent' }}>
-          <input
+          <textarea
+            ref={inputRef}
+            rows={1}
             value={input}
             onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSubmit()}
             placeholder="Есть мысли?"
             style={{
               width: '100%', background: 'transparent', border: 'none', outline: 'none',
               fontFamily: M, fontSize: 15, color: '#222224',
-              marginBottom: 10, display: 'block',
+              marginBottom: 10, display: 'block', resize: 'none', lineHeight: 1.55,
             }}
           />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -171,9 +168,22 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
                 <ArrowUp size={16} color="#fff" strokeWidth={2} />
               </motion.button>
             ) : (
-              <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(34,34,36,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Mic size={15} strokeWidth={1.75} color="rgba(34,34,36,0.35)" />
-              </div>
+              <motion.button
+                onPointerDown={e => { e.preventDefault(); startRecording(); }}
+                onPointerUp={e => { e.preventDefault(); stopRecording(); }}
+                onPointerCancel={stopRecording}
+                style={{
+                  width: 36, height: 36, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: voiceState === 'recording' ? '#c0392b' : 'rgba(34,34,36,0.1)',
+                  transition: 'background 0.15s',
+                }}
+              >
+                {voiceState === 'processing'
+                  ? <Loader size={15} strokeWidth={2} color="#222224" className="animate-spin" />
+                  : <Mic size={15} strokeWidth={1.75} color={voiceState === 'recording' ? '#fff' : 'rgba(34,34,36,0.35)'} />
+                }
+              </motion.button>
             )}
           </div>
         </div>

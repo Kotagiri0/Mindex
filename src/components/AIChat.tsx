@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, Settings, Star, Plus, ArrowUp, MessageCircle, StickyNote, Mic, Loader, Copy, MoreHorizontal, X } from 'lucide-react';
+import { ChevronLeft, Settings, Star, Plus, ArrowUp, MessageCircle, StickyNote, Mic, Loader, Copy, MoreHorizontal, X, BookOpen, ChevronRight } from 'lucide-react';
+import { MysliThinking } from './MysliThinking';
 import NoteView from './NoteView';
 import { Thread, Screen, Message, Task, SubTask } from '../types';
 import { generateResponse } from '../lib/groq';
@@ -7,6 +8,24 @@ import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useVoiceInput } from '../lib/useVoiceInput';
+
+const THINKING_PHRASES = ['Думаю...', 'Анализирую...', 'Ищу в архиве...', 'Формулирую...', 'Пишу ответ...'];
+
+function ThinkingPhrase() {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    const iv = setInterval(() => setIdx((p: number) => (p + 1) % THINKING_PHRASES.length), 1800);
+    return () => clearInterval(iv);
+  }, []);
+  return (
+    <span style={{
+      fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+      fontSize: 14, color: 'rgba(34,34,36,0.4)', fontStyle: 'italic',
+    }}>
+      {THINKING_PHRASES[idx]}
+    </span>
+  );
+}
 
 interface AIChatProps {
   threadId: string | null;
@@ -16,19 +35,20 @@ interface AIChatProps {
   setTasks: (tasks: Task[] | ((prev: Task[]) => Task[])) => void;
   onClose: () => void;
   onNavigate: (screen: Screen) => void;
+  onOpenThread?: (id: string) => void;
   autoSend?: string;
   onAutoSentClear?: () => void;
 }
 
-export default function AIChat({ threadId, threads, setThreads, tasks, setTasks, onClose, onNavigate, autoSend, onAutoSentClear }: AIChatProps) {
+export default function AIChat({ threadId, threads, setThreads, tasks, setTasks, onClose, onNavigate, onOpenThread, autoSend, onAutoSentClear }: AIChatProps) {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [noteMode, setNoteMode] = useState(false);
-  const [thinkingIdx, setThinkingIdx] = useState(0);
   const [animatingContent, setAnimatingContent] = useState<string | null>(null);
   const [replyQuote, setReplyQuote] = useState<string | null>(null);
   const [openMsgMenuIdx, setOpenMsgMenuIdx] = useState<number | null>(null);
   const [hoveredMsgIdx, setHoveredMsgIdx] = useState<number | null>(null);
+  const [openSourcesIdx, setOpenSourcesIdx] = useState<number | null>(null);
   const [isTouchDevice] = useState(() => typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -36,13 +56,6 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   const animIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevIsTypingRef = useRef(false);
 
-  const THINKING_PHRASES = ['Думаю...', 'Анализирую...', 'Ищу в архиве...', 'Формулирую...', 'Пишу ответ...'];
-
-  useEffect(() => {
-    if (!isTyping) return;
-    const iv = setInterval(() => setThinkingIdx(p => (p + 1) % THINKING_PHRASES.length), 1800);
-    return () => clearInterval(iv);
-  }, [isTyping]);
 
   useEffect(() => {
     if (prevIsTypingRef.current && !isTyping) {
@@ -74,8 +87,6 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   );
 
   const thread = threads.find(t => t.id === threadId);
-
-  if (!thread) return null;
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -336,8 +347,9 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             answers: { ...msg.planning_data.answers, [questionId]: answer }
           };
 
+          const updatedAnswers = msg.planning_data.answers;
           const allAnswered = msg.planning_data.questions.every(q =>
-            msg.planning_data?.answers?.[q.id] || q.id === questionId
+            updatedAnswers?.[q.id] !== undefined
           );
 
           if (allAnswered) {
@@ -539,7 +551,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       fetch('/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId }),
+        body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId, raw: true, rawSummary: content.trim() }),
       }).catch(() => {});
     }
   };
@@ -622,6 +634,8 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     return <div>{nodes}</div>;
   };
 
+  if (!thread) return null;
+
   return (
     <div className="flex flex-col h-full" style={{ background: '#f0f0f0' }}>
       <div
@@ -702,7 +716,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           const msgs = visibleMsgs.map((m, i) => {
             const isLast = i === visibleMsgs.length - 1;
             const showAnimated = isLast && m.role === 'assistant' && animatingContent !== null;
-            const showActions = isTouchDevice || hoveredMsgIdx === i;
+            const showActions = isTouchDevice || hoveredMsgIdx === i || openMsgMenuIdx === i;
             return (
             <div key={i}
               onMouseEnter={() => m.role === 'assistant' && setHoveredMsgIdx(i)}
@@ -807,25 +821,6 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                     )}
                   </div>
                 )}
-                {m.role === 'assistant' && m.sources && m.sources.length > 0 && !showAnimated && (
-                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(34,34,36,0.07)' }}>
-                    <div style={{ fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 11, color: 'rgba(34,34,36,0.35)', marginBottom: 6, letterSpacing: '0.05em', textTransform: 'uppercase' as const }}>
-                      Из архива
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                      {m.sources.map((s, si) => (
-                        <span key={si} style={{
-                          fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
-                          fontSize: 12, color: 'rgba(34,34,36,0.5)',
-                          background: 'rgba(34,34,36,0.06)', borderRadius: 6,
-                          padding: '3px 8px',
-                        }}>
-                          {s.title}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
               <div className="text-[11px] text-text-tertiary px-1">{m.time}</div>
 
@@ -835,17 +830,39 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   width: '100%', marginTop: 2,
                   opacity: showActions ? 1 : 0,
+                  pointerEvents: showActions ? 'auto' : 'none',
                   transition: 'opacity 0.15s',
                   position: 'relative',
                 }}>
-                  <button
-                    onClick={() => navigator.clipboard?.writeText(m.content)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#bbb', display: 'flex', alignItems: 'center', transition: 'color 0.12s' }}
-                    onMouseEnter={e => (e.currentTarget.style.color = '#555')}
-                    onMouseLeave={e => (e.currentTarget.style.color = '#bbb')}
-                  >
-                    <Copy size={14} strokeWidth={1.5} />
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <button
+                      onClick={() => navigator.clipboard?.writeText(m.content)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#bbb', display: 'flex', alignItems: 'center', transition: 'color 0.12s' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = '#555')}
+                      onMouseLeave={e => (e.currentTarget.style.color = '#bbb')}
+                    >
+                      <Copy size={14} strokeWidth={1.5} />
+                    </button>
+
+                    {m.sources && m.sources.length > 0 && !showAnimated && (
+                      <button
+                        onClick={() => setOpenSourcesIdx(openSourcesIdx === i ? null : i)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 4,
+                          background: openSourcesIdx === i ? 'rgba(34,34,36,0.08)' : 'none',
+                          border: 'none', cursor: 'pointer', padding: '2px 8px', borderRadius: 20,
+                          fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+                          fontSize: 12, color: openSourcesIdx === i ? '#222224' : '#bbb',
+                          transition: 'color 0.12s, background 0.12s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.color = '#555'; }}
+                        onMouseLeave={e => { e.currentTarget.style.color = openSourcesIdx === i ? '#222224' : '#bbb'; }}
+                      >
+                        <BookOpen size={13} strokeWidth={1.5} />
+                        Источники
+                      </button>
+                    )}
+                  </div>
 
                   <div style={{ position: 'relative' }}>
                     <button
@@ -904,16 +921,88 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         })()}
 
         {isTyping && (
-          <div style={{ alignSelf: 'flex-start', paddingLeft: 2, paddingBottom: 4 }}>
-            <span style={{
-              fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
-              fontSize: 14, color: 'rgba(34,34,36,0.4)', fontStyle: 'italic',
-            }}>
-              {THINKING_PHRASES[thinkingIdx]}
-            </span>
+          <div style={{ alignSelf: 'flex-start', paddingLeft: 2, paddingBottom: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <MysliThinking />
+            <ThinkingPhrase />
           </div>
         )}
       </div>
+
+      {/* Sources bottom sheet */}
+      <AnimatePresence>
+        {openSourcesIdx !== null && (() => {
+          const srcMsg = thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls)[openSourcesIdx];
+          const sources = srcMsg?.sources || [];
+          return (
+            <>
+              <motion.div
+                key="sources-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                style={{ position: 'fixed', inset: 0, zIndex: 40, background: 'rgba(0,0,0,0.25)' }}
+                onClick={() => setOpenSourcesIdx(null)}
+              />
+              <motion.div
+                key="sources-sheet"
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', stiffness: 380, damping: 36 }}
+                style={{
+                  position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 41,
+                  background: '#ffffff', borderRadius: '20px 20px 0 0',
+                  paddingBottom: 'max(24px, env(safe-area-inset-bottom, 24px))',
+                }}
+              >
+                <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(34,34,36,0.12)', margin: '12px auto 20px' }} />
+                <div style={{ padding: '0 20px 8px', fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase' as const, color: 'rgba(34,34,36,0.35)' }}>
+                  Из архива · {sources.length}
+                </div>
+                {sources.map((s, si) => {
+                  const thr = threads.find(t => t.title === s.title);
+                  return (
+                    <button
+                      key={si}
+                      onClick={() => {
+                        setOpenSourcesIdx(null);
+                        if (thr) { onOpenThread ? onOpenThread(thr.id) : onNavigate('threads'); }
+                      }}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 14,
+                        padding: '14px 20px', background: 'none', border: 'none', cursor: thr ? 'pointer' : 'default',
+                        borderTop: si > 0 ? '1px solid rgba(34,34,36,0.06)' : undefined,
+                        textAlign: 'left',
+                      }}
+                    >
+                      <div style={{
+                        width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                        background: 'rgba(34,34,36,0.07)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 12, fontWeight: 600, color: 'rgba(34,34,36,0.4)',
+                      }}>
+                        {si + 1}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 14, color: '#222224', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {s.title}
+                        </div>
+                        {thr?.preview && (
+                          <div style={{ fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 12, color: 'rgba(34,34,36,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
+                            {thr.preview}
+                          </div>
+                        )}
+                      </div>
+                      {thr && <ChevronRight size={15} strokeWidth={1.5} color="rgba(34,34,36,0.25)" />}
+                    </button>
+                  );
+                })}
+              </motion.div>
+            </>
+          );
+        })()}
+      </AnimatePresence>
 
       <div
         className="px-4 flex-shrink-0"
@@ -958,7 +1047,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             placeholder="Есть мысли?"
             value={input}
             onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
+            onKeyDown={e => !isTouchDevice && e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
           />
           <div className="flex items-center justify-between mt-3">
             <button
