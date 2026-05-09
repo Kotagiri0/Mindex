@@ -87,7 +87,7 @@ export default function App() {
         const profileSettings = profile?.settings || defaultSettings;
         setSettings(profileSettings);
         setOnboardingComplete(Boolean(profile?.onboarding_complete));
-        setScreen(profile?.onboarding_complete ? 'today' : 'ob');
+        setScreen(profile?.onboarding_complete ? 'dash' : 'ob');
         setTasks(fetchedTasks);
         setThreads(fetchedThreads);
       } catch (error) {
@@ -140,10 +140,17 @@ export default function App() {
     await db.upsertProfile(onboardingComplete, newSettings);
   };
 
-  const handleOnboardingComplete = async () => {
+  const handleOnboardingComplete = async (threadId?: string) => {
     setOnboardingComplete(true);
     await db.upsertProfile(true, settings);
-    setScreen('today');
+    if (threadId) {
+      const freshThreads = await db.getThreads();
+      setThreads(freshThreads);
+      setCurTh(threadId);
+      setScreen('ai');
+    } else {
+      setScreen(isDesktopViewport ? 'dash' : 'today');
+    }
   };
 
   const startNewThread = async () => {
@@ -285,6 +292,7 @@ export default function App() {
                 navigateMobile('threads');
               }}
               onNavigate={navigateMobile}
+              onOpenThread={(id) => { setCurTh(id); setScreen('ai'); }}
               autoSend={pendingMsg}
               onAutoSentClear={() => setPendingMsg('')}
             />

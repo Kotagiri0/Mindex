@@ -54,7 +54,7 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
   const filtered = threads.filter(t => {
     if (t.source === 'skill') return false;
     if (activeTab === 'thoughts') return t.source !== 'заметка' && searchMatch(t);
-    return searchMatch(t); // notes tab shows all non-skill threads
+    return t.source === 'заметка' && searchMatch(t); // notes tab: only manually archived notes
   });
 
   const handleRename = async (id: string) => {

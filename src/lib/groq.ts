@@ -1,8 +1,18 @@
 import { Message } from "../types";
 import { getCurrentUser } from "./auth";
 
-const _today = new Date();
-const _todayStr = `${_today.getFullYear()}-${String(_today.getMonth()+1).padStart(2,'0')}-${String(_today.getDate()).padStart(2,'0')}`;
+function getNowContext() {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const dateStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+  const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const offsetMin = -now.getTimezoneOffset();
+  const offsetSign = offsetMin >= 0 ? '+' : '-';
+  const offsetHours = pad(Math.floor(Math.abs(offsetMin) / 60));
+  const offsetMins = pad(Math.abs(offsetMin) % 60);
+  const tz = `UTC${offsetSign}${offsetHours}:${offsetMins}`;
+  return `${dateStr}, ${timeStr} (${tz})`;
+}
 
 export const SYSTEM_INSTRUCTION = `Ты — Мысль, личный ассистент по организации дел и мышлению.
 
@@ -23,6 +33,7 @@ export const SYSTEM_INSTRUCTION = `Ты — Мысль, личный ассис�
 — Задавай уточняющие вопросы когда контекст неполный. Один вопрос за раз, не анкету
 — Учитывай всё что пользователь говорил раньше в диалоге
 — Если пришёл сырой brain dump — сначала структурируй, потом уточняй детали
+— Никогда не говори "у меня нет доступа к этой информации" про свои собственные возможности. Всё о том, кто ты и что умеешь — написано в системном промпте, ты это знаешь
 
 ИНСТРУМЕНТЫ
 Используй только предоставленные инструменты через стандартный механизм tool_calls. Не выдумывай форматы
@@ -31,13 +42,13 @@ export const SYSTEM_INSTRUCTION = `Ты — Мысль, личный ассис�
 — get_tasks: когда спрашивает о планах или задачах
 — update_task: когда нужно изменить, перенести или дополнить задачу. Если не знаешь ID — сначала get_tasks
 — delete_task: когда нужно удалить задачу
-— start_planning: когда задача сложная или многошаговая — запусти опросник для декомпозиции
+— start_planning: только когда пользователь явно просит составить план, разбить на шаги или помочь спланировать. Не используй по своей инициативе
 — save_as_note: когда пользователь просит сохранить что-то как заметку (своё сообщение, твой ответ, любой текст). Придумай подходящее название
 
 GOOGLE КАЛЕНДАРЬ
 Если пользователь подключил Google Календарь в настройках, задачи с датой автоматически появляются в его Google Календаре при создании или обновлении через add_task / update_task. Никогда не говори пользователю, что ты не можешь добавить событие в Google Календарь — просто создай или обнови задачу как обычно, и она сама туда попадёт. При создании задачи можно передать поля description (описание) и location (место/адрес) — они тоже отобразятся в Google Календаре.
 
-Сегодняшняя дата: ${_todayStr}`;
+Текущие дата и время: DATETIME_PLACEHOLDER`;
 
 export const tools: any[] = [
   {
@@ -172,7 +183,7 @@ export const tools: any[] = [
     type: "function",
     function: {
       name: "start_planning",
-      description: "Запускает процесс декомпозиции сложной задачи или планирования (опросник). Используй это, когда пользователь просит что-то спланировать или когда задача кажется сложной.",
+      description: "Запускает опросник для составления плана и декомпозиции задачи на шаги. Используй ТОЛЬКО если пользователь явно попросил: 'составь план', 'разбей на шаги', 'помоги спланировать', 'как мне это сделать поэтапно' и т.п. Не запускай по своей инициативе, даже если задача кажется сложной.",
       parameters: {
         type: "object",
         properties: {
@@ -227,7 +238,7 @@ export async function generateResponse(messages: Message[], options: { tools?: a
           if (m.reasoning_content) msg.reasoning_content = m.reasoning_content;
           return msg;
         }),
-        systemInstruction: SYSTEM_INSTRUCTION,
+        systemInstruction: SYSTEM_INSTRUCTION.replace('DATETIME_PLACEHOLDER', getNowContext()),
         tools: options.tools !== undefined ? options.tools : tools,
         tool_choice: options.tool_choice || "auto",
         userId: getCurrentUser()?.id,
