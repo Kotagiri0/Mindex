@@ -97,9 +97,8 @@ export default function NoteView({ threadId, threads, setThreads, tasks, onSwitc
       body: JSON.stringify({ messages: thread.messages, threadId, userId }),
     })
       .then(r => r.json())
-      .then(({ summary }) => {
-        if (!summary) return;
-        const updated = { ...thread, summary };
+      .then(({ summary, is_meaningful }) => {
+        const updated = { ...thread, summary: summary || thread.summary, is_meaningful: is_meaningful ?? thread.is_meaningful };
         setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => t.id === threadId ? updated : t));
         db.saveThread(updated);
         setSummaryReady(true);
@@ -110,7 +109,7 @@ export default function NoteView({ threadId, threads, setThreads, tasks, onSwitc
 
   const threadTasks = (Array.isArray(tasks) ? tasks : []).filter(t => t.threadId === threadId);
   const dateStr = thread ? new Date(thread.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
-  const sourceTag = thread?.source === 'text' ? 'Текст' : 'Мысль';
+  const sourceTag = thread?.source === 'text' ? 'Текст' : thread?.source === 'заметка' ? 'Заметка' : thread?.source === 'skill' ? 'Скилл' : 'Мысль';
 
   if (!thread) return null;
 
@@ -223,7 +222,7 @@ export default function NoteView({ threadId, threads, setThreads, tasks, onSwitc
           )}
 
           {/* Switch to chat */}
-          {thread.source !== 'text' && thread.source !== 'заметка' && (
+          {thread.source !== 'text' && (
             <button
               onClick={onSwitchToChat}
               style={{
