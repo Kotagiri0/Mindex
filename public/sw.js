@@ -54,20 +54,22 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          if (response && response.status === 200 && response.type === 'basic') {
+          if (response && response.status === 200 && (response.type === 'basic' || response.type === 'cors')) {
             const responseToCache = response.clone();
             caches
               .open(CACHE_NAME)
-              .then((cache) => cache.put(event.request, responseToCache));
+              .then((cache) => cache.put(event.request, responseToCache))
+              .catch((error) => console.warn('SW cache put failed:', error));
           }
           return response;
         })
         .catch(async () => {
-          const cached = await caches.match(event.request);
-          if (cached) return cached;
-          const offline = await caches.match('/offline.html');
-          if (offline) return offline;
-          return caches.match('/');
+          const [cached, offline, root] = await Promise.all([
+            caches.match(event.request),
+            caches.match('/offline.html'),
+            caches.match('/'),
+          ]);
+          return cached || offline || root;
         }),
     );
     return;
