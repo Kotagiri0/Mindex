@@ -62,9 +62,6 @@ export const db = {
         storage.setProfile(userId, data.profile);
       }
 
-      storage.setTasks(userId, data.tasks || []);
-      storage.setThreads(userId, data.threads || []);
-
       return data.profile || storage.getProfile(userId);
     } catch {
       return storage.getProfile(userId);
@@ -102,14 +99,24 @@ export const db = {
     const userId = getUserId();
     if (!userId) return [];
 
+    const localThreads = storage.getThreads(userId);
+
     try {
       const data = await request<{ profile: LocalProfile | null; tasks: Task[]; threads: Thread[] }>(
         `${apiBase()}/bootstrap?userId=${encodeURIComponent(userId)}`
       );
-      storage.setThreads(userId, data.threads || []);
-      return (data.threads || []).sort((a, b) => b.createdAt - a.createdAt);
+      const serverThreads = data.threads || [];
+      const serverIds = new Set(serverThreads.map((t) => t.id));
+      // Треды, которые есть локально но не на сервере — pending-save, сохраняем обратно
+      const pendingLocal = localThreads.filter((t) => !serverIds.has(t.id));
+      for (const t of pendingLocal) {
+        db.saveThread(t).catch(() => {});
+      }
+      const merged = [...pendingLocal, ...serverThreads].sort((a, b) => b.createdAt - a.createdAt);
+      storage.setThreads(userId, merged);
+      return merged;
     } catch {
-      return storage.getThreads(userId).sort((a, b) => b.createdAt - a.createdAt);
+      return localThreads.sort((a, b) => b.createdAt - a.createdAt);
     }
   },
   
@@ -134,8 +141,8 @@ export const db = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, thread }),
       });
-    } catch {
-      // Local fallback already saved.
+    } catch (err) {
+      console.error('[db] saveThread failed, thread only in localStorage:', err);
     }
   },
   
