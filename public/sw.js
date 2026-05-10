@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mindex-cache-v1';
+const CACHE_NAME = 'mindex-cache-v2';
 const URLS_TO_CACHE = [
   '/',
   '/index.html',
@@ -45,6 +45,19 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') {
+    return;
+  }
+
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' })
+        .then((response) => {
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', responseToCache));
+          return response;
+        })
+        .catch(async () => (await caches.match('/index.html')) || (await caches.match('/offline.html'))),
+    );
     return;
   }
 
