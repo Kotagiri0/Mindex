@@ -1078,6 +1078,13 @@ app.post("/api/chat", async (req, res) => {
             let ragResult: any = { rows: [] };
             let isExplicitMatch = false; // true только при реальном совпадении, не fallback
 
+            const keywords = String(lastUserMsg.content)
+              .toLowerCase()
+              .replace(/[^\wа-яё\s]/gi, '')
+              .split(/\s+/)
+              .filter(w => w.length > 3)
+              .slice(0, 5);
+
             if (vectorEnabled) {
               const queryEmbedding = await generateEmbedding(String(lastUserMsg.content));
               if (queryEmbedding) {
@@ -1097,15 +1104,30 @@ app.post("/api/chat", async (req, res) => {
                 );
                 if (ragResult.rows.length > 0) isExplicitMatch = true;
               }
+              if (ragResult.rows.length === 0 && keywords.length > 0) {
+                const conditions = keywords.map((_: string, i: number) => `(title ILIKE $${i + 2} OR summary ILIKE $${i + 2})`).join(' OR ');
+                ragResult = await db.query(
+                  `SELECT title, summary FROM user_threads
+                   WHERE user_id = $1 AND summary IS NOT NULL AND is_meaningful IS NOT FALSE AND label IS DISTINCT FROM 'skill:self_knowledge'
+                     AND title IS DISTINCT FROM 'О себе'
+                     AND (${conditions})
+                   ORDER BY updated_at DESC LIMIT 3`,
+                  [userId, ...keywords.map((k: string) => `%${k}%`)]
+                );
+                if (ragResult.rows.length > 0) isExplicitMatch = true;
+              }
+              if (ragResult.rows.length === 0) {
+                ragResult = await db.query(
+                  `SELECT title, summary FROM user_threads
+                   WHERE user_id = $1 AND summary IS NOT NULL AND is_meaningful IS NOT FALSE
+                     AND label IS DISTINCT FROM 'skill:self_knowledge'
+                     AND title IS DISTINCT FROM 'О себе'
+                   ORDER BY updated_at DESC LIMIT 3`,
+                  [userId]
+                );
+              }
             } else {
               // Text-based: keyword matching on summary/title
-              const keywords = String(lastUserMsg.content)
-                .toLowerCase()
-                .replace(/[^\wа-яё\s]/gi, '')
-                .split(/\s+/)
-                .filter(w => w.length > 3)
-                .slice(0, 5);
-
               if (keywords.length > 0) {
                 const conditions = keywords.map((_: string, i: number) => `(title ILIKE $${i + 2} OR summary ILIKE $${i + 2})`).join(' OR ');
                 ragResult = await db.query(
