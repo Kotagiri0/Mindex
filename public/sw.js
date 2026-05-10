@@ -48,8 +48,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  const isNavigation =
-    event.request.mode === 'navigate' || event.request.destination === 'document';
+  const isNavigation = event.request.mode === 'navigate';
 
   if (isNavigation) {
     event.respondWith(
@@ -64,9 +63,11 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(async () => {
-          return (await caches.match(event.request)) ||
-            (await caches.match('/offline.html')) ||
-            (await caches.match('/'));
+          const cached = await caches.match(event.request);
+          if (cached) return cached;
+          const offline = await caches.match('/offline.html');
+          if (offline) return offline;
+          return caches.match('/');
         }),
     );
     return;
