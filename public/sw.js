@@ -50,13 +50,24 @@ self.addEventListener('fetch', (event) => {
 
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request, { cache: 'no-store' })
-        .then((response) => {
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', responseToCache));
+      fetch(event.request, { cache: 'reload' })
+        .then(async (response) => {
+          const contentType = response.headers.get('content-type') || '';
+          if (response && response.status === 200 && contentType.includes('text/html')) {
+            const responseToCache = response.clone();
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(event.request, responseToCache);
+          }
           return response;
         })
-        .catch(async () => (await caches.match('/index.html')) || (await caches.match('/offline.html'))),
+        .catch(async (error) => {
+          console.warn('Navigation fetch failed in service worker:', event.request.url, error);
+          return (
+          (await caches.match(event.request)) ||
+          (await caches.match('/index.html')) ||
+          (await caches.match('/offline.html'))
+          );
+        }),
     );
     return;
   }
