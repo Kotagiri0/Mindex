@@ -64,12 +64,13 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(async () => {
-          const [cached, offline, root] = await Promise.all([
-            caches.match(event.request),
-            caches.match('/offline.html'),
-            caches.match('/'),
-          ]);
-          return cached || offline || root;
+          const cached = await caches.match(event.request);
+          if (cached) return cached;
+          const offline = await caches.match('/offline.html');
+          if (offline) return offline;
+          const root = await caches.match('/');
+          if (root) return root;
+          return new Response('Offline', { status: 503, statusText: 'Offline' });
         }),
     );
     return;
