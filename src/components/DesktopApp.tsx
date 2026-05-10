@@ -1289,8 +1289,11 @@ function ThreadsView({
     t.title.toLowerCase().includes(search.toLowerCase()) ||
     t.preview.toLowerCase().includes(search.toLowerCase());
 
+  const isNoteThread = (t: Thread) =>
+    t.source === 'заметка' || (Boolean(t.summary?.trim()) && t.is_meaningful !== false);
+
   const thoughts = all.filter(t => t.source !== 'skill' && t.source !== 'заметка' && searchMatch(t));
-  const notes = all.filter(t => t.source === 'заметка' && searchMatch(t));
+  const notes = all.filter(t => isNoteThread(t) && searchMatch(t));
 
   const displayed = tab === 'thoughts' ? thoughts : notes;
 
