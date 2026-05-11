@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Мысль — планировщик задач с ИИ</title>
+<meta name="description" content="Думай. Остальное — забота Мысли. Голосом или текстом — Мысль превращает идеи в план." />
+<link rel="stylesheet" href="/landing/styles.css" />
+<link rel="stylesheet" href="/landing/experience.css" />
+<script>
+  /* Редирект в приложение при активной сессии */
+  (function () {
+    try {
+      var user = localStorage.getItem('mx_current_user');
+      if (!user) {
+        var sid = localStorage.getItem('mx_session_user_id');
+        if (sid) {
+          var users = JSON.parse(localStorage.getItem('mx_users') || '[]');
+          user = users.find(function(u) { return u.id === sid; }) || null;
+        }
+      }
+      if (user) window.location.replace('/app');
+    } catch (e) {}
+  })();
+</script>
+</head>
+<body>
+
+<!-- ═════ Header ═════ -->
+<header id="header">
+  <div class="wrap">
+    <a class="logo" href="#top" aria-label="Мысль">
+      <img src="/landing/assets/logo-full.svg" class="logo-full" alt="Мысль" height="28"/>
+    </a>
+    <a class="btn btn-outline" href="/app">попробовать</a>
+  </div>
+</header>
+
+<!-- ═════ Hero ═════ -->
+<section class="hero" id="top">
+  <!-- Bubble chamber -->
+  <div class="hero-stage" aria-hidden="true">
+    <svg class="bubble-chamber" viewBox="0 0 1000 1000">
+      <defs>
+        <filter id="chalk" x="-20%" y="-20%" width="140%" height="140%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="4" seed="2" result="noise"/>
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+      </defs>
+
+      <g class="atom-dim">
+        <circle cx="500" cy="500" r="340" class="ring" style="opacity:0.25"/>
+
+        <circle cx="500" cy="500" r="8" fill="#F0EDE6" filter="url(#chalk)" opacity="0.7">
+          <animate attributeName="r" values="8;11;7;10;8" dur="5s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+          <animate attributeName="cx" values="500;503;498;501;500" dur="7s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+          <animate attributeName="cy" values="500;498;502;499;500" dur="6s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+        </circle>
+
+        <ellipse class="ring" cx="500" cy="500" rx="60" ry="24">
+          <animateTransform attributeName="transform" type="rotate" from="30 500 500" to="390 500 500" dur="10.2s" repeatCount="indefinite"/>
+          <animate attributeName="ry" values="24;54;8;54;24" dur="10.2s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+          <animate attributeName="rx" values="60;48;60;72;60" dur="7.3s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+        </ellipse>
+
+        <ellipse class="ring" cx="500" cy="500" rx="120" ry="48">
+          <animateTransform attributeName="transform" type="rotate" from="180 500 500" to="-180 500 500" dur="15.3s" repeatCount="indefinite"/>
+          <animate attributeName="ry" values="48;108;12;108;48" dur="15.3s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+          <animate attributeName="rx" values="120;96;130;96;120" dur="11.1s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+        </ellipse>
+
+        <ellipse class="ring" cx="500" cy="500" rx="220" ry="88">
+          <animateTransform attributeName="transform" type="rotate" from="90 500 500" to="450 500 500" dur="23.8s" repeatCount="indefinite"/>
+          <animate attributeName="ry" values="88;22;160;22;88" dur="23.8s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+          <animate attributeName="rx" values="220;180;240;180;220" dur="17.6s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+        </ellipse>
+
+        <ellipse class="ring" cx="500" cy="500" rx="340" ry="136">
+          <animateTransform attributeName="transform" type="rotate" from="45 500 500" to="-315 500 500" dur="34s" repeatCount="indefinite"/>
+          <animate attributeName="ry" values="136;34;220;34;136" dur="34s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+          <animate attributeName="rx" values="340;280;360;280;340" dur="25.5s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+        </ellipse>
+      </g>
+    </svg>
+  </div>
+
+  <div class="hero-content">
+    <div class="hero-eyebrow">
+      <span class="dot"></span>
+    </div>
+    <h1 class="hero-title">есть мысли?</h1>
+    <p class="hero-sub">Думай. Остальное — наша забота</p>
+    <div class="hero-cta-wrap">
+      <a class="btn btn-solid btn-lg" href="/app">попробовать бесплатно</a>
+    </div>
+  </div>
+
+
+</section>
+
+<!-- ═════ Chaos / Pain ═════ -->
+<section class="chaos-section">
+  <!-- Хаотичные иллюстрации вокруг текста -->
+  <svg class="chaos-svg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+
+    <!-- Абстрактные фоновые линии — тонкие, по всему полю -->
+    <g class="chaos-g" data-delay="0" opacity="1">
+      <path d="M 0 320 Q 180 280 360 340 Q 540 400 720 350 Q 900 300 1080 370 Q 1260 440 1440 380" stroke="rgba(240,237,230,0.06)" stroke-width="1" fill="none"/>
+      <path d="M 0 560 Q 200 520 400 580 Q 600 640 800 590 Q 1000 540 1200 600 Q 1350 645 1440 620" stroke="rgba(240,237,230,0.05)" stroke-width="1" fill="none"/>
+      <path d="M 120 0 Q 160 200 100 400 Q 40 600 130 900" stroke="rgba(240,237,230,0.04)" stroke-width="1" fill="none"/>
+      <path d="M 1320 0 Q 1280 250 1340 500 Q 1400 750 1310 900" stroke="rgba(240,237,230,0.04)" stroke-width="1" fill="none"/>
+    </g>
+
+    <!-- Левый верх: список задач в хаосе -->
+    <g class="chaos-g chaos-drift" data-delay="0" style="--dx:5px;--dy:-4px;--dr:-1.5deg;--dur:6.3s" transform="rotate(-6, 140, 160)">
+      <!-- чекбокс 1 — выполнен (зачёркнут) -->
+      <rect x="50" y="80" width="11" height="11" rx="2" stroke="rgba(240,237,230,0.35)" stroke-width="1.2" fill="none"/>
+      <line x1="52" y1="85" x2="59" y2="85" stroke="rgba(240,237,230,0.35)" stroke-width="1.2" stroke-linecap="round"/>
+      <text x="70" y="91" font-family="monospace" font-size="11" fill="rgba(240,237,230,0.25)" text-decoration="line-through">созвон с CEO</text>
+      <line x1="68" y1="91" x2="148" y2="91" stroke="rgba(240,237,230,0.18)" stroke-width="0.8"/>
+      <!-- чекбокс 2 -->
+      <rect x="50" y="106" width="11" height="11" rx="2" stroke="rgba(240,237,230,0.4)" stroke-width="1.2" fill="none"/>
+      <text x="70" y="117" font-family="monospace" font-size="11" fill="rgba(240,237,230,0.35)">написать инвестору</text>
+      <!-- чекбокс 3 -->
+      <rect x="50" y="132" width="11" height="11" rx="2" stroke="rgba(240,237,230,0.3)" stroke-width="1.2" fill="none"/>
+      <text x="70" y="143" font-family="monospace" font-size="11" fill="rgba(240,237,230,0.25)">подготовить деки</text>
+      <!-- чекбокс 4 — подчёркнут как срочный -->
+      <rect x="50" y="158" width="11" height="11" rx="2" stroke="rgba(240,237,230,0.5)" stroke-width="1.5" fill="none"/>
+      <text x="70" y="169" font-family="monospace" font-size="11" fill="rgba(240,237,230,0.45)">встреча в 14:00 !!!</text>
+      <!-- кривая стрелка вниз-вправо -->
+      <path d="M 155 155 Q 175 175 160 200" stroke="rgba(240,237,230,0.2)" stroke-width="1" fill="none" stroke-linecap="round" stroke-dasharray="3 3"/>
+    </g>
+
+    <!-- Левый низ: разбросанные заметки -->
+    <g class="chaos-g chaos-drift" data-delay="120" style="--dx:-4px;--dy:5px;--dr:2deg;--dur:7.5s" transform="rotate(4, 130, 730)">
+      <text x="40" y="680" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.3)">важно!!!</text>
+      <text x="55" y="710" font-family="monospace" font-size="11" fill="rgba(240,237,230,0.22)">идея для питча</text>
+      <line x1="53" y1="714" x2="168" y2="714" stroke="rgba(240,237,230,0.12)" stroke-width="0.8"/>
+      <text x="42" y="738" font-family="monospace" font-size="11" fill="rgba(240,237,230,0.18)">не забыть про…</text>
+      <!-- три горизонтальных линии как незаписанные мысли -->
+      <line x1="40" y1="760" x2="190" y2="760" stroke="rgba(240,237,230,0.1)" stroke-width="1" stroke-linecap="round"/>
+      <line x1="40" y1="774" x2="150" y2="774" stroke="rgba(240,237,230,0.08)" stroke-width="1" stroke-linecap="round"/>
+      <line x1="40" y1="788" x2="170" y2="788" stroke="rgba(240,237,230,0.06)" stroke-width="1" stroke-linecap="round"/>
+      <!-- спираль — мысль которая закручивается -->
+      <path d="M 80 830 Q 95 815 110 830 Q 125 845 110 860 Q 90 875 70 855 Q 50 835 75 815" stroke="rgba(240,237,230,0.2)" stroke-width="1" fill="none" stroke-linecap="round"/>
+    </g>
+
+    <!-- Правый верх: три приложения хаотично -->
+    <g class="chaos-g chaos-drift" data-delay="80" style="--dx:-6px;--dy:-3px;--dr:-2deg;--dur:5.1s" transform="rotate(5, 1280, 140)">
+      <!-- плашка 1 -->
+      <rect x="1130" y="60" width="100" height="36" rx="6" stroke="rgba(240,237,230,0.25)" stroke-width="1" fill="none"/>
+      <text x="1145" y="78" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.3)">Notion</text>
+      <text x="1145" y="90" font-family="monospace" font-size="9" fill="rgba(240,237,230,0.18)">47 страниц</text>
+      <!-- плашка 2 — повёрнута -->
+      <g transform="rotate(-8, 1300, 130)">
+        <rect x="1240" y="90" width="110" height="36" rx="6" stroke="rgba(240,237,230,0.2)" stroke-width="1" fill="none"/>
+        <text x="1255" y="108" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.25)">ChatGPT</text>
+        <text x="1255" y="120" font-family="monospace" font-size="9" fill="rgba(240,237,230,0.15)">вчерашний чат</text>
+      </g>
+      <!-- плашка 3 -->
+      <g transform="rotate(6, 1200, 190)">
+        <rect x="1150" y="155" width="100" height="36" rx="6" stroke="rgba(240,237,230,0.18)" stroke-width="1" fill="none"/>
+        <text x="1165" y="173" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.22)">Todoist</text>
+        <text x="1165" y="185" font-family="monospace" font-size="9" fill="rgba(240,237,230,0.13)">83 задачи</text>
+      </g>
+      <!-- стрелки между плашками — хаос переключений -->
+      <path d="M 1230 80 Q 1250 95 1242 108" stroke="rgba(240,237,230,0.15)" stroke-width="1" fill="none" stroke-linecap="round" marker-end="url(#arr2)"/>
+      <path d="M 1242 144 Q 1230 150 1220 168" stroke="rgba(240,237,230,0.12)" stroke-width="1" fill="none" stroke-linecap="round"/>
+    </g>
+
+    <!-- Правый низ: разорванные связи / потерянный контекст -->
+    <g class="chaos-g chaos-drift" data-delay="200" style="--dx:4px;--dy:6px;--dr:1.5deg;--dur:6.9s" transform="rotate(-3, 1320, 750)">
+      <text x="1240" y="680" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.28)">контекст потерян</text>
+      <!-- пунктирная линия — обрыв -->
+      <line x1="1240" y1="692" x2="1380" y2="692" stroke="rgba(240,237,230,0.15)" stroke-width="1" stroke-dasharray="4 4" stroke-linecap="round"/>
+      <!-- вопросительный знак -->
+      <text x="1390" y="696" font-family="monospace" font-size="13" fill="rgba(240,237,230,0.25)">?</text>
+      <!-- незавершённые строки как потерянные мысли -->
+      <text x="1240" y="720" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.2)">где был тот файл…</text>
+      <text x="1240" y="742" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.15)">кто должен был…</text>
+      <text x="1240" y="764" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.1)">когда мы решили…</text>
+      <!-- три точки — недосказанность -->
+      <circle cx="1248" cy="785" r="2" fill="rgba(240,237,230,0.15)"/>
+      <circle cx="1258" cy="785" r="2" fill="rgba(240,237,230,0.1)"/>
+      <circle cx="1268" cy="785" r="2" fill="rgba(240,237,230,0.07)"/>
+    </g>
+
+      <!-- Центр верх: хаотичная стрелка туда-сюда -->
+    <g class="chaos-g chaos-drift" data-delay="160" style="--dx:4px;--dy:-6px;--dr:1.5deg;--dur:5.8s">
+      <path d="M 580 60 Q 650 30 720 60 Q 790 90 860 55" stroke="rgba(240,237,230,0.1)" stroke-width="1" fill="none" stroke-linecap="round"/>
+      <path d="M 855 50 L 863 58 L 852 62" stroke="rgba(240,237,230,0.1)" stroke-width="1" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+
+    <!-- Центр низ: время утекает -->
+    <g class="chaos-g chaos-drift" data-delay="240" style="--dx:-5px;--dy:4px;--dr:-1deg;--dur:6.5s">
+      <text x="640" y="840" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.2)" text-anchor="middle">09:00 → 14:00 → 18:00 → ...</text>
+      <line x1="480" y1="850" x2="960" y2="850" stroke="rgba(240,237,230,0.07)" stroke-width="1" stroke-linecap="round"/>
+    </g>
+
+    <!-- Верх слева от центра: "ChatGPT — миллион чатов" -->
+    <g class="chaos-g chaos-drift" data-delay="60" style="--dx:-6px;--dy:5px;--dr:-2deg;--dur:7.2s" transform="rotate(-5, 380, 55)">
+      <rect x="280" y="30" width="150" height="34" rx="6" stroke="rgba(240,237,230,0.2)" stroke-width="1" fill="none"/>
+      <text x="296" y="48" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.28)">ChatGPT</text>
+      <text x="296" y="59" font-family="monospace" font-size="9" fill="rgba(240,237,230,0.16)">миллион чатов</text>
+    </g>
+
+    <!-- Верх справа от центра: "Todoist 23 задачи" -->
+    <g class="chaos-g chaos-drift" data-delay="100" style="--dx:5px;--dy:-4px;--dr:2.5deg;--dur:4.9s" transform="rotate(4, 1020, 45)">
+      <rect x="940" y="22" width="130" height="34" rx="6" stroke="rgba(240,237,230,0.18)" stroke-width="1" fill="none"/>
+      <text x="956" y="40" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.24)">Todoist</text>
+      <text x="956" y="51" font-family="monospace" font-size="9" fill="rgba(240,237,230,0.14)">23 задачи</text>
+    </g>
+
+    <!-- Верхний левый угол: "важно!!!" крупно -->
+    <g class="chaos-g chaos-drift" data-delay="20" style="--dx:3px;--dy:-5px;--dr:-3deg;--dur:6.1s" transform="rotate(-8, 60, 28)">
+      <text x="20" y="35" font-family="monospace" font-size="14" fill="rgba(240,237,230,0.35)" font-weight="bold">важно!!!</text>
+      <path d="M 20 42 Q 55 52 85 38" stroke="rgba(240,237,230,0.15)" stroke-width="1" fill="none" stroke-linecap="round" stroke-dasharray="3 3"/>
+    </g>
+
+    <!-- Верхний правый угол: знак вопроса -->
+    <g class="chaos-g chaos-drift" data-delay="140" style="--dx:-4px;--dy:6px;--dr:4deg;--dur:5.3s">
+      <text x="1380" y="50" font-family="monospace" font-size="28" fill="rgba(240,237,230,0.2)">?</text>
+      <text x="1370" y="80" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.15)">куда это всё?</text>
+    </g>
+
+    <!-- Левый центр: "идея для питча" -->
+    <g class="chaos-g chaos-drift" data-delay="180" style="--dx:6px;--dy:3px;--dr:-1.5deg;--dur:7.8s" transform="rotate(-4, 110, 440)">
+      <text x="30" y="420" font-family="monospace" font-size="11" fill="rgba(240,237,230,0.28)">идея для питча</text>
+      <line x1="28" y1="424" x2="185" y2="424" stroke="rgba(240,237,230,0.12)" stroke-width="0.8"/>
+      <text x="30" y="445" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.18)">не забыть про…</text>
+      <path d="M 55 455 Q 40 470 60 480" stroke="rgba(240,237,230,0.15)" stroke-width="1" fill="none" stroke-linecap="round"/>
+    </g>
+
+    <!-- Правый центр: "где был тот файл..." -->
+    <g class="chaos-g chaos-drift" data-delay="220" style="--dx:-5px;--dy:-3px;--dr:2deg;--dur:6.7s" transform="rotate(3, 1380, 460)">
+      <text x="1260" y="440" font-family="monospace" font-size="11" fill="rgba(240,237,230,0.25)">где был тот файл…</text>
+      <text x="1260" y="462" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.18)">кто должен был…</text>
+      <path d="M 1260 472 Q 1300 482 1340 470" stroke="rgba(240,237,230,0.12)" stroke-width="1" fill="none" stroke-linecap="round" stroke-dasharray="4 3"/>
+    </g>
+
+    <!-- Нижний левый угол: закорючки + "???" -->
+    <g class="chaos-g chaos-drift" data-delay="260" style="--dx:4px;--dy:-4px;--dr:-2.5deg;--dur:5.6s" transform="rotate(6, 80, 870)">
+      <text x="20" y="855" font-family="monospace" font-size="20" fill="rgba(240,237,230,0.18)">???</text>
+      <path d="M 20 868 Q 60 858 95 872 Q 115 880 105 892" stroke="rgba(240,237,230,0.12)" stroke-width="1" fill="none" stroke-linecap="round"/>
+    </g>
+
+    <!-- Нижний правый угол: "контекст потерян" крупнее -->
+    <g class="chaos-g chaos-drift" data-delay="300" style="--dx:-3px;--dy:5px;--dr:3deg;--dur:4.4s" transform="rotate(-4, 1350, 865)">
+      <text x="1250" y="850" font-family="monospace" font-size="11" fill="rgba(240,237,230,0.28)">контекст потерян</text>
+      <line x1="1250" y1="857" x2="1420" y2="857" stroke="rgba(240,237,230,0.15)" stroke-width="1" stroke-dasharray="5 4"/>
+      <text x="1380" y="878" font-family="monospace" font-size="18" fill="rgba(240,237,230,0.2)">!</text>
+    </g>
+
+    <!-- Верх центра: восклицание -->
+    <g class="chaos-g chaos-drift" data-delay="40" style="--dx:-3px;--dy:-6px;--dr:-4deg;--dur:8.0s">
+      <text x="700" y="28" font-family="monospace" font-size="22" fill="rgba(240,237,230,0.12)">!</text>
+    </g>
+
+  </svg>
+
+  <!-- Центральный текст -->
+  <div class="chaos-text">
+    <h2 class="chaos-title chaos-g" data-delay="320">Планирование превращается&nbsp;в хаос</h2>
+    <p class="chaos-sub chaos-g" data-delay="400">Инструменты множатся, контекст рассыпается по вкладкам,<br>а ценные мысли исчезают быстрее, чем ты успеваешь их записать.</p>
+    <p class="chaos-hint chaos-g" data-delay="460">Кажется, пора что-то менять…</p>
+  </div>
+</section>
+
+<!-- ═════ Solution ═════ -->
+<section class="solution-section">
+  <div class="solution-inner">
+
+    <div class="solution-phone-col">
+      <div class="solution-phone-wrap">
+        <div class="solution-phone">
+          <div class="solution-phone-inner">
+            <img src="/landing/screenshots/main.png" class="solution-screen-img" alt="главный экран"
+              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+            <div class="solution-screen-stub">главный экран</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="solution-text-col">
+      <div class="solution-label">решение</div>
+      <h2 class="solution-title">Агент, который управляет задачами,<br>строит планы и надёжно хранит заметки</h2>
+      <p class="solution-desc">Просто общайся — как с другом.<br>Мысль запомнит, расставит по местам<br>и ничего не потеряет.</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═════ Features ═════ -->
+<section class="feat-section" id="features">
+  <div class="feat-inner">
+
+    <!-- Левая колонка -->
+    <div class="feat-left">
+      <h2 class="feat-title">Всё что нужно —<br/>в одном месте</h2>
+
+      <div class="feat-list" id="featList">
+
+        <div class="feat-item active" data-feat="1">
+          <div class="feat-tag">ДЕЛЕГИРУЙ</div>
+          <div class="feat-name">Агент-планировщик</div>
+          <div class="feat-desc">Агент управляет планировщиком через чат:
+ставит задачи, видит связи и знает контекст,
+делая планирование проще с каждым днём</div>
+        </div>
+
+        <div class="feat-item" data-feat="2">
+          <div class="feat-tag">ДИКТУЙ</div>
+          <div class="feat-name">Голосовой ввод и тг бот</div>
+          <div class="feat-desc">Если неудобно печатать — скажи голосом,
+и Мысль услышит тебя. Неудобно заходить
+в приложение? У нас есть тг коннектор</div>
+        </div>
+
+        <div class="feat-item" data-feat="3">
+          <div class="feat-tag">ДОБАВЛЯЙ</div>
+          <div class="feat-name">Динамическое хранилище заметок</div>
+          <div class="feat-desc">Каждый чат, задача и заметка — часть
+общей картины. Мысль использует твои заметки
+как контекст для будущих бесед, создаёт саммари
+каждого чата и сохраняет в памяти</div>
+        </div>
+
+        <div class="feat-item" data-feat="4">
+          <div class="feat-tag">ДОСТАВАЙ</div>
+          <div class="feat-name">Ассистент по заметкам</div>
+          <div class="feat-desc">Твои записи перестают быть мёртвым грузом —
+Мысль ищет по смыслу, а не ключевым словам.
+Достаточно дать направление, и вся информация
+будет у тебя в руках через мгновения</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Правая колонка — телефон sticky -->
+    <div class="feat-right">
+      <div class="feat-phone-wrap">
+        <div class="feat-phone">
+          <div class="feat-phone-inner">
+            <div class="feat-screen active" data-feat="1">
+              <img src="/landing/screenshots/screen1.png" class="feat-screen-img" alt="Делегируй" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+              <div class="feat-screen-stub">Делегируй</div>
+            </div>
+            <div class="feat-screen" data-feat="2">
+              <img src="/landing/screenshots/screen2.png" class="feat-screen-img" alt="Диктуй" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+              <div class="feat-screen-stub">Диктуй</div>
+            </div>
+            <div class="feat-screen" data-feat="3">
+              <img src="/landing/screenshots/screen3.png" class="feat-screen-img" alt="Добавляй" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+              <div class="feat-screen-stub">Добавляй</div>
+            </div>
+            <div class="feat-screen" data-feat="4">
+              <img src="/landing/screenshots/screen4.png" class="feat-screen-img" alt="Доставай" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+              <div class="feat-screen-stub">Доставай</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═════ Compare ═════ -->
+<section class="compare-section">
+  <div class="wrap compare reveal">
+    <div class="compare-text">
+      <h2 class="section-title">а чем лучше<br/>нейросети?</h2>
+      <div class="rule"></div>
+      <p class="dim">Нейросети — для всего сразу, поэтому для твоих дел — ни для чего конкретно.</p>
+      <p class="dim">Можно собрать связку: ChatGPT + Notion + Calendar. Только это три окна, ручная синхронизация, и мысль которая пришла в душе — утонет раньше чем ты откроешь нужное.</p>
+      <p>Мысль — один инструмент для одной задачи. Говоришь что думаешь — она запоминает, расставляет, не теряет. Работает сразу, без настройки.</p>
+    </div>
+
+    <div class="compare-table-wrap">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Связка приложений</th>
+            <th>Мысль</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>помнит контекст задач</td>
+            <td class="muted">частично</td>
+            <td class="us"><span class="tick"><svg viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>всегда</span></td>
+          </tr>
+          <tr>
+            <td>работает из коробки</td>
+            <td class="muted"><span class="cross"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>нет</span></td>
+            <td class="us"><span class="tick"><svg viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>да</span></td>
+          </tr>
+          <tr>
+            <td>управляет календарём</td>
+            <td class="muted"><span class="cross"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>нет</span></td>
+            <td class="us"><span class="tick"><svg viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>да</span></td>
+          </tr>
+          <tr>
+            <td>Яндекс Календарь</td>
+            <td class="muted"><span class="cross"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>нет</span></td>
+            <td class="us"><span class="tick"><svg viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>да</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ═════ Final CTA ═════ -->
+<section class="final" id="join">
+  <div class="wrap reveal">
+    <h2 class="final-title">попробуй бесплатно</h2>
+    <p class="final-sub">первый месяц бесплатно · без карты · без ограничений</p>
+    <div class="final-cta-wrap">
+      <a class="btn btn-solid btn-lg" href="/app">попробовать бесплатно</a>
+    </div>
+  </div>
+</section>
+
+<!-- ═════ Footer ═════ -->
+<footer>
+  <div class="wrap">
+    <div class="footer-grid">
+      <a class="logo" href="#top" aria-label="мысль">
+        <img src="/landing/assets/logo-full.svg" class="logo-full" alt="Мысль" height="28"/>
+      </a>
+      <div class="footer-tag">Разгружает дела, не нагружая новыми</div>
+      <div class="footer-social">
+        <a href="#" aria-label="Telegram">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M21 4L3 11l6 2 2 6 4-4 4 3 2-14z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        </a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>сделано в России · 2026</span>
+      <span>© мысль</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* Sticky header */
+const header = document.getElementById('header');
+const onScroll = () => header.classList.toggle('scrolled', window.scrollY > 24);
+window.addEventListener('scroll', onScroll, { passive: true });
+onScroll();
+
+/* Reveal on scroll */
+const io = new IntersectionObserver((entries) => {
+  for (const e of entries) {
+    if (e.isIntersecting) {
+      e.target.classList.add('in');
+      io.unobserve(e.target);
+    }
+  }
+}, { threshold: 0.12 });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+/* Features — click only, sequential crossfade */
+(function () {
+  const featItems = document.querySelectorAll('.feat-item');
+  const featScreens = document.querySelectorAll('.feat-screen');
+  if (!featItems.length) return;
+
+  let currentFeat = 1;
+  let fadeTimer = null;
+
+  function setFeat(n) {
+    if (n === currentFeat) return;
+
+    /* Items — instant class swap, CSS handles transition */
+    featItems.forEach(el => el.classList.toggle('active', +el.dataset.feat === n));
+
+    /* Screens — sequential: fade out current, then fade in next */
+    const outEl = document.querySelector(`.feat-screen[data-feat="${currentFeat}"]`);
+    const inEl  = document.querySelector(`.feat-screen[data-feat="${n}"]`);
+
+    if (fadeTimer) clearTimeout(fadeTimer);
+
+    if (outEl) {
+      outEl.classList.remove('fade-in');
+      outEl.classList.add('fade-out');
+      outEl.classList.remove('active');
+    }
+
+    fadeTimer = setTimeout(() => {
+      if (outEl) outEl.classList.remove('fade-out');
+      if (inEl) {
+        inEl.classList.add('active');
+        inEl.classList.add('fade-in');
+        setTimeout(() => inEl.classList.remove('fade-in'), 300);
+      }
+    }, 150);
+
+    currentFeat = n;
+  }
+
+  featItems.forEach(el => {
+    el.addEventListener('click', () => setFeat(+el.dataset.feat));
+  });
+})();
+
+/* Solution section reveal */
+(function () {
+  const phoneCol = document.querySelector('.solution-phone-col');
+  const textCol  = document.querySelector('.solution-text-col');
+  if (!phoneCol || !textCol) return;
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('in');
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.15 });
+  io.observe(phoneCol);
+  io.observe(textCol);
+})();
+
+/* Chaos section stagger */
+const chaosSection = document.querySelector('.chaos-section');
+if (chaosSection) {
+  const chaosItems = chaosSection.querySelectorAll('.chaos-g');
+  const chaosIo = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting) {
+      chaosItems.forEach(el => {
+        const d = parseInt(el.dataset.delay || '0', 10);
+        el.style.setProperty('--delay', String(d));
+        setTimeout(() => el.classList.add('visible'), d);
+      });
+      chaosIo.disconnect();
+    }
+  }, { threshold: 0.15 });
+  chaosIo.observe(chaosSection);
+}
+</script>
+
+</body>
+</html>
