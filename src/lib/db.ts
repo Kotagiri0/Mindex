@@ -184,14 +184,24 @@ export const db = {
     const userId = getUserId();
     if (!userId) return [];
 
+    const localTasks = storage.getTasks(userId);
+
     try {
       const data = await request<{ profile: LocalProfile | null; tasks: Task[]; threads: Thread[] }>(
         `${apiBase()}/bootstrap?userId=${encodeURIComponent(userId)}`
       );
-      storage.setTasks(userId, data.tasks || []);
-      return data.tasks || [];
+      const serverTasks = data.tasks || [];
+      const serverIds = new Set(serverTasks.map((t) => t.id));
+      // Задачи, которые есть локально но не на сервере — pending-save, сохраняем обратно
+      const pendingLocal = localTasks.filter((t) => !serverIds.has(t.id));
+      for (const t of pendingLocal) {
+        db.saveTask(t, { skipCalendarSync: true }).catch(() => {});
+      }
+      const merged = [...pendingLocal, ...serverTasks];
+      storage.setTasks(userId, merged);
+      return merged;
     } catch {
-      return storage.getTasks(userId);
+      return localTasks;
     }
   },
   
