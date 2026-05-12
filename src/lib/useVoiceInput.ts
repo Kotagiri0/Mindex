@@ -2,6 +2,10 @@ import { useState, useRef, useCallback } from 'react';
 
 type VoiceState = 'idle' | 'recording' | 'processing' | 'error';
 
+export const isMobileDevice = () =>
+  /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+  (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent)); // iPad on iOS 13+
+
 export const useVoiceInput = (onTranscript: (text: string) => void) => {
   const [state, setState] = useState<VoiceState>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -30,11 +34,6 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
 
   const sendAudioToServer = useCallback(async (audioBlob: Blob, mimeType?: string) => {
     try {
-      // Read the first bytes to verify the recorded container signature.
-      const arrayBuffer = await audioBlob.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer).slice(0, 16);
-      console.log('[VOICE] First bytes:', Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' '));
-
       const formData = new FormData();
       formData.append('audio', audioBlob, getFileNameForMimeType(mimeType || audioBlob.type));
 
@@ -44,8 +43,8 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Транскрибация не удалась.');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error((errorData as any).error || 'Транскрибация не удалась.');
       }
 
       const data = await response.json();
@@ -74,8 +73,9 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
   const startFallbackRecognition = useCallback(() => {
     const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
     if (!SpeechRecognition) {
-      setError('Голосовой ввод не поддерживается вашим браузером.');
+      setError('Голосовой ввод недоступен в этом браузере.');
       setVoiceState('error');
+      setTimeout(() => setVoiceState('idle'), 2500);
       return;
     }
 
@@ -95,13 +95,24 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
 
     recognition.onerror = (event: any) => {
       console.error('[VOICE] Recognition error:', event.error);
-      setError(`Ошибка при распознавании: ${event.error}`);
+      if (event.error === 'not-allowed') {
+        setError('Нет доступа к микрофону.');
+      } else if (event.error === 'no-speech') {
+        setError('Речь не распознана. Попробуйте ещё раз.');
+      } else {
+        setError('Ошибка распознавания речи.');
+      }
       setVoiceState('error');
-      setTimeout(() => setVoiceState('idle'), 2000);
+      setTimeout(() => setVoiceState('idle'), 2500);
     };
 
     recognition.onend = () => {
-      setVoiceState('idle');
+      if (stateRef.current === 'recording') {
+        setVoiceState('processing');
+      }
+      setTimeout(() => {
+        if (stateRef.current === 'processing') setVoiceState('idle');
+      }, 500);
     };
 
     recognitionRef.current = recognition;
@@ -109,113 +120,121 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
   }, [onTranscript]);
 
   const startRecording = useCallback(async () => {
+    if (stateRef.current !== 'idle') return;
+
+    setError(null);
+    setVoiceState('recording');
+    chunksRef.current = [];
+    recordingStartedAtRef.current = Date.now();
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      console.warn('[VOICE] navigator.mediaDevices not available, trying SpeechRecognition');
+      startFallbackRecognition();
+      return;
+    }
+
     try {
-      if (stateRef.current !== 'idle') return;
+      console.log('[VOICE] Requesting microphone...');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
 
-      setError(null);
-      setVoiceState('recording');
-      chunksRef.current = [];
-      recordingStartedAtRef.current = Date.now();
+      // iOS Safari supports audio/mp4, Chrome/Firefox prefer webm
+      const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+        (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
 
-      if (navigator.mediaDevices?.getUserMedia) {
-        try {
-          console.log('[VOICE] Requesting microphone permission...');
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          streamRef.current = stream;
-          console.log('[VOICE] Stream acquired, tracks:', stream.getTracks().length);
+      const preferredMimeTypes = isIOS
+        ? ['audio/mp4', 'audio/aac', 'audio/webm;codecs=opus', 'audio/webm']
+        : ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
 
-          const preferredMimeTypes = [
-            'audio/webm;codecs=opus',
-            'audio/webm',
-            'audio/mp4',
-            'audio/ogg;codecs=opus',
-            'audio/ogg',
-          ];
-          const selectedMimeType = preferredMimeTypes.find((type) => MediaRecorder.isTypeSupported(type));
-          console.log('[VOICE] Creating MediaRecorder with mimeType:', selectedMimeType || 'browser-default');
-          const mediaRecorder = selectedMimeType
-            ? new MediaRecorder(stream, { mimeType: selectedMimeType })
-            : new MediaRecorder(stream);
-          recorderMimeTypeRef.current = mediaRecorder.mimeType || selectedMimeType || 'audio/webm';
+      const selectedMimeType = preferredMimeTypes.find((type) => MediaRecorder.isTypeSupported(type));
+      console.log('[VOICE] Selected mimeType:', selectedMimeType || 'browser-default');
 
-          mediaRecorder.ondataavailable = (event) => {
-            console.log('[VOICE] ondataavailable:', event.data.size, 'bytes');
-            if (event.data.size > 0) {
-              chunksRef.current.push(event.data);
-            }
-          };
+      const mediaRecorder = selectedMimeType
+        ? new MediaRecorder(stream, { mimeType: selectedMimeType })
+        : new MediaRecorder(stream);
+      recorderMimeTypeRef.current = mediaRecorder.mimeType || selectedMimeType || 'audio/webm';
 
-          mediaRecorderRef.current = mediaRecorder;
-          mediaRecorder.start(100);
-          console.log('[VOICE] Recording started');
-        } catch (err) {
-          console.warn('[VOICE] MediaRecorder not available, falling back to SpeechRecognition');
-          startFallbackRecognition();
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunksRef.current.push(event.data);
         }
+      };
+
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start(100);
+      console.log('[VOICE] Recording started, mimeType:', recorderMimeTypeRef.current);
+    } catch (err: any) {
+      console.error('[VOICE] getUserMedia failed:', err);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setError('Нет доступа к микрофону. Разрешите доступ в настройках браузера.');
+        setVoiceState('error');
+        setTimeout(() => setVoiceState('idle'), 3000);
       } else {
-        console.warn('[VOICE] navigator.mediaDevices not available');
+        console.warn('[VOICE] Falling back to SpeechRecognition');
         startFallbackRecognition();
       }
-    } catch (err: any) {
-      console.error('[VOICE] Error starting recording:', err);
-      setError('Не удалось получить доступ к микрофону.');
-      setVoiceState('error');
     }
   }, [startFallbackRecognition]);
 
   const stopRecording = useCallback(async () => {
-    try {
-      if (mediaRecorderRef.current && stateRef.current === 'recording') {
-        setVoiceState('processing');
+    if (stateRef.current !== 'recording') return;
 
-        await new Promise<void>((resolve) => {
-          const recorder = mediaRecorderRef.current!;
+    if (mediaRecorderRef.current) {
+      setVoiceState('processing');
 
-          recorder.addEventListener('stop', () => {
-            console.log('[VOICE] stopped, chunks:', chunksRef.current.length);
+      await new Promise<void>((resolve) => {
+        const recorder = mediaRecorderRef.current!;
 
-            if (chunksRef.current.length === 0) {
-              setError('Не удалось записать звук.');
-              setVoiceState('error');
-              setTimeout(() => setVoiceState('idle'), 2000);
-              resolve();
-              return;
-            }
+        recorder.addEventListener('stop', () => {
+          console.log('[VOICE] stopped, chunks:', chunksRef.current.length);
 
-            const recordingDurationMs = Date.now() - recordingStartedAtRef.current;
-            if (recordingDurationMs < 300) {
-              setError('Слишком короткая запись. Удерживайте кнопку чуть дольше.');
-              setVoiceState('error');
-              setTimeout(() => setVoiceState('idle'), 2000);
-              resolve();
-              return;
-            }
+          if (chunksRef.current.length === 0) {
+            setError('Не удалось записать звук.');
+            setVoiceState('error');
+            setTimeout(() => setVoiceState('idle'), 2000);
+            resolve();
+            return;
+          }
 
-            const audioBlob = new Blob(chunksRef.current, { type: recorderMimeTypeRef.current });
-            console.log('[VOICE] Blob size:', audioBlob.size);
-            sendAudioToServer(audioBlob, recorderMimeTypeRef.current).then(resolve);
-          }, { once: true });
+          const recordingDurationMs = Date.now() - recordingStartedAtRef.current;
+          if (recordingDurationMs < 300) {
+            setError('Слишком короткая запись.');
+            setVoiceState('error');
+            setTimeout(() => setVoiceState('idle'), 2000);
+            resolve();
+            return;
+          }
 
-          // Stop AFTER listener is attached
-          recorder.requestData(); // flush last chunk
-          recorder.stop();
-        });
+          const audioBlob = new Blob(chunksRef.current, { type: recorderMimeTypeRef.current });
+          console.log('[VOICE] Blob size:', audioBlob.size, 'type:', recorderMimeTypeRef.current);
+          sendAudioToServer(audioBlob, recorderMimeTypeRef.current).then(resolve);
+        }, { once: true });
 
-      } else if (recognitionRef.current && stateRef.current === 'recording') {
-        recognitionRef.current.stop();
-        setVoiceState('processing');
-      }
-    } catch (err: any) {
-      console.error('[VOICE] Error stopping recording:', err);
-      setError('Ошибка при остановке записи.');
-      setVoiceState('error');
+        recorder.requestData();
+        recorder.stop();
+      });
+
+    } else if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+      setVoiceState('processing');
     }
   }, [sendAudioToServer]);
+
+  // Toggle: start if idle, stop if recording (for desktop tap-to-toggle)
+  const toggleRecording = useCallback(async () => {
+    if (stateRef.current === 'idle') {
+      await startRecording();
+    } else if (stateRef.current === 'recording') {
+      await stopRecording();
+    }
+  }, [startRecording, stopRecording]);
 
   return {
     state,
     error,
     startRecording,
     stopRecording,
+    toggleRecording,
   };
 };

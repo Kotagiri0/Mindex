@@ -7,7 +7,7 @@ import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { useVoiceInput } from '../lib/useVoiceInput';
+import { useVoiceInput, isMobileDevice } from '../lib/useVoiceInput';
 
 const THINKING_PHRASES = ['Думаю...', 'Анализирую...', 'Ищу в архиве...', 'Формулирую...', 'Пишу ответ...'];
 
@@ -80,11 +80,12 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     prevIsTypingRef.current = isTyping;
   }, [isTyping]);
 
-  const { state: voiceState, error: voiceError, startRecording, stopRecording } = useVoiceInput(
+  const { state: voiceState, error: voiceError, startRecording, stopRecording, toggleRecording } = useVoiceInput(
     (text) => {
       setInput(prev => prev + (prev ? ' ' : '') + text);
     }
   );
+  const isMobile = isMobileDevice();
 
   const thread = threads.find(t => t.id === threadId);
 
@@ -1070,9 +1071,18 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             </button>
             <div className="flex items-center gap-2">
               <motion.button
-                onPointerDown={e => { e.preventDefault(); startRecording(); }}
-                onPointerUp={e => { e.preventDefault(); stopRecording(); }}
-                onPointerCancel={stopRecording}
+                title={isMobile ? 'Удерживай для записи' : 'Нажми для записи, ещё раз — стоп'}
+                {...(isMobile
+                  ? {
+                      onPointerDown: startRecording,
+                      onPointerUp: stopRecording,
+                      onPointerCancel: stopRecording,
+                    }
+                  : {
+                      onClick: toggleRecording,
+                    }
+                )}
+                disabled={voiceState === 'processing'}
                 style={{
                   width: 32, height: 32, borderRadius: '50%', border: 'none', cursor: 'pointer', flexShrink: 0,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
