@@ -843,6 +843,22 @@ section { position: relative; padding: var(--section) 0; }
 }
 .tick svg, .cross svg { width: 14px; height: 14px; }
 
+/* ───── Onboarding ───── */
+.ob-section { padding: var(--section) 0; }
+.ob-steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 40px; margin-bottom: 48px; }
+.ob-step { display: flex; flex-direction: column; gap: 12px; }
+.ob-num { font-family: var(--ff-rg); font-size: 13px; color: rgba(240,237,230,0.35); letter-spacing: .08em; }
+.ob-title { font-family: var(--ff-rg); font-size: clamp(18px,2vw,24px); color: var(--ink); margin: 0; }
+.ob-desc { font-size: 15px; line-height: 1.6; color: rgba(240,237,230,0.55); margin: 0; }
+.ob-platforms { display: flex; align-items: center; gap: 16px; }
+.ob-platform-label { font-size: 13px; color: rgba(240,237,230,0.35); }
+.ob-platform-list { display: flex; align-items: center; gap: 10px; }
+.ob-platform { font-size: 14px; color: rgba(240,237,230,0.6); }
+.ob-sep { color: rgba(240,237,230,0.2); }
+@media (max-width: 700px) {
+  .ob-steps { grid-template-columns: 1fr; gap: 28px; }
+}
+
 /* ───── Final CTA ───── */
 .final {
   padding: 100px 0;
