@@ -18,6 +18,7 @@ import {
   collectDefaultMetrics,
 } from "prom-client";
 import { verifyGoogleIdToken } from './src/lib/google-auth.ts';
+import { registerBotRoutes, startBot } from './server-bot.ts';
 
 dotenv.config();
 
@@ -1211,6 +1212,11 @@ app.post("/api/chat", async (req, res) => {
 const startServer = async () => {
   await ensureAuthSchema();
 
+  // Регистрируем маршруты Telegram-бота
+  if (db) {
+    registerBotRoutes(app, db);
+  }
+
   if (process.env.NODE_ENV !== "production") {
     try {
       const { createServer } = await import("vite");
@@ -1219,8 +1225,9 @@ const startServer = async () => {
         appType: "spa",
       });
       app.use(vite.middlewares);
-      app.listen(PORT, "0.0.0.0", async () => {
+      app.listen(PORT, "0.0.0.0", () => {
         console.log(`Локальный сервер запущен: http://localhost:${PORT}`);
+        if (db) startBot(db).catch(e => console.error('[Bot] startBot error:', e));
       });
     } catch (err) {
       console.error("Ошибка запуска Vite:", err);
@@ -1235,8 +1242,9 @@ const startServer = async () => {
     res.sendFile(path.join(distPath, "index.html"));
   });
 
-  app.listen(PORT, "0.0.0.0", async () => {
+  app.listen(PORT, "0.0.0.0", () => {
     console.log(`Продакшн сервер запущен: http://localhost:${PORT}`);
+    if (db) startBot(db).catch(e => console.error('[Bot] startBot error:', e));
   });
 };
 
