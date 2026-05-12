@@ -634,7 +634,19 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     return <div>{nodes}</div>;
   };
 
-  if (!thread) return null;
+  if (!thread) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center" style={{ background: '#f0f0f0' }}>
+        <button
+          onClick={onClose}
+          className="w-11 h-11 flex items-center justify-center absolute top-4 left-4"
+          style={{ paddingTop: 'max(0px, env(safe-area-inset-top, 0px))' }}
+        >
+          <ChevronLeft size={24} strokeWidth={1.75} color="#222224" />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full" style={{ background: '#f0f0f0' }}>

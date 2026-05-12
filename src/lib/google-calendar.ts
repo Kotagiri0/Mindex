@@ -347,7 +347,7 @@ const createCalendarEvent = async (accessToken: string, payload: object) => {
 };
 
 export const syncGoogleCalendarTask = async (task: Task): Promise<Task | null> => {
-  const accessToken = await ensureGoogleCalendarToken();
+  const accessToken = await ensureGoogleCalendarToken({ allowPrompt: false });
   if (!accessToken) return null;
 
   const payload = buildEventPayload(task);
