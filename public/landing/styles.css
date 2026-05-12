@@ -368,6 +368,89 @@ section { position: relative; padding: var(--section) 0; }
   animation-delay: calc(var(--delay, 0) * 1ms);
 }
 
+/* Chaos field — HTML elements */
+.chaos-field {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.chaos-el {
+  position: absolute;
+  opacity: 0;
+  transition: opacity 600ms ease-out;
+  font-family: monospace;
+}
+.chaos-el.visible {
+  opacity: 1;
+  animation: chaos-float var(--dur, 6s) ease-in-out infinite;
+  animation-delay: calc(var(--delay, 0) * 1ms);
+}
+
+/* Task list */
+.cel-tasklist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cel-task {
+  font-size: 12px;
+  color: rgba(240,237,230,0.35);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.cel-task::before {
+  content: '';
+  width: 10px; height: 10px;
+  border: 1px solid rgba(240,237,230,0.3);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.cel-done { text-decoration: line-through; opacity: 0.5; }
+.cel-urgent { color: rgba(240,237,230,0.55); }
+.cel-urgent::before { border-color: rgba(240,237,230,0.55); }
+
+/* App badge */
+.cel-badge {
+  border: 1px solid rgba(240,237,230,0.2);
+  border-radius: 6px;
+  padding: 6px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: nowrap;
+}
+.cel-badge-name { font-size: 11px; color: rgba(240,237,230,0.35); }
+.cel-badge-sub  { font-size: 10px; color: rgba(240,237,230,0.18); }
+
+/* Note block */
+.cel-note {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+  color: rgba(240,237,230,0.3);
+  white-space: nowrap;
+}
+.cel-note-line {
+  height: 1px;
+  background: rgba(240,237,230,0.12);
+  width: 160px;
+}
+.cel-note-dash { background: none; border-top: 1px dashed rgba(240,237,230,0.15); }
+.cel-note-dim { font-size: 10px; color: rgba(240,237,230,0.18); }
+
+/* Glyphs & labels */
+.cel-glyph     { font-size: 40px; color: rgba(240,237,230,0.2); line-height: 1; }
+.cel-shout     { font-size: 15px; font-weight: bold; color: rgba(240,237,230,0.35); letter-spacing: 0.05em; }
+.cel-label-big { font-size: 18px; font-weight: bold; color: rgba(240,237,230,0.2); letter-spacing: 0.12em; text-transform: uppercase; }
+.cel-label-mono{ font-size: 10px; color: rgba(240,237,230,0.2); letter-spacing: 0.04em; }
+.cel-dots      { font-size: 14px; color: rgba(240,237,230,0.18); letter-spacing: 6px; }
+.cel-arrow     { font-size: 14px; color: rgba(240,237,230,0.14); letter-spacing: 4px; }
+
 .chaos-text {
   position: relative;
   z-index: 1;

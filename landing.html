@@ -100,163 +100,117 @@
 
 <!-- ═════ Chaos / Pain ═════ -->
 <section class="chaos-section">
-  <!-- Хаотичные иллюстрации вокруг текста -->
-  <svg class="chaos-svg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
 
-    <!-- Абстрактные фоновые линии — тонкие, по всему полю -->
-    <g class="chaos-g" data-delay="0" opacity="1">
-      <path d="M 0 320 Q 180 280 360 340 Q 540 400 720 350 Q 900 300 1080 370 Q 1260 440 1440 380" stroke="rgba(240,237,230,0.06)" stroke-width="1" fill="none"/>
-      <path d="M 0 560 Q 200 520 400 580 Q 600 640 800 590 Q 1000 540 1200 600 Q 1350 645 1440 620" stroke="rgba(240,237,230,0.05)" stroke-width="1" fill="none"/>
-      <path d="M 120 0 Q 160 200 100 400 Q 40 600 130 900" stroke="rgba(240,237,230,0.04)" stroke-width="1" fill="none"/>
-      <path d="M 1320 0 Q 1280 250 1340 500 Q 1400 750 1310 900" stroke="rgba(240,237,230,0.04)" stroke-width="1" fill="none"/>
-    </g>
+  <!-- Хаотичные элементы — position absolute, разбросаны по всему блоку -->
+  <div class="chaos-field" aria-hidden="true">
 
-    <!-- Левый верх: список задач в хаосе -->
-    <g class="chaos-g chaos-drift" data-delay="0" style="--dx:5px;--dy:-4px;--dr:-1.5deg;--dur:6.3s" transform="rotate(-6, 140, 160)">
-      <!-- чекбокс 1 — выполнен (зачёркнут) -->
-      <rect x="50" y="80" width="11" height="11" rx="2" stroke="rgba(240,237,230,0.35)" stroke-width="1.2" fill="none"/>
-      <line x1="52" y1="85" x2="59" y2="85" stroke="rgba(240,237,230,0.35)" stroke-width="1.2" stroke-linecap="round"/>
-      <text x="70" y="91" font-family="monospace" font-size="11" fill="rgba(240,237,230,0.25)" text-decoration="line-through">созвон с CEO</text>
-      <line x1="68" y1="91" x2="148" y2="91" stroke="rgba(240,237,230,0.18)" stroke-width="0.8"/>
-      <!-- чекбокс 2 -->
-      <rect x="50" y="106" width="11" height="11" rx="2" stroke="rgba(240,237,230,0.4)" stroke-width="1.2" fill="none"/>
-      <text x="70" y="117" font-family="monospace" font-size="11" fill="rgba(240,237,230,0.35)">написать инвестору</text>
-      <!-- чекбокс 3 -->
-      <rect x="50" y="132" width="11" height="11" rx="2" stroke="rgba(240,237,230,0.3)" stroke-width="1.2" fill="none"/>
-      <text x="70" y="143" font-family="monospace" font-size="11" fill="rgba(240,237,230,0.25)">подготовить деки</text>
-      <!-- чекбокс 4 — подчёркнут как срочный -->
-      <rect x="50" y="158" width="11" height="11" rx="2" stroke="rgba(240,237,230,0.5)" stroke-width="1.5" fill="none"/>
-      <text x="70" y="169" font-family="monospace" font-size="11" fill="rgba(240,237,230,0.45)">встреча в 14:00 !!!</text>
-      <!-- кривая стрелка вниз-вправо -->
-      <path d="M 155 155 Q 175 175 160 200" stroke="rgba(240,237,230,0.2)" stroke-width="1" fill="none" stroke-linecap="round" stroke-dasharray="3 3"/>
-    </g>
+    <!-- 1. Список задач — левый верх, сильный наклон -->
+    <div class="chaos-el" data-delay="0" style="top:5%;left:2%;transform:rotate(-11deg);--dx:4px;--dy:-3px;--dr:-2deg;--dur:6.4s">
+      <div class="cel-tasklist">
+        <div class="cel-task cel-done">созвон с CEO</div>
+        <div class="cel-task">написать инвестору</div>
+        <div class="cel-task">подготовить деки</div>
+        <div class="cel-task cel-urgent">встреча в 14:00 !!!</div>
+      </div>
+    </div>
 
-    <!-- Левый низ: разбросанные заметки -->
-    <g class="chaos-g chaos-drift" data-delay="120" style="--dx:-4px;--dy:5px;--dr:2deg;--dur:7.5s" transform="rotate(4, 130, 730)">
-      <text x="40" y="680" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.3)">важно!!!</text>
-      <text x="55" y="710" font-family="monospace" font-size="11" fill="rgba(240,237,230,0.22)">идея для питча</text>
-      <line x1="53" y1="714" x2="168" y2="714" stroke="rgba(240,237,230,0.12)" stroke-width="0.8"/>
-      <text x="42" y="738" font-family="monospace" font-size="11" fill="rgba(240,237,230,0.18)">не забыть про…</text>
-      <!-- три горизонтальных линии как незаписанные мысли -->
-      <line x1="40" y1="760" x2="190" y2="760" stroke="rgba(240,237,230,0.1)" stroke-width="1" stroke-linecap="round"/>
-      <line x1="40" y1="774" x2="150" y2="774" stroke="rgba(240,237,230,0.08)" stroke-width="1" stroke-linecap="round"/>
-      <line x1="40" y1="788" x2="170" y2="788" stroke="rgba(240,237,230,0.06)" stroke-width="1" stroke-linecap="round"/>
-      <!-- спираль — мысль которая закручивается -->
-      <path d="M 80 830 Q 95 815 110 830 Q 125 845 110 860 Q 90 875 70 855 Q 50 835 75 815" stroke="rgba(240,237,230,0.2)" stroke-width="1" fill="none" stroke-linecap="round"/>
-    </g>
+    <!-- 2. Плашка Notion — правый верх, слабый наклон -->
+    <div class="chaos-el" data-delay="60" style="top:3%;right:4%;transform:rotate(7deg);--dx:-5px;--dy:-4px;--dr:2deg;--dur:5.2s">
+      <div class="cel-badge">
+        <span class="cel-badge-name">Notion</span>
+        <span class="cel-badge-sub">47 страниц</span>
+      </div>
+    </div>
 
-    <!-- Правый верх: три приложения хаотично -->
-    <g class="chaos-g chaos-drift" data-delay="80" style="--dx:-6px;--dy:-3px;--dr:-2deg;--dur:5.1s" transform="rotate(5, 1280, 140)">
-      <!-- плашка 1 -->
-      <rect x="1130" y="60" width="100" height="36" rx="6" stroke="rgba(240,237,230,0.25)" stroke-width="1" fill="none"/>
-      <text x="1145" y="78" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.3)">Notion</text>
-      <text x="1145" y="90" font-family="monospace" font-size="9" fill="rgba(240,237,230,0.18)">47 страниц</text>
-      <!-- плашка 2 — повёрнута -->
-      <g transform="rotate(-8, 1300, 130)">
-        <rect x="1240" y="90" width="110" height="36" rx="6" stroke="rgba(240,237,230,0.2)" stroke-width="1" fill="none"/>
-        <text x="1255" y="108" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.25)">ChatGPT</text>
-        <text x="1255" y="120" font-family="monospace" font-size="9" fill="rgba(240,237,230,0.15)">вчерашний чат</text>
-      </g>
-      <!-- плашка 3 -->
-      <g transform="rotate(6, 1200, 190)">
-        <rect x="1150" y="155" width="100" height="36" rx="6" stroke="rgba(240,237,230,0.18)" stroke-width="1" fill="none"/>
-        <text x="1165" y="173" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.22)">Todoist</text>
-        <text x="1165" y="185" font-family="monospace" font-size="9" fill="rgba(240,237,230,0.13)">83 задачи</text>
-      </g>
-      <!-- стрелки между плашками — хаос переключений -->
-      <path d="M 1230 80 Q 1250 95 1242 108" stroke="rgba(240,237,230,0.15)" stroke-width="1" fill="none" stroke-linecap="round" marker-end="url(#arr2)"/>
-      <path d="M 1242 144 Q 1230 150 1220 168" stroke="rgba(240,237,230,0.12)" stroke-width="1" fill="none" stroke-linecap="round"/>
-    </g>
+    <!-- 3. "важно!!!" — левый верх ближе к центру, крупно -->
+    <div class="chaos-el" data-delay="30" style="top:8%;left:22%;transform:rotate(-6deg);--dx:3px;--dy:-5px;--dr:-3deg;--dur:7.1s">
+      <span class="cel-shout">важно!!!</span>
+    </div>
 
-    <!-- Правый низ: разорванные связи / потерянный контекст -->
-    <g class="chaos-g chaos-drift" data-delay="200" style="--dx:4px;--dy:6px;--dr:1.5deg;--dur:6.9s" transform="rotate(-3, 1320, 750)">
-      <text x="1240" y="680" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.28)">контекст потерян</text>
-      <!-- пунктирная линия — обрыв -->
-      <line x1="1240" y1="692" x2="1380" y2="692" stroke="rgba(240,237,230,0.15)" stroke-width="1" stroke-dasharray="4 4" stroke-linecap="round"/>
-      <!-- вопросительный знак -->
-      <text x="1390" y="696" font-family="monospace" font-size="13" fill="rgba(240,237,230,0.25)">?</text>
-      <!-- незавершённые строки как потерянные мысли -->
-      <text x="1240" y="720" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.2)">где был тот файл…</text>
-      <text x="1240" y="742" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.15)">кто должен был…</text>
-      <text x="1240" y="764" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.1)">когда мы решили…</text>
-      <!-- три точки — недосказанность -->
-      <circle cx="1248" cy="785" r="2" fill="rgba(240,237,230,0.15)"/>
-      <circle cx="1258" cy="785" r="2" fill="rgba(240,237,230,0.1)"/>
-      <circle cx="1268" cy="785" r="2" fill="rgba(240,237,230,0.07)"/>
-    </g>
+    <!-- 4. Плашка ChatGPT — правый верх, сильный наклон -->
+    <div class="chaos-el" data-delay="90" style="top:11%;right:18%;transform:rotate(-9deg);--dx:-4px;--dy:3px;--dr:-2deg;--dur:5.8s">
+      <div class="cel-badge">
+        <span class="cel-badge-name">ChatGPT</span>
+        <span class="cel-badge-sub">миллион чатов</span>
+      </div>
+    </div>
 
-      <!-- Центр верх: хаотичная стрелка туда-сюда -->
-    <g class="chaos-g chaos-drift" data-delay="160" style="--dx:4px;--dy:-6px;--dr:1.5deg;--dur:5.8s">
-      <path d="M 580 60 Q 650 30 720 60 Q 790 90 860 55" stroke="rgba(240,237,230,0.1)" stroke-width="1" fill="none" stroke-linecap="round"/>
-      <path d="M 855 50 L 863 58 L 852 62" stroke="rgba(240,237,230,0.1)" stroke-width="1" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-    </g>
+    <!-- 5. Вопрос — правый верх угол, очень крупно -->
+    <div class="chaos-el" data-delay="110" style="top:1%;right:1%;transform:rotate(4deg);--dx:-3px;--dy:-6px;--dr:4deg;--dur:4.9s">
+      <span class="cel-glyph">?</span>
+    </div>
 
-    <!-- Центр низ: время утекает -->
-    <g class="chaos-g chaos-drift" data-delay="240" style="--dx:-5px;--dy:4px;--dr:-1deg;--dur:6.5s">
-      <text x="640" y="840" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.2)" text-anchor="middle">09:00 → 14:00 → 18:00 → ...</text>
-      <line x1="480" y1="850" x2="960" y2="850" stroke="rgba(240,237,230,0.07)" stroke-width="1" stroke-linecap="round"/>
-    </g>
+    <!-- 6. Плашка Todoist — справа сверху чуть ниже, наезжает на ChatGPT -->
+    <div class="chaos-el" data-delay="140" style="top:22%;right:8%;transform:rotate(12deg);--dx:-6px;--dy:4px;--dr:3deg;--dur:6.7s">
+      <div class="cel-badge">
+        <span class="cel-badge-name">Todoist</span>
+        <span class="cel-badge-sub">83 задачи</span>
+      </div>
+    </div>
 
-    <!-- Верх слева от центра: "ChatGPT — миллион чатов" -->
-    <g class="chaos-g chaos-drift" data-delay="60" style="--dx:-6px;--dy:5px;--dr:-2deg;--dur:7.2s" transform="rotate(-5, 380, 55)">
-      <rect x="280" y="30" width="150" height="34" rx="6" stroke="rgba(240,237,230,0.2)" stroke-width="1" fill="none"/>
-      <text x="296" y="48" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.28)">ChatGPT</text>
-      <text x="296" y="59" font-family="monospace" font-size="9" fill="rgba(240,237,230,0.16)">миллион чатов</text>
-    </g>
+    <!-- 7. "идея для питча" — левый бок, середина -->
+    <div class="chaos-el" data-delay="170" style="top:38%;left:1%;transform:rotate(-4deg);--dx:5px;--dy:3px;--dr:-1.5deg;--dur:7.5s">
+      <div class="cel-note">
+        <div>идея для питча</div>
+        <div class="cel-note-line"></div>
+        <div class="cel-note-dim">не забыть про…</div>
+      </div>
+    </div>
 
-    <!-- Верх справа от центра: "Todoist 23 задачи" -->
-    <g class="chaos-g chaos-drift" data-delay="100" style="--dx:5px;--dy:-4px;--dr:2.5deg;--dur:4.9s" transform="rotate(4, 1020, 45)">
-      <rect x="940" y="22" width="130" height="34" rx="6" stroke="rgba(240,237,230,0.18)" stroke-width="1" fill="none"/>
-      <text x="956" y="40" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.24)">Todoist</text>
-      <text x="956" y="51" font-family="monospace" font-size="9" fill="rgba(240,237,230,0.14)">23 задачи</text>
-    </g>
+    <!-- 8. "контекст потерян" — правый бок середина, сильный наклон -->
+    <div class="chaos-el" data-delay="200" style="top:42%;right:2%;transform:rotate(-8deg);--dx:-4px;--dy:-3px;--dr:-2deg;--dur:5.6s">
+      <div class="cel-note">
+        <div>контекст потерян</div>
+        <div class="cel-note-line cel-note-dash"></div>
+        <div class="cel-note-dim">где был тот файл…</div>
+        <div class="cel-note-dim" style="opacity:0.5">кто должен был…</div>
+      </div>
+    </div>
 
-    <!-- Верхний левый угол: "важно!!!" крупно -->
-    <g class="chaos-g chaos-drift" data-delay="20" style="--dx:3px;--dy:-5px;--dr:-3deg;--dur:6.1s" transform="rotate(-8, 60, 28)">
-      <text x="20" y="35" font-family="monospace" font-size="14" fill="rgba(240,237,230,0.35)" font-weight="bold">важно!!!</text>
-      <path d="M 20 42 Q 55 52 85 38" stroke="rgba(240,237,230,0.15)" stroke-width="1" fill="none" stroke-linecap="round" stroke-dasharray="3 3"/>
-    </g>
+    <!-- 9. Восклицание — правый верх угол внутри -->
+    <div class="chaos-el" data-delay="50" style="top:2%;right:28%;transform:rotate(-15deg);--dx:3px;--dy:-4px;--dr:-4deg;--dur:8.0s">
+      <span class="cel-glyph" style="font-size:32px;opacity:0.12">!</span>
+    </div>
 
-    <!-- Верхний правый угол: знак вопроса -->
-    <g class="chaos-g chaos-drift" data-delay="140" style="--dx:-4px;--dy:6px;--dr:4deg;--dur:5.3s">
-      <text x="1380" y="50" font-family="monospace" font-size="28" fill="rgba(240,237,230,0.2)">?</text>
-      <text x="1370" y="80" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.15)">куда это всё?</text>
-    </g>
+    <!-- 10. "DEADLINE" — левый низ, крупно наклонено -->
+    <div class="chaos-el" data-delay="230" style="bottom:18%;left:3%;transform:rotate(8deg);--dx:4px;--dy:5px;--dr:3deg;--dur:6.2s">
+      <span class="cel-label-big">DEADLINE</span>
+    </div>
 
-    <!-- Левый центр: "идея для питча" -->
-    <g class="chaos-g chaos-drift" data-delay="180" style="--dx:6px;--dy:3px;--dr:-1.5deg;--dur:7.8s" transform="rotate(-4, 110, 440)">
-      <text x="30" y="420" font-family="monospace" font-size="11" fill="rgba(240,237,230,0.28)">идея для питча</text>
-      <line x1="28" y1="424" x2="185" y2="424" stroke="rgba(240,237,230,0.12)" stroke-width="0.8"/>
-      <text x="30" y="445" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.18)">не забыть про…</text>
-      <path d="M 55 455 Q 40 470 60 480" stroke="rgba(240,237,230,0.15)" stroke-width="1" fill="none" stroke-linecap="round"/>
-    </g>
+    <!-- 11. "???" — нижний левый угол -->
+    <div class="chaos-el" data-delay="260" style="bottom:4%;left:6%;transform:rotate(-13deg);--dx:3px;--dy:-4px;--dr:-2.5deg;--dur:5.5s">
+      <span class="cel-shout" style="opacity:0.2;font-size:22px">???</span>
+    </div>
 
-    <!-- Правый центр: "где был тот файл..." -->
-    <g class="chaos-g chaos-drift" data-delay="220" style="--dx:-5px;--dy:-3px;--dr:2deg;--dur:6.7s" transform="rotate(3, 1380, 460)">
-      <text x="1260" y="440" font-family="monospace" font-size="11" fill="rgba(240,237,230,0.25)">где был тот файл…</text>
-      <text x="1260" y="462" font-family="monospace" font-size="10" fill="rgba(240,237,230,0.18)">кто должен был…</text>
-      <path d="M 1260 472 Q 1300 482 1340 470" stroke="rgba(240,237,230,0.12)" stroke-width="1" fill="none" stroke-linecap="round" stroke-dasharray="4 3"/>
-    </g>
+    <!-- 12. Плашка Telegram — нижний правый, сильный наклон -->
+    <div class="chaos-el" data-delay="280" style="bottom:8%;right:5%;transform:rotate(-10deg);--dx:-5px;--dy:4px;--dr:-3deg;--dur:7.3s">
+      <div class="cel-badge">
+        <span class="cel-badge-name">Telegram</span>
+        <span class="cel-badge-sub">99+ непрочитанных</span>
+      </div>
+    </div>
 
-    <!-- Нижний левый угол: закорючки + "???" -->
-    <g class="chaos-g chaos-drift" data-delay="260" style="--dx:4px;--dy:-4px;--dr:-2.5deg;--dur:5.6s" transform="rotate(6, 80, 870)">
-      <text x="20" y="855" font-family="monospace" font-size="20" fill="rgba(240,237,230,0.18)">???</text>
-      <path d="M 20 868 Q 60 858 95 872 Q 115 880 105 892" stroke="rgba(240,237,230,0.12)" stroke-width="1" fill="none" stroke-linecap="round"/>
-    </g>
+    <!-- 13. "09:00 → 18:00 → ..." — нижний центр-лево -->
+    <div class="chaos-el" data-delay="310" style="bottom:5%;left:28%;transform:rotate(3deg);--dx:-3px;--dy:4px;--dr:1deg;--dur:6.8s">
+      <span class="cel-label-mono">09:00 → 14:00 → 18:00 → ...</span>
+    </div>
 
-    <!-- Нижний правый угол: "контекст потерян" крупнее -->
-    <g class="chaos-g chaos-drift" data-delay="300" style="--dx:-3px;--dy:5px;--dr:3deg;--dur:4.4s" transform="rotate(-4, 1350, 865)">
-      <text x="1250" y="850" font-family="monospace" font-size="11" fill="rgba(240,237,230,0.28)">контекст потерян</text>
-      <line x1="1250" y1="857" x2="1420" y2="857" stroke="rgba(240,237,230,0.15)" stroke-width="1" stroke-dasharray="5 4"/>
-      <text x="1380" y="878" font-family="monospace" font-size="18" fill="rgba(240,237,230,0.2)">!</text>
-    </g>
+    <!-- 14. "куда это всё?" — верхний центр-право -->
+    <div class="chaos-el" data-delay="80" style="top:6%;left:55%;transform:rotate(5deg);--dx:-4px;--dy:-5px;--dr:2deg;--dur:5.1s">
+      <span class="cel-label-mono" style="opacity:0.2">куда это всё?</span>
+    </div>
 
-    <!-- Верх центра: восклицание -->
-    <g class="chaos-g chaos-drift" data-delay="40" style="--dx:-3px;--dy:-6px;--dr:-4deg;--dur:8.0s">
-      <text x="700" y="28" font-family="monospace" font-size="22" fill="rgba(240,237,230,0.12)">!</text>
-    </g>
+    <!-- 15. Три точки-недосказанность — нижний правый угол -->
+    <div class="chaos-el" data-delay="340" style="bottom:3%;right:12%;transform:rotate(-5deg);--dx:-3px;--dy:3px;--dr:-2deg;--dur:4.6s">
+      <span class="cel-dots">• • •</span>
+    </div>
 
-  </svg>
+    <!-- 16. Стрелка хаоса — верх посередине -->
+    <div class="chaos-el" data-delay="120" style="top:3%;left:38%;transform:rotate(-3deg);--dx:4px;--dy:-3px;--dr:1deg;--dur:7.8s">
+      <span class="cel-arrow">↗ ↙ ↗</span>
+    </div>
+
+  </div>
 
   <!-- Центральный текст -->
   <div class="chaos-text">
@@ -508,6 +462,23 @@ document.querySelectorAll('.reveal').forEach(el => io.observe(el));
   });
 })();
 
+/* Chaos field elements (new HTML-based) */
+(function () {
+  const chaosSection = document.querySelector('.chaos-section');
+  if (!chaosSection) return;
+  const els = chaosSection.querySelectorAll('.chaos-el');
+  const io = new IntersectionObserver((entries) => {
+    if (!entries[0].isIntersecting) return;
+    els.forEach(el => {
+      const d = parseInt(el.dataset.delay || '0', 10);
+      el.style.setProperty('--delay', String(d));
+      setTimeout(() => el.classList.add('visible'), d);
+    });
+    io.disconnect();
+  }, { threshold: 0.1 });
+  io.observe(chaosSection);
+})();
+
 /* Solution section reveal */
 (function () {
   const phoneCol = document.querySelector('.solution-phone-col');
@@ -535,6 +506,7 @@ if (chaosSection) {
         const d = parseInt(el.dataset.delay || '0', 10);
         el.style.setProperty('--delay', String(d));
         setTimeout(() => el.classList.add('visible'), d);
+        /* also handle .chaos-el */
       });
       chaosIo.disconnect();
     }
