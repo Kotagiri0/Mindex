@@ -492,6 +492,26 @@ async function processUpdate(update: any, token: string, db: Pool, groq: Groq): 
   await tgApi(token, 'sendMessage', { chat_id: chatId, text: aiResponse });
 }
 
+// ─── Token validation ─────────────────────────────────────────────────────────
+
+async function validateToken(token: string): Promise<boolean> {
+  try {
+    const res = await axios.get(`https://api.telegram.org/bot${token}/getMe`, { timeout: 10_000 });
+    const bot = res.data?.result;
+    console.log(`[Bot] Токен действителен. Бот: @${bot?.username} (id=${bot?.id})`);
+    return true;
+  } catch (e: any) {
+    const status = e?.response?.status;
+    if (status === 401 || status === 404) {
+      console.error('[Bot] Неверный токен TELEGRAM_BOT_TOKEN — проверь значение в .env и перезапусти сервер.');
+      return false;
+    }
+    // Сетевая ошибка — считаем токен действительным, попробуем в polling/webhook
+    console.warn('[Bot] Не удалось проверить токен (сетевая ошибка), продолжаем запуск:', e?.message);
+    return true;
+  }
+}
+
 // ─── Настройка вебхука ────────────────────────────────────────────────────────
 
 async function setupWebhook(token: string, appUrl: string): Promise<void> {
@@ -520,8 +540,10 @@ async function startLongPolling(token: string, db: Pool, groq: Groq): Promise<vo
   }
 
   let offset = 0;
+  let running = true;
 
   const poll = async (): Promise<void> => {
+    if (!running) return;
     try {
       const res = await axios.get(`https://api.telegram.org/bot${token}/getUpdates`, {
         params: { offset, timeout: 30, allowed_updates: ['message', 'callback_query'] },
@@ -535,6 +557,12 @@ async function startLongPolling(token: string, db: Pool, groq: Groq): Promise<vo
         );
       }
     } catch (e: any) {
+      const status = e?.response?.status;
+      if (status === 401 || status === 404) {
+        console.error('[Bot] Polling остановлен: неверный токен TELEGRAM_BOT_TOKEN.');
+        running = false;
+        return;
+      }
       if (e?.code !== 'ECONNABORTED') {
         console.error('[Bot] Ошибка polling:', e?.message || e);
         await new Promise(r => setTimeout(r, POLLING_ERROR_RETRY_DELAY_MS));
@@ -543,6 +571,7 @@ async function startLongPolling(token: string, db: Pool, groq: Groq): Promise<vo
     setImmediate(poll);
   };
 
+  console.log('[Bot] Long-polling запущен, ожидаю сообщений...');
   poll();
 }
 
@@ -591,6 +620,13 @@ export async function startBot(db: Pool): Promise<void> {
   if (!groqKey) return;
 
   const groq = new Groq({ apiKey: groqKey });
+
+  // Проверяем токен перед запуском
+  const tokenOk = await validateToken(token);
+  if (!tokenOk) {
+    console.error('[Bot] Бот не запущен из-за ошибки токена.');
+    return;
+  }
 
   // Определяем URL приложения (Railway или кастомный)
   const appUrl =
