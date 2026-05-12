@@ -887,6 +887,7 @@ section { position: relative; padding: var(--section) 0; }
   padding: 100px 0;
   text-align: center;
 }
+.final-eyebrow { font-family: var(--ff-mu); font-size: clamp(18px, 2vw, 24px); color: rgba(240,237,230,0.45); margin-bottom: 16px; }
 .final-title {
   font-family: var(--font-display);
   font-weight: 400;
