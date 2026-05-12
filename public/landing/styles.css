@@ -624,6 +624,7 @@ section { position: relative; padding: var(--section) 0; }
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 var(--pad);
+  align-items: start;
 }
 
 /* Left column */
@@ -685,17 +686,24 @@ section { position: relative; padding: var(--section) 0; }
   font-weight: 400;
   font-size: 15px;
   line-height: 1.6;
-  color: rgba(240,237,230,0.2);
+  color: rgba(240,237,230,0.5);
   white-space: pre-line;
-  max-height: 0;
-  overflow: hidden;
+  display: grid;
+  grid-template-rows: 0fr;
   opacity: 0;
-  transition: max-height 600ms cubic-bezier(0.16, 1, 0.3, 1), opacity 600ms cubic-bezier(0.16, 1, 0.3, 1), color 600ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: grid-template-rows 500ms cubic-bezier(0.16, 1, 0.3, 1), opacity 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.feat-desc-inner {
+  overflow: hidden;
+  padding-top: 0;
+  transition: padding-top 500ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .feat-item.active .feat-desc {
-  max-height: 200px;
+  grid-template-rows: 1fr;
   opacity: 1;
-  color: rgba(240,237,230,0.5);
+}
+.feat-item.active .feat-desc-inner {
+  padding-top: 10px;
 }
 
 /* Right column — sticky phone */
