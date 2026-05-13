@@ -45,7 +45,13 @@
       "PowerShell(Copy-Item \"d:\\\\Mindex-1\\\\landing_example\\\\experience.js\" \"d:\\\\Mindex-1\\\\public\\\\landing\\\\experience.js\")",
       "PowerShell(Get-ChildItem \"d:\\\\Mindex-1\\\\public\" -Recurse -Name | Where-Object { $_ -match '\\\\.\\(svg|png|ico\\)$' })",
       "Bash(Select-String \"DONE|error|Built\")",
-      "Bash(Select-Object -Last 5)"
+      "Bash(Select-Object -Last 5)",
+      "PowerShell(New-Item -ItemType Directory -Path \"d:\\\\Mindex-1\\\\public\\\\landing\\\\screenshots\" -Force)",
+      "PowerShell(Rename-Item -Path \"d:\\\\Mindex-1\\\\public\\\\landing\\\\screenshots\\\\���� �ਭ.png\" -NewName \"start-screen.png\")",
+      "PowerShell(Rename-Item \"d:\\\\Mindex-1\\\\public\\\\landing\\\\screenshots\\\\case 1.png\" \"screen1.png\")",
+      "PowerShell(Rename-Item \"d:\\\\Mindex-1\\\\public\\\\landing\\\\screenshots\\\\case 2.png\" \"screen2.png\")",
+      "PowerShell(Rename-Item \"d:\\\\Mindex-1\\\\public\\\\landing\\\\screenshots\\\\case 3.png\" \"screen3.png\")",
+      "PowerShell(Rename-Item \"d:\\\\Mindex-1\\\\public\\\\landing\\\\screenshots\\\\case 4.png\" \"screen4.png\")"
     ]
   }
 }

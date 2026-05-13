@@ -2224,7 +2224,7 @@ export default function DesktopApp({
             <LogoIcon size={40} />
             <div style={{ marginTop: 12, textAlign: 'center' }}>
               <div style={{ fontFamily: M, fontSize: 22, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>
-                Со интернетом что-то не то...
+                С интернетом что-то не то...
               </div>
               <div style={{ fontFamily: M, fontSize: 15, color: 'var(--text-30)', lineHeight: 1.5 }}>
                 Попробуй немного подождать и обновить страницу
