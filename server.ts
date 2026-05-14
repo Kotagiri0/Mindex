@@ -1,7 +1,6 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import Groq from "groq-sdk";
 import dotenv from "dotenv";
 import cors from "cors";
 import crypto from "crypto";
@@ -149,7 +148,6 @@ app.use("/api/*", (req, res, next) => {
   next();
 });
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
 
 // Multer configuration for voice uploads
@@ -929,9 +927,9 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
       return res.status(400).json({ error: "Аудиофайл пуст (0 байт)." });
     }
 
-    const apiKey = process.env.GROQ_API_KEY;
+    const apiKey = process.env.ROUTERAI_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: "GROQ_API_KEY не найден." });
+      return res.status(500).json({ error: "ROUTERAI_API_KEY не найден." });
     }
 
     const inputExtension = resolveAudioExtension(req.file.mimetype, req.file.originalname);
@@ -956,15 +954,36 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
     const wavBuffer = fs.readFileSync(tmpOut);
     console.log('[VOICE] Converted to wav:', wavBuffer.length, 'bytes');
 
-    const groq = new Groq({ apiKey });
-    const transcription = await groq.audio.transcriptions.create({
-      file: new File([wavBuffer], "audio.wav", { type: "audio/wav" }),
-      model: "whisper-large-v3",
-      language: "ru",
+    const base64Audio = wavBuffer.toString('base64');
+
+    const aiRes = await fetch('https://routerai.ru/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'openai/gpt-audio-mini',
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Расшифруй этот аудиофайл дословно. Верни только текст расшифровки, без комментариев и пояснений.' },
+            { type: 'input_audio', input_audio: { data: base64Audio, format: 'wav' } },
+          ],
+        }],
+        max_tokens: 1024,
+        thinking: false,
+      }),
     });
 
-    console.log('[VOICE] Transcription success:', transcription.text?.slice(0, 100));
-    return res.status(200).json({ text: transcription.text });
+    if (!aiRes.ok) {
+      const err = await aiRes.text();
+      console.error('[VOICE] RouterAI error:', err);
+      return res.status(500).json({ error: 'Ошибка транскрибации.' });
+    }
+
+    const aiData = await aiRes.json() as any;
+    const text = aiData.choices?.[0]?.message?.content?.trim() ?? '';
+
+    console.log('[VOICE] Transcription success:', text.slice(0, 100));
+    return res.status(200).json({ text });
 
   } catch (error: any) {
     console.error("[VOICE] Transcription error:", error?.message || error);
