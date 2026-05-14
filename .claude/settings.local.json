@@ -33,7 +33,25 @@
       "Bash(curl -s -H \"X-Figma-Token: figd_p5doxUhdRuKVKjsYfDe_VwCdJ2XRBrka8RdqrJH1\" \"https://api.figma.com/v1/files/rTEFs00Wt76PnvoxFj1WuY/nodes?ids=361-1462\")",
       "Bash(python -m json.tool)",
       "Bash(git fetch *)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(git cherry-pick *)",
+      "Bash(Get-ChildItem -Path \"d:\\\\Mindex-1\" -Force)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(Format-Table -AutoSize)",
+      "PowerShell(Get-ChildItem -Path \"d:\\\\Mindex-1\" -Force | Select-Object Name, @{N=\"Type\";E={if\\($_.PSIsContainer\\){\"DIR\"}else{\"FILE\"}}} | Format-Table -AutoSize)",
+      "PowerShell(Get-ChildItem -Path \"d:\\\\Mindex-1\\\\src\" -Recurse -Depth 2 | Select-Object FullName, @{N=\"Type\";E={if\\($_.PSIsContainer\\){\"DIR\"}else{\"FILE\"}}} | Format-Table -AutoSize)",
+      "PowerShell(New-Item -ItemType Directory -Path \"d:\\\\Mindex-1\\\\public\\\\landing\\\\assets\\\\fonts\" -Force)",
+      "PowerShell(Copy-Item \"d:\\\\Mindex-1\\\\landing_example\\\\experience.css\" \"d:\\\\Mindex-1\\\\public\\\\landing\\\\experience.css\")",
+      "PowerShell(Copy-Item \"d:\\\\Mindex-1\\\\landing_example\\\\experience.js\" \"d:\\\\Mindex-1\\\\public\\\\landing\\\\experience.js\")",
+      "PowerShell(Get-ChildItem \"d:\\\\Mindex-1\\\\public\" -Recurse -Name | Where-Object { $_ -match '\\\\.\\(svg|png|ico\\)$' })",
+      "Bash(Select-String \"DONE|error|Built\")",
+      "Bash(Select-Object -Last 5)",
+      "PowerShell(New-Item -ItemType Directory -Path \"d:\\\\Mindex-1\\\\public\\\\landing\\\\screenshots\" -Force)",
+      "PowerShell(Rename-Item -Path \"d:\\\\Mindex-1\\\\public\\\\landing\\\\screenshots\\\\���� �ਭ.png\" -NewName \"start-screen.png\")",
+      "PowerShell(Rename-Item \"d:\\\\Mindex-1\\\\public\\\\landing\\\\screenshots\\\\case 1.png\" \"screen1.png\")",
+      "PowerShell(Rename-Item \"d:\\\\Mindex-1\\\\public\\\\landing\\\\screenshots\\\\case 2.png\" \"screen2.png\")",
+      "PowerShell(Rename-Item \"d:\\\\Mindex-1\\\\public\\\\landing\\\\screenshots\\\\case 3.png\" \"screen3.png\")",
+      "PowerShell(Rename-Item \"d:\\\\Mindex-1\\\\public\\\\landing\\\\screenshots\\\\case 4.png\" \"screen4.png\")"
     ]
   }
 }
