@@ -51,10 +51,13 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
     t.title.toLowerCase().includes(search.toLowerCase()) ||
     t.preview.toLowerCase().includes(search.toLowerCase());
 
+  const isNoteThread = (t: Thread) =>
+    t.source === 'заметка' || (Boolean(t.summary?.trim()) && t.is_meaningful !== false);
+
   const filtered = threads.filter(t => {
     if (t.source === 'skill') return false;
     if (activeTab === 'thoughts') return t.source !== 'заметка' && searchMatch(t);
-    return t.source === 'заметка' && searchMatch(t); // notes tab: only manually archived notes
+    return isNoteThread(t) && searchMatch(t);
   });
 
   const handleRename = async (id: string) => {

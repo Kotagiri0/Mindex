@@ -285,7 +285,8 @@ export default function App() {
               setTasks={updateTasks}
               onClose={() => {
                 const th = threads.find(t => t.id === curTh);
-                if (th && th.messages.filter(m => m.role === 'user').length === 0) {
+                const hasLinkedTask = tasks.some(t => t.threadId === curTh);
+                if (th && !hasLinkedTask && th.messages.filter(m => m.role === 'user').length === 0) {
                   setThreads(prev => prev.filter(t => t.id !== curTh));
                   db.deleteThread(curTh!);
                 }

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mindex-cache-v1';
+const CACHE_NAME = 'mindex-cache-v2';
 const URLS_TO_CACHE = [
   '/',
   '/index.html',
@@ -48,6 +48,34 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  const isNavigation = event.request.mode === 'navigate';
+
+  if (isNavigation) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200 && (response.type === 'basic' || response.type === 'cors')) {
+            const responseToCache = response.clone();
+            caches
+              .open(CACHE_NAME)
+              .then((cache) => cache.put(event.request, responseToCache))
+              .catch((error) => console.warn('SW cache put failed:', error));
+          }
+          return response;
+        })
+        .catch(async () => {
+          const cached = await caches.match(event.request);
+          if (cached) return cached;
+          const offline = await caches.match('/offline.html');
+          if (offline) return offline;
+          const root = await caches.match('/');
+          if (root) return root;
+          return new Response('Offline', { status: 503, statusText: 'Offline' });
+        }),
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then(
       (cachedResponse) =>
@@ -64,9 +92,6 @@ self.addEventListener('fetch', (event) => {
             return response;
           })
           .catch(async () => {
-            if (event.request.mode === 'navigate') {
-              return (await caches.match('/offline.html')) || (await caches.match('/'));
-            }
             return new Response('Offline', { status: 503, statusText: 'Offline' });
           }),
     ),
