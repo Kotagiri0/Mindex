@@ -101,26 +101,51 @@ export default function App() {
 
     loadData();
 
-    const refreshTasks = async () => {
-      if (cancelled) return;
-      const fresh = await db.refreshTasks();
-      if (!cancelled) setTasks(fresh);
+    let refreshInFlight = false;
+    let intervalId: number | null = null;
+
+    const refreshTasks = async (source: 'interval' | 'visibility') => {
+      if (cancelled || refreshInFlight) return;
+      if (source === 'interval' && document.visibilityState !== 'visible') return;
+      refreshInFlight = true;
+      try {
+        const fresh = await db.refreshTasks();
+        if (!cancelled) setTasks(fresh);
+      } catch (error) {
+        console.warn('Failed to refresh tasks:', error);
+      } finally {
+        refreshInFlight = false;
+      }
     };
 
-    const interval = window.setInterval(() => {
-      refreshTasks().catch(() => {});
-    }, 60_000);
+    const startInterval = () => {
+      if (intervalId !== null) return;
+      intervalId = window.setInterval(() => {
+        refreshTasks('interval');
+      }, 60_000);
+    };
+
+    const stopInterval = () => {
+      if (intervalId === null) return;
+      window.clearInterval(intervalId);
+      intervalId = null;
+    };
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState !== 'visible') return;
-      refreshTasks().catch(() => {});
+      if (document.visibilityState === 'visible') {
+        startInterval();
+        refreshTasks('visibility');
+        return;
+      }
+      stopInterval();
     };
 
+    handleVisibilityChange();
     window.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
+      stopInterval();
       window.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [currentUser]);
