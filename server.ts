@@ -927,9 +927,9 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
       return res.status(400).json({ error: "Аудиофайл пуст (0 байт)." });
     }
 
-    const apiKey = process.env.ROUTERAI_API_KEY;
+    const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: "ROUTERAI_API_KEY не найден." });
+      return res.status(500).json({ error: "OPENROUTER_API_KEY не найден." });
     }
 
     const inputExtension = resolveAudioExtension(req.file.mimetype, req.file.originalname);
@@ -954,33 +954,25 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
     const wavBuffer = fs.readFileSync(tmpOut);
     console.log('[VOICE] Converted to wav:', wavBuffer.length, 'bytes');
 
-    const base64Audio = wavBuffer.toString('base64');
+    const formData = new FormData();
+    formData.append('file', new Blob([wavBuffer], { type: 'audio/wav' }), 'audio.wav');
+    formData.append('model', 'openai/whisper-large-v3-turbo');
+    formData.append('language', 'ru');
 
-    const aiRes = await fetch('https://routerai.ru/api/v1/chat/completions', {
+    const aiRes = await fetch('https://openrouter.ai/api/v1/audio/transcriptions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'openai/gpt-audio-mini',
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text', text: 'Расшифруй этот аудиофайл дословно. Верни только текст расшифровки, без комментариев и пояснений.' },
-            { type: 'input_audio', input_audio: { data: base64Audio, format: 'wav' } },
-          ],
-        }],
-        max_tokens: 1024,
-        thinking: false,
-      }),
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+      body: formData,
     });
 
     if (!aiRes.ok) {
       const err = await aiRes.text();
-      console.error('[VOICE] RouterAI error:', err);
+      console.error('[VOICE] OpenRouter error:', err);
       return res.status(500).json({ error: 'Ошибка транскрибации.' });
     }
 
     const aiData = await aiRes.json() as any;
-    const text = aiData.choices?.[0]?.message?.content?.trim() ?? '';
+    const text = (aiData.text ?? '').trim();
 
     console.log('[VOICE] Transcription success:', text.slice(0, 100));
     return res.status(200).json({ text });
