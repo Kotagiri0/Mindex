@@ -8,8 +8,6 @@
 
 import type { Express } from 'express';
 import type { Pool } from 'pg';
-import axios from 'axios';
-import Groq from 'groq-sdk';
 import crypto from 'crypto';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -50,16 +48,38 @@ const POLLING_ERROR_RETRY_DELAY_MS = 5_000;
 // ─── System prompt ────────────────────────────────────────────────────────────
 
 function getSystemInstruction(): string {
-  return `Ты — ассистент по имени "Мысль". Помогай пользователю организовывать дела, превращая хаос мыслей в чёткие планы.
-Отвечай на русском языке, лаконично и по делу. Ты работаешь в Telegram-боте — не используй Markdown-форматирование.
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('ru-RU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Europe/Moscow' });
+  const timeStr = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' });
 
-ПРАВИЛА ИНСТРУМЕНТОВ:
-1. Если пользователь хочет добавить что-то новое — используй add_task.
-2. Если спрашивает о задачах — используй get_tasks.
-3. Если просит изменить, перенести или отметить задачу — используй update_task.
-4. Если не знаешь ID задачи — сначала вызови get_tasks.
+  return `Ты — Мысль, личный ассистент по организации дел и мышлению.
 
-Сегодняшняя дата: ${new Date().toISOString().split('T')[0]}.`;
+Отвечай только на русском. Никогда не используй эмодзи, звёздочки, Markdown-форматирование. Только чистый текст.
+
+ХАРАКТЕР
+Говори как умный человек, а не как сервис. Коротко, прямо, без воды. Человечно — но без слащавости и дежурных фраз. Если можно ответить одним словом — ответь одним словом.
+
+Точки в конце: ставь точку только когда она реально нужна — в конце длинного абзаца или сложного предложения. Короткие ответы, реплики, перечисления, вопросы — без точки в конце. Чувствуй ритм текста
+
+Никогда не начинай ответ с "Конечно!", "Отлично!", "Понял!", "Вот:", "Хорошо!" и любых других вводных. Сразу к делу
+
+ГЛАВНЫЕ ПРАВИЛА
+— Меньше слов = лучше. Каждое слово должно нести смысл
+— Если чего-то не знаешь или не можешь — говори прямо. Не придумывай
+— Задавай уточняющие вопросы когда контекст неполный. Один вопрос за раз, не анкету
+— Учитывай всё что пользователь говорил раньше в диалоге
+— Если пришёл сырой brain dump — сначала структурируй, потом уточняй детали
+— Никогда не говори "у меня нет доступа к этой информации" про свои собственные возможности
+
+ИНСТРУМЕНТЫ
+— add_task: когда пользователь хочет добавить новую задачу
+— get_tasks: когда спрашивает о планах или задачах
+— update_task: когда нужно изменить, перенести или дополнить задачу. Если не знаешь ID — сначала get_tasks
+— delete_task: когда нужно удалить задачу
+— get_notes: когда пользователь спрашивает о заметках, просит найти что-то в заметках
+— create_note: когда пользователь просит сохранить что-то как заметку
+
+Текущие дата и время: ${dateStr}, ${timeStr} (Москва)`;
 }
 
 // ─── Tool definitions ─────────────────────────────────────────────────────────
@@ -125,6 +145,34 @@ const botTools: any[] = [
         required: ['id']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_notes',
+      description: 'Получить список заметок пользователя.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Поисковый запрос (необязательно). Если указан — фильтрует по заголовку или содержимому.' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_note',
+      description: 'Создать новую заметку.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Заголовок заметки.' },
+          content: { type: 'string', description: 'Содержимое заметки.' }
+        },
+        required: ['title', 'content']
+      }
+    }
   }
 ];
 
@@ -178,6 +226,28 @@ async function executeTool(name: string, args: any, db: Pool, userId: string): P
       );
       return { success: true };
     }
+    case 'get_notes': {
+      let query = `SELECT id, title, summary, created_at FROM user_threads WHERE user_id = $1 AND source = 'заметка' AND is_meaningful IS NOT FALSE`;
+      const params: any[] = [userId];
+      if (args.query) {
+        query += ` AND (title ILIKE $2 OR summary ILIKE $2)`;
+        params.push(`%${args.query}%`);
+      }
+      query += ` ORDER BY updated_at DESC LIMIT 10`;
+      const { rows } = await db.query(query, params);
+      return rows.map((r: any) => ({ id: r.id, title: r.title, content: r.summary || '' }));
+    }
+    case 'create_note': {
+      const id = crypto.randomUUID();
+      const title = String(args.title);
+      const content = String(args.content);
+      await db.query(
+        `INSERT INTO user_threads (id, user_id, title, preview, messages, created_at, updated_at, source, summary, is_meaningful)
+         VALUES ($1, $2, $3, $4, '[]'::jsonb, NOW(), NOW(), 'заметка', $5, true)`,
+        [id, userId, title, content.slice(0, 100), content]
+      );
+      return { success: true, id, title };
+    }
     default:
       return { error: 'Unknown tool' };
   }
@@ -223,12 +293,31 @@ function buildSafeHistory(msgs: StoredMessage[]): any[] {
   return safe;
 }
 
+async function callRouterAI(apiKey: string, body: object): Promise<any> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  try {
+    const response = await fetch('https://routerai.ru/api/v1/chat/completions', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify(body),
+    });
+    clearTimeout(timeoutId);
+    if (!response.ok) throw new Error(`RouterAI error: ${response.status}`);
+    return await response.json();
+  } catch (e) {
+    clearTimeout(timeoutId);
+    throw e;
+  }
+}
+
 async function processWithAI(
   userText: string,
   threadMessages: StoredMessage[],
   db: Pool,
   userId: string,
-  groq: Groq
+  apiKey: string
 ): Promise<{ aiResponse: string; newMessages: StoredMessage[] }> {
   const now = () => new Date().toISOString();
   const userMsg: StoredMessage = { role: 'user', content: userText, time: now() };
@@ -240,16 +329,17 @@ async function processWithAI(
   const newMessages: StoredMessage[] = [userMsg];
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
-    const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+    const data = await callRouterAI(apiKey, {
+      model: 'deepseek/deepseek-v4-flash',
       messages: [{ role: 'system', content: getSystemInstruction() }, ...loopMessages],
       tools: botTools,
       tool_choice: 'auto',
       temperature: 0.7,
-      max_tokens: 1024
+      max_tokens: 1024,
+      thinking: false,
     });
 
-    const msg = completion.choices[0].message;
+    const msg = data.choices[0].message;
 
     if (msg.tool_calls && msg.tool_calls.length > 0) {
       const assistantEntry: StoredMessage = {
@@ -335,21 +425,42 @@ async function saveBotThread(
   }
 }
 
+// ─── Получить web userId по telegram chatId ───────────────────────────────────
+
+async function getWebUserId(db: Pool, chatId: number): Promise<string | null> {
+  const { rows } = await db.query(
+    `SELECT user_id FROM user_profiles WHERE telegram_chat_id = $1 LIMIT 1`,
+    [chatId]
+  );
+  return rows[0]?.user_id ?? null;
+}
+
 // ─── Profile registration ─────────────────────────────────────────────────────
 
-async function ensureProfile(db: Pool, userId: string): Promise<void> {
+async function ensureProfile(db: Pool, userId: string, chatId?: number): Promise<void> {
   await db.query(
     `INSERT INTO user_profiles (user_id, settings, onboarding_complete, updated_at)
      VALUES ($1, '{"agent":true,"confirm":true,"notifs":true}'::jsonb, true, NOW())
      ON CONFLICT (user_id) DO NOTHING`,
     [userId]
   );
+  if (chatId !== undefined) {
+    await db.query(
+      `UPDATE user_profiles SET telegram_chat_id = $1, updated_at = NOW() WHERE user_id = $2`,
+      [chatId, userId]
+    );
+  }
 }
 
 // ─── Telegram API helper ──────────────────────────────────────────────────────
 
 async function tgApi(token: string, method: string, body: any): Promise<any> {
-  return axios.post(`https://api.telegram.org/bot${token}/${method}`, body);
+  const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return res.json();
 }
 
 function escapeHtml(str: string): string {
@@ -363,12 +474,46 @@ async function handleStart(
   chatId: number,
   firstName: string,
   db: Pool,
-  userId: string
+  userId: string,
+  linkCode?: string
 ): Promise<void> {
+  // Привязка аккаунта по коду
+  if (linkCode) {
+    const { rows } = await db.query(
+      `SELECT user_id FROM telegram_link_codes
+       WHERE code = $1 AND used = FALSE AND expires_at > NOW()
+       LIMIT 1`,
+      [linkCode]
+    );
+
+    if (rows[0]) {
+      const webUserId = rows[0].user_id;
+      await db.query(
+        `UPDATE user_profiles SET telegram_chat_id = $1, updated_at = NOW() WHERE user_id = $2`,
+        [chatId, webUserId]
+      );
+      await db.query(
+        `UPDATE telegram_link_codes SET used = TRUE WHERE code = $1`,
+        [linkCode]
+      );
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: `✅ Готово, ${escapeHtml(firstName)}! Telegram подключён к Mindex.\n\nТеперь я буду напоминать тебе о задачах прямо сюда, за 15 минут до начала.\n\n/tasks — задачи на сегодня\n/help — список команд`
+      });
+      return;
+    } else {
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: `Код недействителен или уже использован. Вернись в приложение и нажми "Подключить Telegram" ещё раз.`
+      });
+      return;
+    }
+  }
+
   await ensureProfile(db, userId);
   await tgApi(token, 'sendMessage', {
     chat_id: chatId,
-    text: `Привет, ${escapeHtml(firstName)}! Я Мысль — твой персональный помощник по планированию.\n\nПросто напиши что думаешь, и я помогу разобраться с задачами. Например:\n"Встреча с командой завтра в 10"\n"Что у меня на сегодня?"\n\n/tasks — задачи на сегодня\n/help — список команд`
+    text: `Привет, ${escapeHtml(firstName)}! Я Мысль — твой персональный помощник по планированию.\n\nЧтобы получать уведомления о задачах, подключи меня в настройках приложения Mindex.\n\nЕсли уже подключил — просто пиши:\n"Встреча с командой завтра в 10"\n"Что у меня на сегодня?"\n\n/tasks — задачи на сегодня\n/help — список команд`
   });
 }
 
@@ -442,7 +587,7 @@ async function handleCallback(cq: TgCallbackQuery, token: string, db: Pool): Pro
 
 // ─── Обработка одного обновления ─────────────────────────────────────────────
 
-async function processUpdate(update: any, token: string, db: Pool, groq: Groq): Promise<void> {
+async function processUpdate(update: any, token: string, db: Pool, apiKey: string): Promise<void> {
   // Inline keyboard callback
   if (update.callback_query) {
     await handleCallback(update.callback_query as TgCallbackQuery, token, db);
@@ -452,13 +597,27 @@ async function processUpdate(update: any, token: string, db: Pool, groq: Groq): 
   const message: TgMessage = update.message;
   if (!message?.from || !message.text) return;
 
-  const tgUserId = message.from.id;
-  const userId = `tg_${tgUserId}`;
   const chatId = message.chat.id;
   const text = message.text.trim();
 
-  if (text === '/start') {
-    await handleStart(token, chatId, message.from.first_name, db, userId);
+  if (text.startsWith('/start')) {
+    const tgUserId = message.from.id;
+    const tgUserfallbackId = `tg_${tgUserId}`;
+    const parts = text.split(' ');
+    const linkCode = parts[1]?.trim() || undefined;
+    await handleStart(token, chatId, message.from.first_name, db, tgUserfallbackId, linkCode);
+    return;
+  }
+
+  // Проверяем привязку — без неё общение закрыто
+  console.log(`[Bot] сообщение от chatId=${chatId}, text="${text}"`);
+  const webUserId = await getWebUserId(db, chatId);
+  console.log(`[Bot] webUserId для chatId=${chatId}: ${webUserId}`);
+  if (!webUserId) {
+    await tgApi(token, 'sendMessage', {
+      chat_id: chatId,
+      text: `Чтобы общаться со мной, сначала подключи Telegram в приложении Mindex.\n\nОткрой приложение → Настройки → Telegram → Подключить. Получишь код — введи его командой /start КОД`
+    });
     return;
   }
 
@@ -468,44 +627,46 @@ async function processUpdate(update: any, token: string, db: Pool, groq: Groq): 
   }
 
   if (text === '/tasks') {
-    await ensureProfile(db, userId);
-    await handleTasks(token, chatId, db, userId);
+    await handleTasks(token, chatId, db, webUserId);
     return;
   }
 
-  // Все остальные сообщения → AI (Мысль)
-  await ensureProfile(db, userId);
-
-  const thread = await loadBotThread(db, userId);
+  // Все остальные сообщения → AI (Мысль) — используем webUserId для доступа к данным
+  const thread = await loadBotThread(db, webUserId);
   const existingMessages = thread?.messages ?? [];
 
-  const { aiResponse, newMessages } = await processWithAI(
-    text,
-    existingMessages,
-    db,
-    userId,
-    groq
-  );
-
-  await saveBotThread(db, userId, thread?.id ?? null, [...existingMessages, ...newMessages]);
-
-  await tgApi(token, 'sendMessage', { chat_id: chatId, text: aiResponse });
+  console.log(`[Bot] вызываю AI для ${webUserId}, сообщение: "${text}"`);
+  try {
+    const { aiResponse, newMessages } = await processWithAI(
+      text,
+      existingMessages,
+      db,
+      webUserId,
+      apiKey
+    );
+    console.log(`[Bot] AI ответил: "${aiResponse?.slice(0, 80)}"`);
+    await saveBotThread(db, webUserId, thread?.id ?? null, [...existingMessages, ...newMessages]);
+    await tgApi(token, 'sendMessage', { chat_id: chatId, text: aiResponse });
+  } catch (e: any) {
+    console.error(`[Bot] ошибка AI:`, e?.message || e);
+    await tgApi(token, 'sendMessage', { chat_id: chatId, text: 'Не могу ответить прямо сейчас, попробуй позже.' });
+  }
 }
 
 // ─── Token validation ─────────────────────────────────────────────────────────
 
 async function validateToken(token: string): Promise<boolean> {
   try {
-    const res = await axios.get(`https://api.telegram.org/bot${token}/getMe`, { timeout: 10_000 });
-    const bot = res.data?.result;
-    console.log(`[Bot] Токен действителен. Бот: @${bot?.username} (id=${bot?.id})`);
-    return true;
-  } catch (e: any) {
-    const status = e?.response?.status;
-    if (status === 401 || status === 404) {
+    const res = await fetch(`https://api.telegram.org/bot${token}/getMe`, { signal: AbortSignal.timeout(10_000) });
+    if (res.status === 401 || res.status === 404) {
       console.error('[Bot] Неверный токен TELEGRAM_BOT_TOKEN — проверь значение в .env и перезапусти сервер.');
       return false;
     }
+    const data = await res.json() as any;
+    const bot = data?.result;
+    console.log(`[Bot] Токен действителен. Бот: @${bot?.username} (id=${bot?.id})`);
+    return true;
+  } catch (e: any) {
     // Сетевая ошибка — считаем токен действительным, попробуем в polling/webhook
     console.warn('[Bot] Не удалось проверить токен (сетевая ошибка), продолжаем запуск:', e?.message);
     return true;
@@ -517,23 +678,26 @@ async function validateToken(token: string): Promise<boolean> {
 async function setupWebhook(token: string, appUrl: string): Promise<void> {
   const webhookUrl = `${appUrl}/api/telegram`;
   try {
-    await axios.post(`https://api.telegram.org/bot${token}/setWebhook`, {
-      url: webhookUrl,
-      allowed_updates: ['message', 'callback_query'],
-      drop_pending_updates: true
+    await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: webhookUrl, allowed_updates: ['message', 'callback_query'], drop_pending_updates: true }),
     });
     console.log(`[Bot] Webhook установлен: ${webhookUrl}`);
   } catch (e: any) {
-    console.error('[Bot] Ошибка установки webhook:', e?.response?.data || e?.message);
+    console.error('[Bot] Ошибка установки webhook:', e?.message);
   }
 }
 
 // ─── Long-polling для локальной разработки ────────────────────────────────────
 
-async function startLongPolling(token: string, db: Pool, groq: Groq): Promise<void> {
-  // Сначала удаляем webhook, чтобы можно было использовать getUpdates
+async function startLongPolling(token: string, db: Pool, apiKey: string): Promise<void> {
   try {
-    await axios.post(`https://api.telegram.org/bot${token}/deleteWebhook`, { drop_pending_updates: true });
+    await fetch(`https://api.telegram.org/bot${token}/deleteWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ drop_pending_updates: true }),
+    });
     console.log('[Bot] Webhook удалён, запускаем long-polling');
   } catch (e: any) {
     console.warn('[Bot] Не удалось удалить webhook:', e?.message);
@@ -545,25 +709,24 @@ async function startLongPolling(token: string, db: Pool, groq: Groq): Promise<vo
   const poll = async (): Promise<void> => {
     if (!running) return;
     try {
-      const res = await axios.get(`https://api.telegram.org/bot${token}/getUpdates`, {
-        params: { offset, timeout: 30, allowed_updates: ['message', 'callback_query'] },
-        timeout: 35_000
-      });
-      const updates: any[] = res.data?.result ?? [];
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 35_000);
+      const res = await fetch(
+        `https://api.telegram.org/bot${token}/getUpdates?offset=${offset}&timeout=30&allowed_updates=["message","callback_query"]`,
+        { signal: controller.signal }
+      );
+      clearTimeout(timeoutId);
+      const data = await res.json();
+      const updates: any[] = data?.result ?? [];
       for (const update of updates) {
         offset = update.update_id + 1;
-        processUpdate(update, token, db, groq).catch(e =>
+        processUpdate(update, token, db, apiKey).catch(e =>
           console.error('[Bot] Ошибка обработки обновления:', e)
         );
       }
     } catch (e: any) {
-      const status = e?.response?.status;
-      if (status === 401 || status === 404) {
-        console.error('[Bot] Polling остановлен: неверный токен TELEGRAM_BOT_TOKEN.');
-        running = false;
-        return;
-      }
-      if (e?.code !== 'ECONNABORTED') {
+      const isAbort = e?.name === 'AbortError';
+      if (!isAbort) {
         console.error('[Bot] Ошибка polling:', e?.message || e);
         await new Promise(r => setTimeout(r, POLLING_ERROR_RETRY_DELAY_MS));
       }
@@ -588,19 +751,15 @@ export function registerBotRoutes(app: Express, db: Pool): void {
     return;
   }
 
-  const groqKey = process.env.GROQ_API_KEY;
-  if (!groqKey) {
-    console.warn('[Bot] GROQ_API_KEY не установлен — бот отключён');
+  const apiKey = process.env.ROUTERAI_API_KEY;
+  if (!apiKey) {
+    console.warn('[Bot] ROUTERAI_API_KEY не установлен — бот отключён');
     return;
   }
 
-  const groq = new Groq({ apiKey: groqKey });
-
-  // Вебхук эндпоинт
   app.post('/api/telegram', (req, res) => {
-    // Отвечаем немедленно, обработку делаем асинхронно
     res.status(200).end();
-    processUpdate(req.body, token, db, groq).catch(e =>
+    processUpdate(req.body, token, db, apiKey).catch(e =>
       console.error('[Bot] Ошибка вебхука:', e)
     );
   });
@@ -608,27 +767,19 @@ export function registerBotRoutes(app: Express, db: Pool): void {
   console.log('[Bot] Маршруты зарегистрированы: POST /api/telegram');
 }
 
-/**
- * Запускает бота: устанавливает webhook на Railway или long-polling локально.
- * Вызывается после запуска HTTP-сервера.
- */
 export async function startBot(db: Pool): Promise<void> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return;
 
-  const groqKey = process.env.GROQ_API_KEY;
-  if (!groqKey) return;
+  const apiKey = process.env.ROUTERAI_API_KEY;
+  if (!apiKey) return;
 
-  const groq = new Groq({ apiKey: groqKey });
-
-  // Проверяем токен перед запуском
   const tokenOk = await validateToken(token);
   if (!tokenOk) {
     console.error('[Bot] Бот не запущен из-за ошибки токена.');
     return;
   }
 
-  // Определяем URL приложения (Railway или кастомный)
   const appUrl =
     process.env.APP_URL ||
     (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null);
@@ -637,6 +788,6 @@ export async function startBot(db: Pool): Promise<void> {
     await setupWebhook(token, appUrl);
   } else {
     console.log('[Bot] APP_URL не задан — запускаем long-polling');
-    startLongPolling(token, db, groq);
+    startLongPolling(token, db, apiKey);
   }
 }
