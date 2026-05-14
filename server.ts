@@ -531,6 +531,9 @@ app.get("/api/data/bootstrap", async (req, res) => {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }
 
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+
   const userId = String(req.query.userId || "").trim();
   if (!userId) {
     return res.status(400).json({ error: "userId обязателен." });
