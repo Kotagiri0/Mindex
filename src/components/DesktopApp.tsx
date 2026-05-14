@@ -2045,7 +2045,6 @@ export default function DesktopApp({
       if (t.id === id) { const u = { ...t, name, time, date, description, location }; db.saveTask(u); return u; }
       return t;
     }));
-    setEditingTask(null);
   };
 
   const deleteTask = async (id: string) => {

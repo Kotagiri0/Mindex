@@ -73,7 +73,7 @@ export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onO
         <motion.div
           key="task-panel"
           initial={{ width: 0, opacity: 0 }}
-          animate={{ width: 300, opacity: 1 }}
+          animate={{ width: 360, opacity: 1 }}
           exit={{ width: 0, opacity: 0 }}
           transition={{ type: 'spring', damping: 28, stiffness: 280 }}
           style={{
@@ -102,13 +102,12 @@ export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onO
             <div style={{ marginBottom: 14 }}>
               <label style={labelStyle}>Название</label>
               <input
+                className="task-panel-input"
                 style={inputStyle}
                 value={name}
                 onChange={e => setName(e.target.value)}
                 onBlur={handleUpdate}
                 onKeyDown={e => e.key === 'Enter' && handleUpdate()}
-                onFocus={e => { (e.target as HTMLInputElement).style.borderColor = '#222224'; (e.target as HTMLInputElement).style.background = '#fff'; }}
-                onBlurCapture={e => { (e.target as HTMLInputElement).style.borderColor = 'transparent'; (e.target as HTMLInputElement).style.background = '#f5f5f5'; }}
               />
             </div>
 
@@ -118,9 +117,10 @@ export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onO
                 <label style={labelStyle}>Дата</label>
                 <input
                   type="date"
+                  className="task-panel-input"
                   style={inputStyle}
                   value={date}
-                  onChange={e => { setDate(e.target.value); }}
+                  onChange={e => setDate(e.target.value)}
                   onBlur={handleUpdate}
                 />
               </div>
@@ -128,9 +128,10 @@ export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onO
                 <label style={labelStyle}>Время</label>
                 <input
                   type="time"
+                  className="task-panel-input"
                   style={inputStyle}
                   value={time}
-                  onChange={e => { setTime(e.target.value); }}
+                  onChange={e => setTime(e.target.value)}
                   onBlur={handleUpdate}
                 />
               </div>
@@ -140,13 +141,12 @@ export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onO
             <div style={{ marginBottom: 14 }}>
               <label style={labelStyle}>Место</label>
               <input
+                className="task-panel-input"
                 style={inputStyle}
                 placeholder="Адрес или название"
                 value={location}
                 onChange={e => setLocation(e.target.value)}
                 onBlur={handleUpdate}
-                onFocus={e => { (e.target as HTMLInputElement).style.borderColor = '#222224'; (e.target as HTMLInputElement).style.background = '#fff'; }}
-                onBlurCapture={e => { (e.target as HTMLInputElement).style.borderColor = 'transparent'; (e.target as HTMLInputElement).style.background = '#f5f5f5'; }}
               />
             </div>
 
@@ -154,14 +154,13 @@ export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onO
             <div style={{ marginBottom: 20 }}>
               <label style={labelStyle}>Описание</label>
               <textarea
+                className="task-panel-input"
                 style={{ ...inputStyle, height: 'auto', minHeight: 80, padding: '10px 12px', resize: 'none', lineHeight: 1.55 }}
                 placeholder="Заметки к задаче"
                 rows={3}
                 value={description}
                 onChange={e => setDescription(e.target.value)}
                 onBlur={handleUpdate}
-                onFocus={e => { (e.target as HTMLTextAreaElement).style.borderColor = '#222224'; (e.target as HTMLTextAreaElement).style.background = '#fff'; }}
-                onBlurCapture={e => { (e.target as HTMLTextAreaElement).style.borderColor = 'transparent'; (e.target as HTMLTextAreaElement).style.background = '#f5f5f5'; }}
               />
             </div>
 

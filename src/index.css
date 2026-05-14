@@ -241,3 +241,9 @@ input, textarea, button {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+.task-panel-input:focus {
+  border-color: #222224 !important;
+  background: #ffffff !important;
+  outline: none;
+}
