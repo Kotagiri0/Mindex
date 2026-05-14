@@ -204,6 +204,22 @@ export const db = {
       return localTasks;
     }
   },
+
+  refreshTasks: async (): Promise<Task[]> => {
+    const userId = getUserId();
+    if (!userId) return [];
+
+    try {
+      const data = await request<{ tasks: Task[] }>(
+        `${apiBase()}/bootstrap?userId=${encodeURIComponent(userId)}`
+      );
+      const serverTasks = data.tasks || [];
+      storage.setTasks(userId, serverTasks);
+      return serverTasks;
+    } catch {
+      return storage.getTasks(userId);
+    }
+  },
   
   saveTask: async (task: Task, options?: { skipCalendarSync?: boolean }) => {
     const userId = getUserId();
