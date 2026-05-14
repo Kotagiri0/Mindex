@@ -21,6 +21,7 @@ import DesktopApp from './components/DesktopApp';
 import TodayMobile from './components/TodayMobile';
 
 const defaultSettings = { agent: true, confirm: true, notifs: true };
+const TASK_REFRESH_INTERVAL_MS = 60_000;
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<LocalUser | null>(getCurrentUser());
@@ -122,7 +123,7 @@ export default function App() {
       if (intervalId !== null) return;
       intervalId = window.setInterval(() => {
         refreshTasks('interval');
-      }, 60_000);
+      }, TASK_REFRESH_INTERVAL_MS);
     };
 
     const stopInterval = () => {
