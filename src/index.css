@@ -89,6 +89,7 @@
 
 body {
   margin: 0;
+  background: #f9f9f9; /* hardcoded fallback before CSS vars load */
   background: var(--bg);
   color: var(--text-primary);
   font-family: 'Muller', 'Helvetica Neue', Helvetica, sans-serif;
