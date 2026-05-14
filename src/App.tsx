@@ -101,8 +101,27 @@ export default function App() {
 
     loadData();
 
+    const refreshTasks = async () => {
+      if (cancelled) return;
+      const fresh = await db.refreshTasks();
+      if (!cancelled) setTasks(fresh);
+    };
+
+    const interval = window.setInterval(() => {
+      refreshTasks().catch(() => {});
+    }, 60_000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      refreshTasks().catch(() => {});
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [currentUser]);
 
