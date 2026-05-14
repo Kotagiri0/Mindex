@@ -169,9 +169,10 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
               </motion.button>
             ) : (
               <motion.button
-                onPointerDown={e => { e.preventDefault(); startRecording(); }}
-                onPointerUp={e => { e.preventDefault(); stopRecording(); }}
+                onPointerDown={startRecording}
+                onPointerUp={stopRecording}
                 onPointerCancel={stopRecording}
+                disabled={voiceState === 'processing'}
                 style={{
                   width: 36, height: 36, borderRadius: '50%', border: 'none', cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',

@@ -154,7 +154,7 @@ function ChatInputBar({
   placeholder?: string;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
-  const { state: voiceState, startRecording, stopRecording } = useVoiceInput((text) => {
+  const { state: voiceState, toggleRecording } = useVoiceInput((text) => {
     onChange(value ? value + ' ' + text : text);
   });
 
@@ -211,10 +211,9 @@ function ChatInputBar({
             </motion.button>
           ) : (
             <motion.button
-              onPointerDown={e => { e.preventDefault(); startRecording(); }}
-              onPointerUp={e => { e.preventDefault(); stopRecording(); }}
-              onPointerCancel={stopRecording}
-              title={isRecording ? 'Отпусти для завершения' : 'Удерживай для записи'}
+              onClick={toggleRecording}
+              disabled={isProcessing}
+              title={isRecording ? 'Нажми чтобы остановить' : 'Нажми для записи'}
               style={{
                 width: 32, height: 32, borderRadius: '50%', border: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -383,7 +382,7 @@ function TodayScreen({
 }) {
   const [chatInput, setChatInput] = useState('');
   const today = todayStr();
-  const { state: voiceStateTd, startRecording: startRecTd, stopRecording: stopRecTd } = useVoiceInput(text => setChatInput(v => v ? v + ' ' + text : text));
+  const { state: voiceStateTd, toggleRecording: toggleRecTd } = useVoiceInput(text => setChatInput(v => v ? v + ' ' + text : text));
   const now = new Date();
 
   const todayTasks = useMemo(() =>
@@ -492,9 +491,9 @@ function TodayScreen({
                 </motion.button>
               ) : (
                 <button
-                  onPointerDown={e => { e.preventDefault(); startRecTd(); }}
-                  onPointerUp={e => { e.preventDefault(); stopRecTd(); }}
-                  onPointerCancel={stopRecTd}
+                  onClick={toggleRecTd}
+                  disabled={voiceStateTd === 'processing'}
+                  title={voiceStateTd === 'recording' ? 'Нажми чтобы остановить' : 'Нажми для записи'}
                   style={{ background: voiceStateTd === 'recording' ? '#c0392b' : 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: '50%', display: 'flex', flexShrink: 0, transition: 'background 0.15s' }}>
                   <Mic size={17} strokeWidth={1.5} color={voiceStateTd === 'recording' ? '#fff' : '#bbb'} />
                 </button>
@@ -1289,8 +1288,11 @@ function ThreadsView({
     t.title.toLowerCase().includes(search.toLowerCase()) ||
     t.preview.toLowerCase().includes(search.toLowerCase());
 
+  const isNoteThread = (t: Thread) =>
+    t.source === 'заметка' || (Boolean(t.summary?.trim()) && t.is_meaningful !== false);
+
   const thoughts = all.filter(t => t.source !== 'skill' && t.source !== 'заметка' && searchMatch(t));
-  const notes = all.filter(t => t.source === 'заметка' && searchMatch(t));
+  const notes = all.filter(t => isNoteThread(t) && searchMatch(t));
 
   const displayed = tab === 'thoughts' ? thoughts : notes;
 
@@ -1568,7 +1570,7 @@ function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
   const [addInput, setAddInput] = useState('');
   const [addFocused, setAddFocused] = useState(false);
   const [chatInput, setChatInput] = useState('');
-  const { state: voiceStateCal, startRecording: startRecCal, stopRecording: stopRecCal } = useVoiceInput(text => setChatInput(v => v ? v + ' ' + text : text));
+  const { state: voiceStateCal, toggleRecording: toggleRecCal } = useVoiceInput(text => setChatInput(v => v ? v + ' ' + text : text));
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const tooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const miniCalRef = useRef<HTMLDivElement>(null);
@@ -1837,9 +1839,9 @@ function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
             style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 14, color: 'var(--text-primary)' }}
           />
           <button
-            onPointerDown={e => { e.preventDefault(); startRecCal(); }}
-            onPointerUp={e => { e.preventDefault(); stopRecCal(); }}
-            onPointerCancel={stopRecCal}
+            onClick={toggleRecCal}
+            disabled={voiceStateCal === 'processing'}
+            title={voiceStateCal === 'recording' ? 'Нажми чтобы остановить' : 'Нажми для записи'}
             style={{ background: voiceStateCal === 'recording' ? '#c0392b' : 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: '50%', display: 'flex', transition: 'background 0.15s' }}>
             <Mic size={17} strokeWidth={1.5} color={voiceStateCal === 'recording' ? '#fff' : '#bbb'} />
           </button>

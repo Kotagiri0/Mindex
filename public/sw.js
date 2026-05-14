@@ -48,7 +48,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (event.request.mode === 'navigate') {
+  const isNavigation = event.request.mode === 'navigate';
+
+  if (isNavigation) {
     event.respondWith(
       fetch(event.request, { cache: 'reload' })
         .then(async (response) => {
@@ -62,11 +64,15 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(async (error) => {
           console.warn('Navigation fetch failed in service worker:', event.request.url, error);
-          return (
-          (await caches.match(event.request)) ||
-          (await caches.match('/index.html')) ||
-          (await caches.match('/offline.html'))
-          );
+          const cached = await caches.match(event.request);
+          if (cached) return cached;
+          const index = await caches.match('/index.html');
+          if (index) return index;
+          const offline = await caches.match('/offline.html');
+          if (offline) return offline;
+          const root = await caches.match('/');
+          if (root) return root;
+          return new Response('Offline', { status: 503, statusText: 'Offline' });
         }),
     );
     return;
@@ -88,9 +94,6 @@ self.addEventListener('fetch', (event) => {
             return response;
           })
           .catch(async () => {
-            if (event.request.mode === 'navigate') {
-              return (await caches.match('/offline.html')) || (await caches.match('/'));
-            }
             return new Response('Offline', { status: 503, statusText: 'Offline' });
           }),
     ),
