@@ -9,31 +9,20 @@ const isStandalone =
   window.matchMedia('(display-mode: fullscreen)').matches ||
   (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
 
-if (isStandalone && document.fullscreenEnabled) {
-  const cleanupFullscreenListeners = () => {
-    window.removeEventListener('pointerdown', requestFullscreen);
-    window.removeEventListener('keydown', requestFullscreen);
-  };
-
-  const requestFullscreen = () => {
-    if (document.fullscreenElement) {
-      cleanupFullscreenListeners();
-      return;
+// Fix iOS: after backgrounding, app may reload in browser mode.
+// On visibility restore, if we lost standalone — reload to re-enter PWA.
+if (isStandalone) {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      const stillStandalone =
+        window.matchMedia('(display-mode: standalone)').matches ||
+        window.matchMedia('(display-mode: fullscreen)').matches ||
+        (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+      if (!stillStandalone) {
+        window.location.reload();
+      }
     }
-
-    document.documentElement.requestFullscreen()
-      .then(() => {
-        cleanupFullscreenListeners();
-      })
-      .catch((error) => {
-        if (import.meta.env.DEV) {
-          console.error('Fullscreen request failed:', error);
-        }
-      });
-  };
-
-  window.addEventListener('pointerdown', requestFullscreen);
-  window.addEventListener('keydown', requestFullscreen);
+  });
 }
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {

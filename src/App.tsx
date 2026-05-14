@@ -215,7 +215,7 @@ export default function App() {
   }
 
   return (
-    <div className="safe-area-container relative w-full h-screen overflow-hidden bg-bg">
+    <div className="safe-area-container relative w-full overflow-hidden bg-bg" style={{ height: '100dvh' }}>
       <AnimatePresence mode="wait">
         {screen === 'today' && (
           <motion.div

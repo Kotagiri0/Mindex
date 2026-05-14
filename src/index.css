@@ -96,6 +96,32 @@ body {
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
   -webkit-tap-highlight-color: transparent;
+  /* Prevent elastic scroll that reveals white background */
+  overscroll-behavior: none;
+  /* Lock height immediately — no reflow after standalone kicks in */
+  height: 100dvh;
+  height: 100vh; /* fallback */
+}
+
+/* Standalone PWA — fill exact screen, no browser chrome */
+@media (display-mode: standalone) {
+  body {
+    height: 100dvh;
+    position: fixed;
+    width: 100%;
+  }
+}
+
+/* iOS Safari standalone via meta tag */
+@supports (-webkit-touch-callout: none) {
+  body {
+    height: -webkit-fill-available;
+  }
+  @media (display-mode: standalone) {
+    body {
+      height: 100dvh;
+    }
+  }
 }
 
 .safe-area-container {
