@@ -150,6 +150,7 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
               width: '100%', background: 'transparent', border: 'none', outline: 'none',
               fontFamily: M, fontSize: 15, color: '#222224',
               marginBottom: 10, display: 'block', resize: 'none', lineHeight: 1.55,
+              maxHeight: '120px', overflowY: 'auto',
             }}
           />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

@@ -344,10 +344,10 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   };
 
   useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.style.height = 'auto';
-      inputRef.current.style.height = inputRef.current.scrollHeight + 'px';
-    }
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
   }, [input]);
 
   const handleSend = () => {
@@ -1090,6 +1090,8 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
               lineHeight: 1.55,
               border: 'none',
               display: 'block',
+              maxHeight: '120px',
+              overflowY: 'auto',
             }}
             placeholder="Есть мысли?"
             value={input}
