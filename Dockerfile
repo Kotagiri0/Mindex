@@ -28,6 +28,8 @@ RUN npm install --omit=dev --legacy-peer-deps
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server.ts ./server.ts
+COPY --from=builder /app/server-bot.ts ./server-bot.ts
+COPY --from=builder /app/api ./api
 COPY --from=builder /app/src ./src
 
 EXPOSE 3000

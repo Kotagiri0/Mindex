@@ -97,6 +97,32 @@ http://localhost:3000
 docker compose logs -f alloy
 ```
 
+## Telegram-бот
+
+Бот встроен прямо в сервер (`server-bot.ts`). Позволяет управлять задачами и общаться с Мыслью прямо в Telegram.
+
+### Команды
+
+- `/start` — приветствие и кнопка Mini App
+- `/tasks` — задачи на сегодня с кнопками ✓
+- `/add <задача>` — добавить задачу быстро
+- `/clear` — очистить историю диалога
+- `/app` — открыть Mini App
+- `/help` — список всех команд
+- любой текст — Мысль отвечает с учётом контекста и управляет задачами через tool-calling
+
+### Локальный запуск бота
+
+Добавь `TELEGRAM_BOT_TOKEN` в `.env` и запусти `npm run dev`. Бот автоматически включит polling-режим — ngrok не нужен.
+
+### Деплой на Railway
+
+1. Добавь `TELEGRAM_BOT_TOKEN`, `APP_URL` и `GROQ_API_KEY` в Railway variables
+2. Задеплой
+3. Открой `GET /api/setup-bot` один раз — webhook и команды зарегистрируются автоматически
+
+Подробнее — в [DOCUMENTATION.md](DOCUMENTATION.md#telegram-бот).
+
 ## Метрики
 
 Сервер публикует Prometheus-метрики на:
@@ -142,6 +168,9 @@ http://localhost:3000/metrics
 - `GOOGLE_CLIENT_ID` и `VITE_GOOGLE_CLIENT_ID` — Google OAuth client ID
 - `GRAFANA_CLOUD_USER_ID` — Metrics Instance ID для Alloy
 - `GRAFANA_CLOUD_API_KEY` — Grafana Cloud token для remote_write
+- `TELEGRAM_BOT_TOKEN` — токен Telegram-бота
+- `APP_URL` — публичный URL сервера (Railway, для webhook)
+- `MINI_APP_URL` — URL Telegram Mini App
 
 ## Архитектура в двух словах
 

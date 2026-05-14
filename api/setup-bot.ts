@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from "axios";
+import { BOT_COMMANDS } from "./bot-commands";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS
@@ -25,22 +26,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     // 1. Устанавливаем вебхук
     await axios.get(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${webhookUrl}&drop_pending_updates=true`);
-    
-    // 2. Проверяем статус
+
+    // 2. Регистрируем команды в меню Telegram
+    await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/setMyCommands`, {
+      commands: BOT_COMMANDS,
+    });
+
+    // 3. Проверяем статус
     const infoRes = await axios.get(`https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo`);
-    
+
     console.log(`[Bot Setup] Webhook set to: ${webhookUrl}`);
-    res.status(200).json({ 
-      success: true, 
-      message: "Бот успешно настроен!", 
+    res.status(200).json({
+      success: true,
+      message: "Бот успешно настроен!",
       webhookUrl,
-      info: infoRes.data.result
+      info: infoRes.data.result,
     });
   } catch (error: any) {
     console.error("[Bot Setup] Error:", error.response?.data || error.message);
-    res.status(500).json({ 
-      success: false, 
-      error: error.response?.data?.description || error.message 
+    res.status(500).json({
+      success: false,
+      error: error.response?.data?.description || error.message,
     });
   }
 }
+
