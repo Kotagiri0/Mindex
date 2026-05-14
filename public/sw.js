@@ -52,20 +52,22 @@ self.addEventListener('fetch', (event) => {
 
   if (isNavigation) {
     event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          if (response && response.status === 200 && (response.type === 'basic' || response.type === 'cors')) {
+      fetch(event.request, { cache: 'reload' })
+        .then(async (response) => {
+          const contentType = response.headers.get('content-type') || '';
+          if (response && response.status === 200 && contentType.includes('text/html')) {
             const responseToCache = response.clone();
-            caches
-              .open(CACHE_NAME)
-              .then((cache) => cache.put(event.request, responseToCache))
-              .catch((error) => console.warn('SW cache put failed:', error));
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(event.request, responseToCache);
           }
           return response;
         })
-        .catch(async () => {
+        .catch(async (error) => {
+          console.warn('Navigation fetch failed in service worker:', event.request.url, error);
           const cached = await caches.match(event.request);
           if (cached) return cached;
+          const index = await caches.match('/index.html');
+          if (index) return index;
           const offline = await caches.match('/offline.html');
           if (offline) return offline;
           const root = await caches.match('/');
