@@ -9,6 +9,17 @@
 import type { Express } from 'express';
 import type { Pool } from 'pg';
 import crypto from 'crypto';
+import { SocksProxyAgent } from 'socks-proxy-agent';
+
+const SOCKS_PROXY = process.env.SOCKS_PROXY_URL;
+const proxyAgent = SOCKS_PROXY ? new SocksProxyAgent(SOCKS_PROXY) : null;
+
+const tgFetch = (url: string, options: RequestInit = {}) => {
+  if (proxyAgent) {
+    return fetch(url, { ...options, dispatcher: proxyAgent as any });
+  }
+  return fetch(url, options);
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -455,7 +466,7 @@ async function ensureProfile(db: Pool, userId: string, chatId?: number): Promise
 // ─── Telegram API helper ──────────────────────────────────────────────────────
 
 async function tgApi(token: string, method: string, body: any): Promise<any> {
-  const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+  const res = await tgFetch(`https://api.telegram.org/bot${token}/${method}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -657,7 +668,7 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
 
 async function validateToken(token: string): Promise<boolean> {
   try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/getMe`, { signal: AbortSignal.timeout(10_000) });
+    const res = await tgFetch(`https://api.telegram.org/bot${token}/getMe`, { signal: AbortSignal.timeout(10_000) });
     if (res.status === 401 || res.status === 404) {
       console.error('[Bot] Неверный токен TELEGRAM_BOT_TOKEN — проверь значение в .env и перезапусти сервер.');
       return false;
@@ -678,7 +689,7 @@ async function validateToken(token: string): Promise<boolean> {
 async function setupWebhook(token: string, appUrl: string): Promise<void> {
   const webhookUrl = `${appUrl}/api/telegram`;
   try {
-    await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+    await tgFetch(`https://api.telegram.org/bot${token}/setWebhook`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: webhookUrl, allowed_updates: ['message', 'callback_query'], drop_pending_updates: true }),
@@ -693,7 +704,7 @@ async function setupWebhook(token: string, appUrl: string): Promise<void> {
 
 async function startLongPolling(token: string, db: Pool, apiKey: string): Promise<void> {
   try {
-    await fetch(`https://api.telegram.org/bot${token}/deleteWebhook`, {
+    await tgFetch(`https://api.telegram.org/bot${token}/deleteWebhook`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ drop_pending_updates: true }),
