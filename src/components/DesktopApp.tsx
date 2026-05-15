@@ -2028,6 +2028,7 @@ export default function DesktopApp({
     if (screen === 'ob' || screen === 'today') setScreen('dash');
   }, [screen]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [noInternet, setNoInternet] = useState(false);
@@ -2037,6 +2038,13 @@ export default function DesktopApp({
     setTasks(prev => [...(Array.isArray(prev) ? prev : []), t]);
     await db.saveTask(t);
     setIsAddModalOpen(false);
+  };
+
+  const createTaskFromPanel = async (name: string, time: string, date: string, description: string, location: string) => {
+    const t: Task = { id: uuid(), name, time, date, done: false, description, location };
+    setTasks(prev => [...(Array.isArray(prev) ? prev : []), t]);
+    await db.saveTask(t);
+    setIsCreatingTask(false);
   };
 
   const updateTask = async (id: string, name: string, time: string, date: string, description: string, location: string) => {
@@ -2118,7 +2126,7 @@ export default function DesktopApp({
 
           {screen === 'dash' && !calActive && (
             <motion.div key="today" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.13 }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-              <TodayScreen tasks={tasks} setTasks={setTasks} onQuickChat={startNewThreadWithMessage} onAddTask={() => setIsAddModalOpen(true)} onEditTask={setEditingTask} />
+              <TodayScreen tasks={tasks} setTasks={setTasks} onQuickChat={startNewThreadWithMessage} onAddTask={() => { setEditingTask(null); setIsCreatingTask(true); }} onEditTask={(t) => { setIsCreatingTask(false); setEditingTask(t); }} />
             </motion.div>
           )}
 
@@ -2213,9 +2221,12 @@ export default function DesktopApp({
 
         <TaskDetailPanel
           task={editingTask}
-          onClose={() => setEditingTask(null)}
+          isCreating={isCreatingTask}
+          initialDate={todayStr()}
+          onClose={() => { setEditingTask(null); setIsCreatingTask(false); }}
           onUpdate={updateTask}
           onDelete={deleteTask}
+          onCreate={createTaskFromPanel}
           onOpenThread={id => { setCurTh(id); setScreen('ai'); }}
         />
       </div>

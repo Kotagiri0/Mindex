@@ -11,9 +11,12 @@ interface TaskDetailPanelProps {
   onUpdate: (id: string, name: string, time: string, date: string, description: string, location: string) => void;
   onDelete: (id: string) => void;
   onOpenThread?: (id: string) => void;
+  onCreate?: (name: string, time: string, date: string, description: string, location: string) => void;
+  initialDate?: string;
+  isCreating?: boolean;
 }
 
-export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onOpenThread }: TaskDetailPanelProps) {
+export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onOpenThread, onCreate, initialDate, isCreating }: TaskDetailPanelProps) {
   const [name, setName] = useState('');
   const [time, setTime] = useState('');
   const [date, setDate] = useState('');
@@ -21,18 +24,30 @@ export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onO
   const [location, setLocation] = useState('');
 
   useEffect(() => {
-    if (task) {
+    if (isCreating) {
+      setName('');
+      setTime('');
+      setDate(initialDate || '');
+      setDescription('');
+      setLocation('');
+    } else if (task) {
       setName(task.name);
       setTime(task.time || '');
       setDate(task.date || '');
       setDescription(task.description || '');
       setLocation(task.location || '');
     }
-  }, [task?.id]);
+  }, [task?.id, isCreating]);
 
   const handleUpdate = () => {
     if (!task || !name.trim()) return;
     onUpdate(task.id, name, time, date, description, location);
+  };
+
+  const handleCreate = () => {
+    if (!name.trim() || !onCreate) return;
+    onCreate(name, time, date, description, location);
+    onClose();
   };
 
   const handleDelete = () => {
@@ -69,7 +84,7 @@ export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onO
 
   return (
     <AnimatePresence>
-      {task && (
+      {(task || isCreating) && (
         <motion.div
           key="task-panel"
           initial={{ width: 0, opacity: 0 }}
@@ -89,7 +104,7 @@ export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onO
           <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 0' }}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-              <span style={{ fontFamily: M, fontSize: 15, fontWeight: 600, color: '#222224' }}>Задача</span>
+              <span style={{ fontFamily: M, fontSize: 15, fontWeight: 600, color: '#222224' }}>{isCreating ? 'Новая задача' : 'Задача'}</span>
               <button
                 onClick={onClose}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', color: 'rgba(34,34,36,0.35)', borderRadius: 6 }}
@@ -182,20 +197,34 @@ export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onO
             )}
           </div>
 
-          {/* Delete */}
+          {/* Delete / Create */}
           <div style={{ padding: '12px 20px 20px', borderTop: '1px solid rgba(0,0,0,0.05)' }}>
-            <button
-              onClick={handleDelete}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                width: '100%', height: 40, borderRadius: 10,
-                background: 'rgba(192,57,43,0.08)', border: 'none', cursor: 'pointer',
-                fontFamily: M, fontSize: 14, color: '#c0392b', paddingLeft: 12,
-              }}
-            >
-              <Trash2 size={15} strokeWidth={1.75} />
-              Удалить задачу
-            </button>
+            {isCreating ? (
+              <button
+                onClick={handleCreate}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: '100%', height: 40, borderRadius: 10,
+                  background: '#222224', border: 'none', cursor: 'pointer',
+                  fontFamily: M, fontSize: 14, color: '#fff',
+                }}
+              >
+                Создать задачу
+              </button>
+            ) : (
+              <button
+                onClick={handleDelete}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  width: '100%', height: 40, borderRadius: 10,
+                  background: 'rgba(192,57,43,0.08)', border: 'none', cursor: 'pointer',
+                  fontFamily: M, fontSize: 14, color: '#c0392b', paddingLeft: 12,
+                }}
+              >
+                <Trash2 size={15} strokeWidth={1.75} />
+                Удалить задачу
+              </button>
+            )}
           </div>
         </motion.div>
       )}
