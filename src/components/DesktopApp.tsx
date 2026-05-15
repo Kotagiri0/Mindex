@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { Task, Thread, Message, Settings as SettingsType, Screen } from '../types';
 import AddTaskModal from './AddTaskModal';
-import EditTaskModal from './EditTaskModal';
+import TaskDetailPanel from './TaskDetailPanel';
 import SettingsScreen from './Settings';
 import NoteView from './NoteView';
 import NoteEditor from './NoteEditor';
@@ -2044,7 +2044,6 @@ export default function DesktopApp({
       if (t.id === id) { const u = { ...t, name, time, date, description, location }; db.saveTask(u); return u; }
       return t;
     }));
-    setEditingTask(null);
   };
 
   const deleteTask = async (id: string) => {
@@ -2098,7 +2097,7 @@ export default function DesktopApp({
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}>
+    <div style={{ display: 'flex', height: '100dvh', overflow: 'hidden', background: 'var(--bg)' }}>
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(v => !v)}
@@ -2113,7 +2112,8 @@ export default function DesktopApp({
         onDropText={handleDropText}
       />
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minWidth: 0 }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
         <AnimatePresence mode="wait">
 
           {screen === 'dash' && !calActive && (
@@ -2209,10 +2209,18 @@ export default function DesktopApp({
           )}
 
         </AnimatePresence>
+        </div>
+
+        <TaskDetailPanel
+          task={editingTask}
+          onClose={() => setEditingTask(null)}
+          onUpdate={updateTask}
+          onDelete={deleteTask}
+          onOpenThread={id => { setCurTh(id); setScreen('ai'); }}
+        />
       </div>
 
       <AddTaskModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onAdd={addTask} initialDate={todayStr()} />
-      <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} onUpdate={updateTask} onDelete={deleteTask} onOpenThread={id => { setCurTh(id); setScreen('ai'); }} />
 
       <AnimatePresence>
         {noInternet && (
@@ -2226,7 +2234,7 @@ export default function DesktopApp({
             <LogoIcon size={40} />
             <div style={{ marginTop: 12, textAlign: 'center' }}>
               <div style={{ fontFamily: M, fontSize: 22, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>
-                Со интернетом что-то не то...
+                С интернетом что-то не то...
               </div>
               <div style={{ fontFamily: M, fontSize: 15, color: 'var(--text-30)', lineHeight: 1.5 }}>
                 Попробуй немного подождать и обновить страницу

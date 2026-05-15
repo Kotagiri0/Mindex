@@ -89,6 +89,7 @@
 
 body {
   margin: 0;
+  background: #f9f9f9; /* hardcoded fallback before CSS vars load */
   background: var(--bg);
   color: var(--text-primary);
   font-family: 'Muller', 'Helvetica Neue', Helvetica, sans-serif;
@@ -96,6 +97,32 @@ body {
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
   -webkit-tap-highlight-color: transparent;
+  /* Prevent elastic scroll that reveals white background */
+  overscroll-behavior: none;
+  /* Lock height immediately — no reflow after standalone kicks in */
+  height: 100dvh;
+  height: 100vh; /* fallback */
+}
+
+/* Standalone PWA — fill exact screen, no browser chrome */
+@media (display-mode: standalone) {
+  body {
+    height: 100dvh;
+    position: fixed;
+    width: 100%;
+  }
+}
+
+/* iOS Safari standalone via meta tag */
+@supports (-webkit-touch-callout: none) {
+  body {
+    height: -webkit-fill-available;
+  }
+  @media (display-mode: standalone) {
+    body {
+      height: 100dvh;
+    }
+  }
 }
 
 .safe-area-container {
@@ -209,4 +236,14 @@ input, textarea, button {
 @keyframes dotBlink {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.4; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.task-panel-input:focus {
+  border-color: #222224 !important;
+  background: #ffffff !important;
+  outline: none;
 }

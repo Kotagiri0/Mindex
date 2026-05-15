@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Мысль — планировщик задач с ИИ</title>
+<meta name="description" content="Думай. Остальное — забота Мысли. Голосом или текстом — Мысль превращает идеи в план." />
+<link rel="stylesheet" href="/landing/styles.css" />
+<link rel="stylesheet" href="/landing/experience.css" />
+<script>
+  /* Редирект в приложение при активной сессии */
+  (function () {
+    try {
+      var user = localStorage.getItem('mx_current_user');
+      if (!user) {
+        var sid = localStorage.getItem('mx_session_user_id');
+        if (sid) {
+          var users = JSON.parse(localStorage.getItem('mx_users') || '[]');
+          user = users.find(function(u) { return u.id === sid; }) || null;
+        }
+      }
+      if (user) window.location.replace('/app');
+    } catch (e) {}
+  })();
+</script>
+</head>
+<body>
+
+<!-- ═════ Header ═════ -->
+<header id="header">
+  <div class="wrap">
+    <a class="logo" href="#top" aria-label="Мысль">
+      <img src="/landing/assets/logo-full.svg" class="logo-full" alt="Мысль" height="28"/>
+    </a>
+    <a class="btn btn-outline" href="/app">попробовать</a>
+  </div>
+</header>
+
+<!-- ═════ Hero ═════ -->
+<section class="hero" id="top">
+  <!-- Bubble chamber -->
+  <div class="hero-stage" aria-hidden="true">
+    <svg class="bubble-chamber" viewBox="0 0 1000 1000">
+      <defs>
+        <filter id="chalk" x="-20%" y="-20%" width="140%" height="140%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="4" seed="2" result="noise"/>
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+      </defs>
+
+      <g class="atom-dim">
+        <circle cx="500" cy="500" r="340" class="ring" style="opacity:0.25"/>
+
+        <circle cx="500" cy="500" r="8" fill="#F0EDE6" filter="url(#chalk)" opacity="0.7">
+          <animate attributeName="r" values="8;11;7;10;8" dur="5s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+          <animate attributeName="cx" values="500;503;498;501;500" dur="7s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+          <animate attributeName="cy" values="500;498;502;499;500" dur="6s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+        </circle>
+
+        <ellipse class="ring" cx="500" cy="500" rx="60" ry="24">
+          <animateTransform attributeName="transform" type="rotate" from="30 500 500" to="390 500 500" dur="10.2s" repeatCount="indefinite"/>
+          <animate attributeName="ry" values="24;54;8;54;24" dur="10.2s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+          <animate attributeName="rx" values="60;48;60;72;60" dur="7.3s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+        </ellipse>
+
+        <ellipse class="ring" cx="500" cy="500" rx="120" ry="48">
+          <animateTransform attributeName="transform" type="rotate" from="180 500 500" to="-180 500 500" dur="15.3s" repeatCount="indefinite"/>
+          <animate attributeName="ry" values="48;108;12;108;48" dur="15.3s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+          <animate attributeName="rx" values="120;96;130;96;120" dur="11.1s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+        </ellipse>
+
+        <ellipse class="ring" cx="500" cy="500" rx="220" ry="88">
+          <animateTransform attributeName="transform" type="rotate" from="90 500 500" to="450 500 500" dur="23.8s" repeatCount="indefinite"/>
+          <animate attributeName="ry" values="88;22;160;22;88" dur="23.8s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+          <animate attributeName="rx" values="220;180;240;180;220" dur="17.6s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+        </ellipse>
+
+        <ellipse class="ring" cx="500" cy="500" rx="340" ry="136">
+          <animateTransform attributeName="transform" type="rotate" from="45 500 500" to="-315 500 500" dur="34s" repeatCount="indefinite"/>
+          <animate attributeName="ry" values="136;34;220;34;136" dur="34s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+          <animate attributeName="rx" values="340;280;360;280;340" dur="25.5s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+        </ellipse>
+      </g>
+    </svg>
+  </div>
+
+  <div class="hero-content">
+    <h1 class="hero-title">инструмент для<br>мыслящих людей</h1>
+    <p class="hero-sub">Личный планировщик с ИИ, который<br>помогает справиться с хаосом в голове</p>
+    <div class="hero-cta-wrap">
+      <a class="btn btn-solid btn-lg" href="/app">попробовать бесплатно</a>
+    </div>
+  </div>
+
+
+</section>
+
+<!-- ═════ Chaos / Pain ═════ -->
+<section class="chaos-section">
+
+  <!-- Хаотичные элементы — position absolute, разбросаны по всему блоку -->
+  <div class="chaos-field" aria-hidden="true">
+
+    <!-- 1. Список задач — левый верх, сильный наклон -->
+    <div class="chaos-el" data-delay="0" style="top:5%;left:2%;transform:rotate(-11deg);--dx:4px;--dy:-3px;--dr:-2deg;--dur:6.4s">
+      <div class="cel-tasklist">
+        <div class="cel-task cel-done">созвон с CEO</div>
+        <div class="cel-task">написать инвестору</div>
+        <div class="cel-task">подготовить деки</div>
+        <div class="cel-task cel-urgent">встреча в 14:00 !!!</div>
+      </div>
+    </div>
+
+    <!-- 2. Плашка Notion — правый верх, слабый наклон -->
+    <div class="chaos-el" data-delay="60" style="top:3%;right:4%;transform:rotate(7deg);--dx:-5px;--dy:-4px;--dr:2deg;--dur:5.2s">
+      <div class="cel-badge">
+        <span class="cel-badge-name">Notion</span>
+        <span class="cel-badge-sub">47 страниц</span>
+      </div>
+    </div>
+
+    <!-- 3. "важно!!!" — левый верх ближе к центру, крупно -->
+    <div class="chaos-el" data-delay="30" style="top:8%;left:22%;transform:rotate(-6deg);--dx:3px;--dy:-5px;--dr:-3deg;--dur:7.1s">
+      <span class="cel-shout">важно!!!</span>
+    </div>
+
+    <!-- 4. Плашка ChatGPT — правый верх, сильный наклон -->
+    <div class="chaos-el" data-delay="90" style="top:11%;right:18%;transform:rotate(-9deg);--dx:-4px;--dy:3px;--dr:-2deg;--dur:5.8s">
+      <div class="cel-badge">
+        <span class="cel-badge-name">ChatGPT</span>
+        <span class="cel-badge-sub">миллион чатов</span>
+      </div>
+    </div>
+
+    <!-- 5. Вопрос — правый верх угол, очень крупно -->
+    <div class="chaos-el" data-delay="110" style="top:1%;right:1%;transform:rotate(4deg);--dx:-3px;--dy:-6px;--dr:4deg;--dur:4.9s">
+      <span class="cel-glyph">?</span>
+    </div>
+
+    <!-- 6. Плашка Todoist — справа сверху чуть ниже, наезжает на ChatGPT -->
+    <div class="chaos-el" data-delay="140" style="top:22%;right:8%;transform:rotate(12deg);--dx:-6px;--dy:4px;--dr:3deg;--dur:6.7s">
+      <div class="cel-badge">
+        <span class="cel-badge-name">Todoist</span>
+        <span class="cel-badge-sub">83 задачи</span>
+      </div>
+    </div>
+
+    <!-- 7. "идея для питча" — левый бок, середина -->
+    <div class="chaos-el" data-delay="170" style="top:38%;left:1%;transform:rotate(-4deg);--dx:5px;--dy:3px;--dr:-1.5deg;--dur:7.5s">
+      <div class="cel-note">
+        <div>идея для питча</div>
+        <div class="cel-note-line"></div>
+        <div class="cel-note-dim">не забыть про…</div>
+      </div>
+    </div>
+
+    <!-- 8. "контекст потерян" — правый бок середина, сильный наклон -->
+    <div class="chaos-el" data-delay="200" style="top:42%;right:2%;transform:rotate(-8deg);--dx:-4px;--dy:-3px;--dr:-2deg;--dur:5.6s">
+      <div class="cel-note">
+        <div>контекст потерян</div>
+        <div class="cel-note-line cel-note-dash"></div>
+        <div class="cel-note-dim">где был тот файл…</div>
+        <div class="cel-note-dim" style="opacity:0.5">кто должен был…</div>
+      </div>
+    </div>
+
+    <!-- 9. Восклицание — правый верх угол внутри -->
+    <div class="chaos-el" data-delay="50" style="top:2%;right:28%;transform:rotate(-15deg);--dx:3px;--dy:-4px;--dr:-4deg;--dur:8.0s">
+      <span class="cel-glyph" style="font-size:32px;opacity:0.12">!</span>
+    </div>
+
+    <!-- 10. "DEADLINE" — левый низ, крупно наклонено -->
+    <div class="chaos-el" data-delay="230" style="bottom:18%;left:3%;transform:rotate(8deg);--dx:4px;--dy:5px;--dr:3deg;--dur:6.2s">
+      <span class="cel-label-big">DEADLINE</span>
+    </div>
+
+    <!-- 11. "???" — нижний левый угол -->
+    <div class="chaos-el" data-delay="260" style="bottom:4%;left:6%;transform:rotate(-13deg);--dx:3px;--dy:-4px;--dr:-2.5deg;--dur:5.5s">
+      <span class="cel-shout" style="opacity:0.2;font-size:22px">???</span>
+    </div>
+
+    <!-- 12. Плашка Telegram — нижний правый, сильный наклон -->
+    <div class="chaos-el" data-delay="280" style="bottom:8%;right:5%;transform:rotate(-10deg);--dx:-5px;--dy:4px;--dr:-3deg;--dur:7.3s">
+      <div class="cel-badge">
+        <span class="cel-badge-name">Telegram</span>
+        <span class="cel-badge-sub">99+ непрочитанных</span>
+      </div>
+    </div>
+
+    <!-- 13. "09:00 → 18:00 → ..." — нижний центр-лево -->
+    <div class="chaos-el" data-delay="310" style="bottom:5%;left:28%;transform:rotate(3deg);--dx:-3px;--dy:4px;--dr:1deg;--dur:6.8s">
+      <span class="cel-label-mono">09:00 → 14:00 → 18:00 → ...</span>
+    </div>
+
+    <!-- 14. "куда это всё?" — верхний центр-право -->
+    <div class="chaos-el" data-delay="80" style="top:6%;left:55%;transform:rotate(5deg);--dx:-4px;--dy:-5px;--dr:2deg;--dur:5.1s">
+      <span class="cel-label-mono" style="opacity:0.2">куда это всё?</span>
+    </div>
+
+    <!-- 15. Три точки-недосказанность — нижний правый угол -->
+    <div class="chaos-el" data-delay="340" style="bottom:3%;right:12%;transform:rotate(-5deg);--dx:-3px;--dy:3px;--dr:-2deg;--dur:4.6s">
+      <span class="cel-dots">• • •</span>
+    </div>
+
+    <!-- 16. Стрелка хаоса — верх посередине -->
+    <div class="chaos-el" data-delay="120" style="top:3%;left:38%;transform:rotate(-3deg);--dx:4px;--dy:-3px;--dr:1deg;--dur:7.8s">
+      <span class="cel-arrow">↗ ↙ ↗</span>
+    </div>
+
+  </div>
+
+  <!-- Центральный текст -->
+  <div class="chaos-text">
+    <h2 class="chaos-title chaos-g" data-delay="320">Планирование превращается&nbsp;в хаос</h2>
+    <p class="chaos-sub chaos-g" data-delay="400">Инструменты множатся, контекст рассыпается по вкладкам,<br>а ценные мысли исчезают быстрее, чем ты успеваешь их записать.</p>
+    <p class="chaos-hint chaos-g" data-delay="460">Кажется, пора что-то менять…</p>
+  </div>
+</section>
+
+<!-- ═════ Solution ═════ -->
+<section class="solution-section">
+  <div class="solution-inner">
+
+    <div class="solution-phone-col">
+      <div class="solution-phone-wrap">
+        <div class="solution-phone">
+          <div class="solution-phone-inner">
+            <img src="/landing/screenshots/start-screen.png" class="solution-screen-img" alt="стартовый экран"
+              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+            <div class="solution-screen-stub">стартовый экран</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="solution-text-col">
+      <div class="solution-label">решение</div>
+      <h2 class="solution-title">Агент, который управляет<br>задачами, строит планы<br>и надёжно хранит заметки</h2>
+      <p class="solution-desc">Просто общайся — как с другом.<br>Мысль запомнит, расставит по местам<br>и ничего не потеряет.</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═════ Features ═════ -->
+<section class="feat-section" id="features">
+  <div class="feat-inner">
+
+    <!-- Левая колонка -->
+    <div class="feat-left">
+      <h2 class="feat-title">Всё что нужно —<br/>в одном месте</h2>
+
+      <div class="feat-list" id="featList">
+
+        <div class="feat-item active" data-feat="1">
+          <img src="/landing/screenshots/screen1.png" class="feat-item-img" alt="Делегируй"/>
+          <div class="feat-tag">ДЕЛЕГИРУЙ</div>
+          <div class="feat-name">Агент-планировщик</div>
+          <div class="feat-desc"><div class="feat-desc-inner">Агент управляет планировщиком через чат:
+ставит задачи, видит связи и знает контекст,
+делая планирование проще с каждым днём</div></div>
+        </div>
+
+        <div class="feat-item" data-feat="2">
+          <img src="/landing/screenshots/screen2.png" class="feat-item-img" alt="Диктуй"/>
+          <div class="feat-tag">ДИКТУЙ</div>
+          <div class="feat-name">Голосовой ввод и тг бот</div>
+          <div class="feat-desc"><div class="feat-desc-inner">Если неудобно печатать — скажи голосом,
+и Мысль услышит тебя. Неудобно заходить
+в приложение? У нас есть тг коннектор</div></div>
+        </div>
+
+        <div class="feat-item" data-feat="3">
+          <img src="/landing/screenshots/screen3.png" class="feat-item-img" alt="Добавляй"/>
+          <div class="feat-tag">ДОБАВЛЯЙ</div>
+          <div class="feat-name">Динамическое хранилище заметок</div>
+          <div class="feat-desc"><div class="feat-desc-inner">Каждый чат, задача и заметка — часть
+общей картины. Мысль использует твои заметки
+как контекст для будущих бесед, создаёт саммари
+каждого чата и сохраняет в памяти</div></div>
+        </div>
+
+        <div class="feat-item" data-feat="4">
+          <img src="/landing/screenshots/screen4.png" class="feat-item-img" alt="Доставай"/>
+          <div class="feat-tag">ДОСТАВАЙ</div>
+          <div class="feat-name">Ассистент по заметкам</div>
+          <div class="feat-desc"><div class="feat-desc-inner">Твои записи перестают быть мёртвым грузом —
+Мысль ищет по смыслу, а не ключевым словам.
+Достаточно дать направление, и вся информация
+будет у тебя в руках через мгновения</div></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Правая колонка — телефон sticky -->
+    <div class="feat-right">
+      <div class="feat-phone-wrap">
+        <div class="feat-phone">
+          <div class="feat-phone-inner">
+            <div class="feat-screen active" data-feat="1">
+              <img src="/landing/screenshots/screen1.png" class="feat-screen-img" alt="Делегируй" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+              <div class="feat-screen-stub">Делегируй</div>
+            </div>
+            <div class="feat-screen" data-feat="2">
+              <img src="/landing/screenshots/screen2.png" class="feat-screen-img" alt="Диктуй" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+              <div class="feat-screen-stub">Диктуй</div>
+            </div>
+            <div class="feat-screen" data-feat="3">
+              <img src="/landing/screenshots/screen3.png" class="feat-screen-img" alt="Добавляй" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+              <div class="feat-screen-stub">Добавляй</div>
+            </div>
+            <div class="feat-screen" data-feat="4">
+              <img src="/landing/screenshots/screen4.png" class="feat-screen-img" alt="Доставай" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+              <div class="feat-screen-stub">Доставай</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═════ Onboarding ═════ -->
+<section class="ob-section">
+  <div class="wrap">
+
+    <h2 class="ob-heading">Минута до первого замысла</h2>
+
+    <div class="ob-steps">
+      <div class="ob-step">
+        <span class="ob-num">01</span>
+        <svg class="ob-icon" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="18" cy="10" r="7"/>
+          <path d="M6 30c0-6.627 5.373-12 12-12s12 5.373 12 12"/>
+          <line x1="18" y1="3" x2="18" y2="1"/>
+          <line x1="25" y1="5" x2="27" y2="3"/>
+        </svg>
+        <div class="ob-step-title">Зарегистрируйся</div>
+        <div class="ob-step-desc">Через гугл или по почте и паролю —<br>быстро и безопасно</div>
+      </div>
+      <div class="ob-step">
+        <span class="ob-num">02</span>
+        <svg class="ob-icon" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M6 8h24a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H10l-6 4V10a2 2 0 0 1 2-2z"/>
+          <line x1="12" y1="16" x2="24" y2="16"/>
+          <line x1="12" y1="21" x2="19" y2="21"/>
+        </svg>
+        <div class="ob-step-title">Начни первую мысль</div>
+        <div class="ob-step-desc">Расскажи ассистенту о себе<br>и запланируй первую задачу</div>
+      </div>
+      <div class="ob-step">
+        <span class="ob-num">03</span>
+        <svg class="ob-icon" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="5" y="5" width="26" height="26" rx="3"/>
+          <line x1="11" y1="13" x2="25" y2="13"/>
+          <line x1="11" y1="18" x2="25" y2="18"/>
+          <line x1="11" y1="23" x2="19" y2="23"/>
+          <polyline points="21 20 24 23 29 17" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div class="ob-step-title">Мысль разберётся</div>
+        <div class="ob-step-desc">Расставит задачи в календаре<br>и сформулирует планы сама</div>
+      </div>
+    </div>
+
+    <h2 class="ob-platforms-title">Везде, где ты работаешь</h2>
+
+    <div class="ob-platforms">
+      <div class="ob-platform">
+        <svg class="ob-platform-icon" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="3" y="6" width="30" height="24" rx="3"/>
+          <line x1="3" y1="12" x2="33" y2="12"/>
+          <circle cx="7.5" cy="9" r="1" fill="currentColor" stroke="none"/>
+          <circle cx="11.5" cy="9" r="1" fill="currentColor" stroke="none"/>
+          <circle cx="15.5" cy="9" r="1" fill="currentColor" stroke="none"/>
+        </svg>
+        <div class="ob-platform-name">Веб-приложение</div>
+        <div class="ob-platform-desc">Полный интерфейс в браузере — работает на любом устройстве без установки</div>
+        <span class="ob-platform-tag">уже доступно</span>
+      </div>
+      <div class="ob-platform">
+        <svg class="ob-platform-icon" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="10" y="3" width="16" height="30" rx="3"/>
+          <line x1="15" y1="28" x2="21" y2="28"/>
+        </svg>
+        <div class="ob-platform-name">Мобильное приложение</div>
+        <div class="ob-platform-desc">iOS и Android — голосовой ввод, уведомления, доступ к архиву</div>
+        <span class="ob-platform-tag">скоро</span>
+      </div>
+      <div class="ob-platform">
+        <svg class="ob-platform-icon" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="18" cy="18" r="15"/>
+          <path d="M8 18 L28 10 L22 28 L16 22 L8 18Z"/>
+          <line x1="16" y1="22" x2="28" y2="10"/>
+        </svg>
+        <div class="ob-platform-name">Telegram-бот</div>
+        <div class="ob-platform-desc">Быстрый доступ без открытия приложения — скинул мысль, Мысль поняла</div>
+        <span class="ob-platform-tag">уже доступно</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═════ Final CTA ═════ -->
+<section class="final" id="join">
+  <div class="wrap reveal">
+    <h2 class="final-title">есть мысли?</h2>
+    <div class="final-cta-wrap">
+      <a class="btn btn-solid btn-lg" href="/app">узнать сейчас</a>
+    </div>
+  </div>
+</section>
+
+<!-- ═════ Footer ═════ -->
+<footer>
+  <div class="wrap">
+    <div class="footer-grid">
+      <a class="logo" href="#top" aria-label="мысль">
+        <img src="/landing/assets/logo-full.svg" class="logo-full" alt="Мысль" height="28"/>
+      </a>
+      <div class="footer-tag">Разгружает дела, не нагружая новыми</div>
+      <div class="footer-social">
+        <a href="#" aria-label="Telegram">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M21 4L3 11l6 2 2 6 4-4 4 3 2-14z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        </a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>сделано в России · 2026</span>
+      <span>© мысль</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* Sticky header */
+const header = document.getElementById('header');
+const onScroll = () => header.classList.toggle('scrolled', window.scrollY > 24);
+window.addEventListener('scroll', onScroll, { passive: true });
+onScroll();
+
+/* Reveal on scroll */
+const io = new IntersectionObserver((entries) => {
+  for (const e of entries) {
+    if (e.isIntersecting) {
+      e.target.classList.add('in');
+      io.unobserve(e.target);
+    }
+  }
+}, { threshold: 0.12 });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+/* Features — click only, sequential crossfade */
+(function () {
+  const featItems = document.querySelectorAll('.feat-item');
+  const featScreens = document.querySelectorAll('.feat-screen');
+  if (!featItems.length) return;
+
+  let currentFeat = 1;
+  let fadeTimer = null;
+
+  function setFeat(n) {
+    if (n === currentFeat) return;
+
+    /* Items — instant class swap, CSS handles transition */
+    featItems.forEach(el => el.classList.toggle('active', +el.dataset.feat === n));
+
+    /* Screens — sequential: fade out current, then fade in next */
+    const outEl = document.querySelector(`.feat-screen[data-feat="${currentFeat}"]`);
+    const inEl  = document.querySelector(`.feat-screen[data-feat="${n}"]`);
+
+    if (fadeTimer) clearTimeout(fadeTimer);
+
+    if (outEl) {
+      outEl.classList.remove('fade-in');
+      outEl.classList.add('fade-out');
+      outEl.classList.remove('active');
+    }
+
+    fadeTimer = setTimeout(() => {
+      if (outEl) outEl.classList.remove('fade-out');
+      if (inEl) {
+        inEl.classList.add('active');
+        inEl.classList.add('fade-in');
+        setTimeout(() => inEl.classList.remove('fade-in'), 300);
+      }
+    }, 150);
+
+    currentFeat = n;
+  }
+
+  featItems.forEach(el => {
+    el.addEventListener('click', () => setFeat(+el.dataset.feat));
+  });
+})();
+
+/* Chaos field elements (new HTML-based) */
+(function () {
+  const chaosSection = document.querySelector('.chaos-section');
+  if (!chaosSection) return;
+  const els = chaosSection.querySelectorAll('.chaos-el');
+  const io = new IntersectionObserver((entries) => {
+    if (!entries[0].isIntersecting) return;
+    els.forEach(el => {
+      const d = parseInt(el.dataset.delay || '0', 10);
+      el.style.setProperty('--delay', String(d));
+      setTimeout(() => el.classList.add('visible'), d);
+    });
+    io.disconnect();
+  }, { threshold: 0.1 });
+  io.observe(chaosSection);
+})();
+
+/* Solution section reveal */
+(function () {
+  const phoneCol = document.querySelector('.solution-phone-col');
+  const textCol  = document.querySelector('.solution-text-col');
+  if (!phoneCol || !textCol) return;
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('in');
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.15 });
+  io.observe(phoneCol);
+  io.observe(textCol);
+})();
+
+/* Chaos section stagger */
+const chaosSection = document.querySelector('.chaos-section');
+if (chaosSection) {
+  const chaosItems = chaosSection.querySelectorAll('.chaos-g');
+  const chaosIo = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting) {
+      chaosItems.forEach(el => {
+        const d = parseInt(el.dataset.delay || '0', 10);
+        el.style.setProperty('--delay', String(d));
+        setTimeout(() => el.classList.add('visible'), d);
+        /* also handle .chaos-el */
+      });
+      chaosIo.disconnect();
+    }
+  }, { threshold: 0.15 });
+  chaosIo.observe(chaosSection);
+}
+
+/* Onboarding reveal */
+const obIo = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); obIo.unobserve(e.target); } });
+}, { threshold: 0.15 });
+document.querySelectorAll('.ob-step, .ob-platform').forEach(el => obIo.observe(el));
+</script>
+
+</body>
+</html>

@@ -67,6 +67,98 @@ function IntegrationRow({ name, desc }: { name: string; desc: string }) {
   );
 }
 
+function TelegramRow() {
+  const [step, setStep] = useState<'idle' | 'code' | 'done'>('idle');
+  const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || 'MindexBot';
+
+  useEffect(() => {
+    const user = getCurrentUser();
+    if (!user) return;
+    fetch(`/api/telegram/link-status?userId=${encodeURIComponent(user.id)}`)
+      .then(r => r.json())
+      .then(d => { if (d.linked) setStep('done'); })
+      .catch(() => {});
+  }, []);
+
+  const handleConnect = async () => {
+    const user = getCurrentUser();
+    if (!user) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/telegram/link-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      const data = await res.json();
+      setCode(data.code);
+      setStep('code');
+
+      // Polling — проверяем каждые 3 секунды, подключился ли пользователь
+      const interval = setInterval(async () => {
+        const r = await fetch(`/api/telegram/link-status?userId=${encodeURIComponent(user.id)}`);
+        const d = await r.json();
+        if (d.linked) {
+          clearInterval(interval);
+          setStep('done');
+        }
+      }, 3000);
+      setTimeout(() => clearInterval(interval), 10 * 60 * 1000); // стоп через 10 мин
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <div style={{ height: 1, background: 'rgba(0,0,0,0.06)' }} />
+      <div style={{ padding: '18px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontFamily: M, fontSize: 15, color: 'var(--text-primary)', marginBottom: 3 }}>Telegram</div>
+            <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)' }}>
+              {step === 'done' ? '✅ Подключён — уведомления активны' : 'Уведомления о задачах прямо в Telegram'}
+            </div>
+          </div>
+          {step === 'idle' && <PillButton label={loading ? '...' : 'Подключить'} onClick={handleConnect} />}
+          {step === 'done' && <span style={{ fontFamily: M, fontSize: 12, color: '#4caf50' }}>Подключён</span>}
+        </div>
+        {step === 'code' && (
+          <div style={{ marginTop: 14, padding: '14px 16px', background: 'rgba(0,0,0,0.04)', borderRadius: 12 }}>
+            <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>
+              1. Открой бота в Telegram
+            </div>
+            <a
+              href={`https://t.me/${botUsername}?start=${code}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontFamily: M, fontSize: 14, color: '#5B6CF8', textDecoration: 'none', fontWeight: 500 }}
+            >
+              @{botUsername} →
+            </a>
+            <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)', marginTop: 10, marginBottom: 6 }}>
+              2. Или введи код вручную командой:
+            </div>
+            <div style={{
+              fontFamily: 'monospace', fontSize: 16, fontWeight: 700,
+              letterSpacing: '0.12em', color: 'var(--text-primary)',
+              background: 'rgba(0,0,0,0.06)', borderRadius: 8,
+              padding: '8px 12px', display: 'inline-block'
+            }}>
+              /start {code}
+            </div>
+            <div style={{ fontFamily: M, fontSize: 12, color: 'var(--text-muted)', marginTop: 10 }}>
+              Ожидаю подключения...
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function GoogleCalendarRow() {
   const [connected, setConnected] = useState(() => isGoogleCalendarConnected());
   const [loading, setLoading] = useState(false);
@@ -425,6 +517,7 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
           <div style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 4 }}>
             Интеграции
           </div>
+          <TelegramRow />
           <GoogleCalendarRow />
           <IntegrationRow name="Яндекс Календарь" desc="Синхронизация твоих событий и задач" />
           <IntegrationRow name="Notion" desc="Импорт страниц как заметок" />

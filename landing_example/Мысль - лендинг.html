@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Мысль — планировщик задач с ИИ</title>
+<meta name="description" content="Думай. Остальное — забота Мысли. Голосом или текстом — Мысль превращает идеи в план." />
+<link rel="stylesheet" href="styles.css?v=10" />
+<template id="__bundler_thumbnail" data-bg-color="#0D0D0D">
+  <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <rect x="14" y="14" width="172" height="172" rx="86" fill="none" stroke="#F0EDE6" stroke-width="2"/>
+    <ellipse cx="100" cy="100" rx="62" ry="22" fill="none" stroke="#F0EDE6" stroke-width="1.6" opacity="0.7"/>
+    <ellipse cx="100" cy="100" rx="62" ry="22" fill="none" stroke="#F0EDE6" stroke-width="1.6" opacity="0.5" transform="rotate(60 100 100)"/>
+    <ellipse cx="100" cy="100" rx="62" ry="22" fill="none" stroke="#F0EDE6" stroke-width="1.6" opacity="0.5" transform="rotate(-60 100 100)"/>
+    <circle cx="100" cy="100" r="6" fill="#F0EDE6"/>
+  </svg>
+</template>
+</head>
+<body>
+
+<!-- ═════ Header ═════ -->
+<header id="header">
+  <div class="wrap">
+    <a class="logo" href="#top" aria-label="Мысль">
+      <img class="logo-full" src="assets/logo-full.svg" alt="мысль" style="width: 140px" />
+    </a>
+    <a class="btn btn-outline" href="#join">занять место</a>
+  </div>
+</header>
+
+<!-- ═════ Hero ═════ -->
+<section class="hero" id="top">
+  <!-- Bubble chamber — soviet physics aesthetic -->
+  <div class="hero-stage" aria-hidden="true">
+    <svg class="bubble-chamber" viewBox="0 0 1000 1000">
+      <defs>
+        <filter id="chalk" x="-20%" y="-20%" width="140%" height="140%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="4" seed="2" result="noise"/>
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+      </defs>
+
+      <g class="atom-dim">
+        <!-- Неподвижный круг -->
+        <circle cx="500" cy="500" r="340" class="ring" style="opacity:0.25"/>
+
+        <!-- Ядро -->
+        <circle cx="500" cy="500" r="8" fill="#F0EDE6" filter="url(#chalk)" opacity="0.7">
+          <animate attributeName="r" values="8;11;7;10;8" dur="5s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+          <animate attributeName="cx" values="500;503;498;501;500" dur="7s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+          <animate attributeName="cy" values="500;498;502;499;500" dur="6s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+        </circle>
+
+        <!-- Кольцо 0 -->
+        <ellipse class="ring" cx="500" cy="500" rx="60" ry="24">
+          <animateTransform attributeName="transform" type="rotate" from="30 500 500" to="390 500 500" dur="10.2s" repeatCount="indefinite"/>
+          <animate attributeName="ry" values="24;54;8;54;24" dur="10.2s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+          <animate attributeName="rx" values="60;48;60;72;60" dur="7.3s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+        </ellipse>
+
+        <!-- Кольцо 1 -->
+        <ellipse class="ring" cx="500" cy="500" rx="120" ry="48">
+          <animateTransform attributeName="transform" type="rotate" from="180 500 500" to="-180 500 500" dur="15.3s" repeatCount="indefinite"/>
+          <animate attributeName="ry" values="48;108;12;108;48" dur="15.3s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+          <animate attributeName="rx" values="120;96;130;96;120" dur="11.1s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+        </ellipse>
+
+        <!-- Кольцо 2 -->
+        <ellipse class="ring" cx="500" cy="500" rx="220" ry="88">
+          <animateTransform attributeName="transform" type="rotate" from="90 500 500" to="450 500 500" dur="23.8s" repeatCount="indefinite"/>
+          <animate attributeName="ry" values="88;22;160;22;88" dur="23.8s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+          <animate attributeName="rx" values="220;180;240;180;220" dur="17.6s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+        </ellipse>
+
+        <!-- Кольцо 3 -->
+        <ellipse class="ring" cx="500" cy="500" rx="340" ry="136">
+          <animateTransform attributeName="transform" type="rotate" from="45 500 500" to="-315 500 500" dur="34s" repeatCount="indefinite"/>
+          <animate attributeName="ry" values="136;34;220;34;136" dur="34s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+          <animate attributeName="rx" values="340;280;360;280;340" dur="25.5s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+        </ellipse>
+      </g>
+    </svg>
+  </div>
+
+  <div class="hero-content">
+    <div class="hero-eyebrow">
+      <span class="dot"></span>
+    </div>
+    <h1 class="hero-title" style="font-family: &quot;Helvetica Neue&quot;; width: 808px; text-align: center; letter-spacing: -7.4px; font-size: 150px; font-weight: 300; line-height: 1">есть мысли?</h1>
+    <p class="hero-sub">Думай. Остальное — забота Мысли</p>
+    <div class="hero-cta-wrap">
+      <a class="btn btn-solid btn-lg" href="#join">занять место</a>
+      <span class="hero-micro">
+</span>
+    </div>
+  </div>
+
+  <div class="scroll-cue" aria-hidden="true" style="font-family: Arial">как это работает?</div>
+</section>
+
+<!-- ═════ Pain ═════ -->
+<section class="pain-section">
+  <div class="wrap pain reveal">
+    <div class="pain-text">
+      <p>Ты открываешь нейронку, потом планировщик, потом календарь, но помогает ли это в работе?</p>
+      <p>Контекст в трёх местах и нигде сразу</p>
+      <p>Самые ценные мысли исчезает, пока ты думаешь, куда их записать. Так это работает сейчас...</p>
+    </div>
+
+    <div class="pain-stack" aria-hidden="true">
+      <svg class="connector" viewBox="0 0 360 420" preserveAspectRatio="none">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+            <path d="M0,0 L10,5 L0,10" fill="none" stroke="#F0EDE6" stroke-opacity="0.25" stroke-width="1"/>
+          </marker>
+        </defs>
+        <path d="M 90 80 Q 180 60 200 130" fill="none" stroke="#F0EDE6" stroke-opacity="0.2" stroke-width="1" stroke-dasharray="2 4" marker-end="url(#arr)"/>
+        <path d="M 240 160 Q 280 200 220 240" fill="none" stroke="#F0EDE6" stroke-opacity="0.15" stroke-width="1" stroke-dasharray="2 4" marker-end="url(#arr)"/>
+        <path d="M 200 280 Q 140 320 100 320" fill="none" stroke="#F0EDE6" stroke-opacity="0.1" stroke-width="1" stroke-dasharray="2 4"/>
+      </svg>
+
+      <div class="app-tile t1">
+        <div class="ic">C</div>
+        <div class="name">ChatGPT</div>
+        <div class="lines"><span></span><span></span><span></span></div>
+      </div>
+      <div class="app-tile t2">
+        <div class="ic">N</div>
+        <div class="name">Notion</div>
+        <div class="lines"><span></span><span></span><span></span></div>
+      </div>
+      <div class="app-tile t3">
+        <div class="ic">К</div>
+        <div class="name">Calendar</div>
+        <div class="lines"><span></span><span></span><span></span></div>
+      </div>
+      <div class="app-tile t4">
+        <div class="ic">·</div>
+        <div class="name" style="opacity:.6">мысль…</div>
+        <div class="lines"><span></span><span></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════ Simulator ═════ -->
+<section class="sim-section">
+  <div class="wrap sim-wrap reveal">
+    <div class="section-label" style="opacity: 0">попробуй прямо здесь</div>
+    <div class="sim-card">
+      <form class="sim-input" id="simForm">
+        <textarea class="sim-text" id="simText" rows="2"
+          placeholder="завтра важная встреча в 14:00, хочу до неё успеть подготовить материалы и погулять с собакой"></textarea>
+        <button type="submit" class="sim-send" id="simSend" aria-label="отправить">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </form>
+
+      <div class="sim-response" id="simResponse">
+        <span class="label" style="font-family: Arial">думала 1 секунду</span>
+        Готово. Запланировала: прогулка с собакой в 11:00, подготовка материалов 11:45–13:30, встреча в 14:00.
+      </div>
+
+      <div class="sim-tracker" id="simTracker">
+        <div class="sim-tracker-head">
+          <span class="date">завтра · вторник</span>
+          <span class="meta">3 задачи</span>
+        </div>
+        <div class="task-row" data-i="0">
+          <span class="check"></span>
+          <span class="title">прогулка с собакой</span>
+          <span class="time">11:00</span>
+        </div>
+        <div class="task-row" data-i="1">
+          <span class="check"></span>
+          <span class="title">подготовка материалов</span>
+          <span class="time">11:45 — 13:30</span>
+        </div>
+        <div class="task-row" data-i="2">
+          <span class="check"></span>
+          <span class="title">встреча</span>
+          <span class="time">14:00</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════ How it works ═════ -->
+<section class="how-section">
+  <div class="wrap reveal">
+    <h2 class="section-title">как это работает</h2>
+
+    <div class="how-grid">
+      <div class="how-step">
+        <span class="how-num">01</span>
+        <div class="how-icon">
+          <!-- mic / waveform — organic strokes -->
+          <svg viewBox="0 0 96 96" fill="none">
+            <g stroke="#F0EDE6" stroke-width="1.4" stroke-linecap="round" fill="none">
+              <rect x="38" y="18" width="20" height="42" rx="10"/>
+              <path d="M28 48a20 20 0 0 0 40 0"/>
+              <path d="M48 68v10"/>
+              <path d="M40 78h16"/>
+              <!-- soft waves -->
+              <path d="M14 48c2-3 4-3 6 0s4 3 6 0" opacity="0.5"/>
+              <path d="M70 48c2-3 4-3 6 0s4 3 6 0" opacity="0.5"/>
+            </g>
+            <g fill="#F0EDE6">
+              <circle cx="20" cy="22" r="0.9" opacity="0.5"/>
+              <circle cx="80" cy="30" r="0.7" opacity="0.5"/>
+              <circle cx="78" cy="68" r="0.8" opacity="0.5"/>
+            </g>
+          </svg>
+        </div>
+        <h3>Говоришь что думаешь.<br/>Голосом или текстом. Без структуры.</h3>
+      </div>
+
+      <div class="how-step">
+        <span class="how-num">02</span>
+        <div class="how-icon">
+          <!-- orbit -->
+          <svg viewBox="0 0 96 96" fill="none">
+            <g stroke="#F0EDE6" stroke-width="1.2" fill="none">
+              <circle cx="48" cy="48" r="30" opacity="0.7"/>
+              <ellipse cx="48" cy="48" rx="30" ry="9" opacity="0.7"/>
+              <ellipse cx="48" cy="48" rx="20" ry="6" opacity="0.55" transform="rotate(15 48 48)"/>
+            </g>
+            <g fill="#F0EDE6">
+              <circle cx="48" cy="48" r="2"/>
+              <circle cx="78" cy="48" r="1.5"/>
+              <circle cx="22" cy="44" r="1.1" opacity="0.7"/>
+              <circle cx="62" cy="36" r="0.8" opacity="0.6"/>
+            </g>
+          </svg>
+        </div>
+        <h3>Мысль берёт контекст из памяти, планирует и уточняет нюансы.</h3>
+      </div>
+
+      <div class="how-step">
+        <span class="how-num">03</span>
+        <div class="how-icon">
+          <!-- task list -->
+          <svg viewBox="0 0 96 96" fill="none">
+            <g stroke="#F0EDE6" stroke-width="1.3" stroke-linecap="round" fill="none">
+              <circle cx="22" cy="28" r="6"/>
+              <path d="M19 28l2.5 2.5L26 26"/>
+              <path d="M36 28h44" opacity="0.85"/>
+              <circle cx="22" cy="50" r="6"/>
+              <path d="M36 50h36" opacity="0.5"/>
+              <circle cx="22" cy="72" r="6"/>
+              <path d="M36 72h28" opacity="0.3"/>
+            </g>
+          </svg>
+        </div>
+        <h3>Готовый план появляется в трекере. Ничего не теряется.</h3>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════ Compare ═════ -->
+<section class="compare-section">
+  <div class="wrap compare reveal">
+    <div class="compare-text">
+      <h2 class="section-title">а чем лучше<br/>нейросети?</h2>
+      <div class="rule"></div>
+      <p class="dim">Нейросети — для всего сразу, поэтому для твоих дел — ни для чего конкретно.</p>
+      <p class="dim">Можно собрать связку: ChatGPT + Notion + Calendar. Только это три окна, ручная синхронизация, и мысль которая пришла в душе — утонет раньше чем ты откроешь нужное.</p>
+      <p>Мысль — один инструмент для одной задачи. Говоришь что думаешь — она запоминает, расставляет, не теряет. Работает сразу, без настройки.</p>
+    </div>
+
+    <div class="compare-table-wrap">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Связка приложений</th>
+            <th>Мысль</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>помнит контекст задач</td>
+            <td class="muted">частично</td>
+            <td class="us"><span class="tick"><svg viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>всегда</span></td>
+          </tr>
+          <tr>
+            <td>работает из коробки</td>
+            <td class="muted"><span class="cross"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>нет</span></td>
+            <td class="us"><span class="tick"><svg viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>да</span></td>
+          </tr>
+          <tr>
+            <td>управляет календарём</td>
+            <td class="muted"><span class="cross"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>нет</span></td>
+            <td class="us"><span class="tick"><svg viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>да</span></td>
+          </tr>
+          <tr>
+            <td>Яндекс Календарь</td>
+            <td class="muted"><span class="cross"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>нет</span></td>
+            <td class="us"><span class="tick"><svg viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>да</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ═════ Final CTA ═════ -->
+<section class="final" id="join">
+  <div class="wrap reveal">
+    <h2 class="final-title" style="font-family: &quot;Helvetica Neue&quot;; height: 50px">займи место</h2>
+    <p class="final-sub" style="opacity: 0">первый месяц бесплатно для всех из листа ожидания</p>
+
+    <form class="waitlist" id="waitForm" novalidate>
+      <div class="waitlist-row">
+        <input type="email" id="email" placeholder="твой email" required autocomplete="email"/>
+        <button type="submit" class="btn btn-solid">занять место</button>
+      </div>
+      <div class="waitlist-count" id="waitCount">уже 0 человек в листе ожидания</div>
+      <div class="waitlist-success" id="waitOk">записал. напишем когда откроем доступ.</div>
+    </form>
+  </div>
+</section>
+
+<!-- ═════ Footer ═════ -->
+<footer>
+  <div class="wrap">
+    <div class="footer-grid">
+      <a class="logo" href="#top" aria-label="мысль">
+        <img class="logo-mark-img" src="assets/logo-mark.svg" alt="" aria-hidden="true" style="width: 34px; height: 34px" />
+        <span class="logo-word" style="opacity: 0">мысль</span>
+      </a>
+      <div class="footer-tag">Разгружает дела, не нагружая новыми</div>
+      <div class="footer-social">
+        <a href="#" aria-label="Telegram">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M21 4L3 11l6 2 2 6 4-4 4 3 2-14z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        </a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>сделано в России · 2026</span>
+      <span>© мысль</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* Sticky header */
+const header = document.getElementById('header');
+const onScroll = () => header.classList.toggle('scrolled', window.scrollY > 24);
+window.addEventListener('scroll', onScroll, { passive: true });
+onScroll();
+
+/* Reveal on scroll */
+const io = new IntersectionObserver((entries) => {
+  for (const e of entries) {
+    if (e.isIntersecting) {
+      e.target.classList.add('in');
+      io.unobserve(e.target);
+    }
+  }
+}, { threshold: 0.12 });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+/* Simulator */
+const simForm = document.getElementById('simForm');
+const simInput = simForm;
+const simText = document.getElementById('simText');
+const simSend = document.getElementById('simSend');
+const simResp = document.getElementById('simResponse');
+const simTracker = document.getElementById('simTracker');
+const taskRows = document.querySelectorAll('.task-row');
+
+let simRan = false;
+function runSim() {
+  if (simRan) return; simRan = true;
+  simSend.disabled = true;
+  simInput.classList.add('processing', 'dim');
+
+  setTimeout(() => {
+    simInput.classList.remove('processing');
+    simResp.classList.add('show');
+  }, 900);
+
+  setTimeout(() => {
+    simTracker.classList.add('show');
+    taskRows.forEach((r, i) => {
+      setTimeout(() => r.classList.add('show'), i * 220);
+    });
+  }, 1800);
+}
+
+simForm.addEventListener('submit', (e) => { e.preventDefault(); runSim(); });
+
+/* If user clears placeholder and types something, also auto-trigger fine — keep send button */
+simText.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runSim(); }
+});
+
+/* Auto-grow textarea */
+function grow() {
+  simText.style.height = 'auto';
+  simText.style.height = Math.min(simText.scrollHeight, 200) + 'px';
+}
+simText.addEventListener('input', grow);
+
+/* Waitlist */
+const waitForm = document.getElementById('waitForm');
+const waitOk = document.getElementById('waitOk');
+const waitCount = document.getElementById('waitCount');
+let count = 0;
+waitForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const email = document.getElementById('email').value.trim();
+  if (!/^.+@.+\..+$/.test(email)) {
+    document.getElementById('email').focus();
+    return;
+  }
+  count += 1;
+  waitCount.textContent = `уже ${count} ${count === 1 ? 'человек' : (count < 5 ? 'человека' : 'человек')} в листе ожидания`;
+  waitOk.classList.add('show');
+  document.getElementById('email').value = '';
+});
+</script>
+
+</body>
+</html>

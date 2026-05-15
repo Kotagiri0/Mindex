@@ -1,7 +1,6 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import Groq from "groq-sdk";
 import dotenv from "dotenv";
 import cors from "cors";
 import crypto from "crypto";
@@ -18,6 +17,7 @@ import {
   collectDefaultMetrics,
 } from "prom-client";
 import { verifyGoogleIdToken } from './src/lib/google-auth.ts';
+import { registerBotRoutes, startBot } from './server-bot.ts';
 
 dotenv.config();
 
@@ -148,7 +148,6 @@ app.use("/api/*", (req, res, next) => {
   next();
 });
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
 
 // Multer configuration for voice uploads
@@ -274,6 +273,8 @@ const ensureAuthSchema = async () => {
     );
   `);
 
+  await db.query(`ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS telegram_chat_id BIGINT;`);
+  await db.query(`ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ;`);
   await db.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'local';`);
   await db.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS google_sub TEXT;`);
   await db.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS email TEXT;`);
@@ -341,7 +342,124 @@ const ensureAuthSchema = async () => {
   } catch (e) {
     console.warn('[DB] vector column/index skipped (pgvector unavailable):', e);
   }
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS telegram_link_codes (
+      code TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used BOOLEAN NOT NULL DEFAULT FALSE
+    );
+  `);
 };
+
+// Генерация одноразового кода для привязки Telegram
+app.post("/api/telegram/link-code", async (req, res) => {
+  if (!db) return res.status(500).json({ error: "БД не настроена." });
+  const userId = String(req.body?.userId || "").trim();
+  if (!userId) return res.status(400).json({ error: "userId обязателен." });
+
+  const code = `MNDX-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 минут
+
+  await db.query(
+    `INSERT INTO telegram_link_codes (code, user_id, expires_at) VALUES ($1, $2, $3)
+     ON CONFLICT (code) DO UPDATE SET user_id = $2, expires_at = $3, used = FALSE`,
+    [code, userId, expiresAt]
+  );
+
+  res.json({ code });
+});
+
+// Проверка статуса привязки (polling с фронтенда)
+app.get("/api/telegram/link-status", async (req, res) => {
+  if (!db) return res.status(500).json({ error: "БД не настроена." });
+  const userId = String(req.query.userId || "").trim();
+  if (!userId) return res.status(400).json({ error: "userId обязателен." });
+
+  const { rows } = await db.query(
+    `SELECT telegram_chat_id FROM user_profiles WHERE user_id = $1 LIMIT 1`,
+    [userId]
+  );
+  const linked = Boolean(rows[0]?.telegram_chat_id);
+  res.json({ linked });
+});
+
+// Тестовый эндпоинт — запускает проактивную отправку немедленно для одного userId
+app.post("/api/telegram/proactive-test", async (req, res) => {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return res.status(500).json({ error: "TELEGRAM_BOT_TOKEN не задан" });
+  if (!db) return res.status(500).json({ error: "БД не настроена" });
+
+  const userId = String(req.body?.userId || "").trim();
+  if (!userId) return res.status(400).json({ error: "userId обязателен" });
+
+  try {
+    const apiKey = process.env.ROUTERAI_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: "ROUTERAI_API_KEY не задан" });
+
+    const { rows: profileRows } = await db.query(
+      `SELECT telegram_chat_id FROM user_profiles WHERE user_id = $1 LIMIT 1`,
+      [userId]
+    );
+    if (!profileRows[0]?.telegram_chat_id) {
+      return res.status(400).json({ error: "Telegram не привязан к этому аккаунту" });
+    }
+    const chatId = profileRows[0].telegram_chat_id;
+    const today = new Date().toISOString().split('T')[0];
+
+    const [tasksRes, threadsRes] = await Promise.all([
+      db.query(
+        `SELECT name, date, time FROM user_tasks WHERE user_id = $1 AND done = false ORDER BY date ASC, time ASC NULLS LAST LIMIT 5`,
+        [userId]
+      ),
+      db.query(
+        `SELECT title, summary FROM user_threads WHERE user_id = $1 AND summary IS NOT NULL AND is_meaningful = true ORDER BY updated_at DESC LIMIT 3`,
+        [userId]
+      ),
+    ]);
+
+    if (tasksRes.rows.length === 0 && threadsRes.rows.length === 0) {
+      return res.json({ sent: false, reason: "Нет контекста для отправки" });
+    }
+
+    const taskLines = tasksRes.rows.map((t: any) => {
+      const when = t.date === today ? 'сегодня' : t.date;
+      return `- ${t.name} (${when}${t.time ? ', ' + t.time : ''})`;
+    }).join('\n');
+
+    const threadLines = threadsRes.rows.map((t: any) =>
+      `[${t.title}]: ${t.summary?.slice(0, 120)}`
+    ).join('\n');
+
+    const userContext = [
+      taskLines ? `Незакрытые задачи:\n${taskLines}` : '',
+      threadLines ? `Из прошлых разговоров:\n${threadLines}` : '',
+    ].filter(Boolean).join('\n\n');
+
+    const prompt = `Ты — Мысль, персональный AI-ассистент. Сгенерируй одно короткое проактивное сообщение пользователю.\n\nКонтекст пользователя:\n${userContext}\n\nПравила:\n- Максимум 2 предложения\n- Конкретная отсылка к реальному контексту\n- Заканчивается вопросом или мягким действием\n- Никогда: "Как дела?", "Чем могу помочь?"\n- Одна самая важная задача, не список\n- Звучи как живой собеседник\n- Plaintext, без кавычек, без подписи`;
+
+    const aiRes = await fetch('https://routerai.ru/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: 'deepseek/deepseek-v4-flash', messages: [{ role: 'user', content: prompt }], max_tokens: 150, temperature: 0.8, thinking: false }),
+    });
+
+    const aiData = await aiRes.json();
+    const text = aiData.choices?.[0]?.message?.content?.trim();
+    if (!text) return res.status(500).json({ error: "AI не вернул текст" });
+
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text }),
+    });
+
+    res.json({ sent: true, text });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message });
+  }
+});
 
 app.post("/api/auth/register", async (req, res) => {
   if (!db) {
@@ -540,7 +658,7 @@ app.get("/api/data/bootstrap", async (req, res) => {
     const [profileRes, tasksRes, threadsRes] = await Promise.all([
       db.query(
         `
-          SELECT user_id, settings, onboarding_complete, updated_at
+          SELECT user_id, settings, onboarding_complete, updated_at, telegram_chat_id
           FROM user_profiles
           WHERE user_id = $1
           LIMIT 1
@@ -575,6 +693,7 @@ app.get("/api/data/bootstrap", async (req, res) => {
             settings: profileRow.settings,
             onboarding_complete: profileRow.onboarding_complete,
             updated_at: profileRow.updated_at,
+            telegram_chat_id: profileRow.telegram_chat_id || null,
           }
         : null,
       tasks: tasksRes.rows.map((row) => ({
@@ -678,7 +797,8 @@ app.post("/api/data/task", dataRateLimit, async (req, res) => {
       ]
     );
     return res.status(200).json({ success: true });
-  } catch {
+  } catch (err) {
+    console.error('[API] POST /api/data/task error:', err);
     return res.status(500).json({ error: "Не удалось сохранить задачу." });
   }
 });
@@ -808,9 +928,9 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
       return res.status(400).json({ error: "Аудиофайл пуст (0 байт)." });
     }
 
-    const apiKey = process.env.GROQ_API_KEY;
+    const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: "GROQ_API_KEY не найден." });
+      return res.status(500).json({ error: "OPENROUTER_API_KEY не найден." });
     }
 
     const inputExtension = resolveAudioExtension(req.file.mimetype, req.file.originalname);
@@ -835,15 +955,27 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
     const wavBuffer = fs.readFileSync(tmpOut);
     console.log('[VOICE] Converted to wav:', wavBuffer.length, 'bytes');
 
-    const groq = new Groq({ apiKey });
-    const transcription = await groq.audio.transcriptions.create({
-      file: new File([wavBuffer], "audio.wav", { type: "audio/wav" }),
-      model: "whisper-large-v3",
-      language: "ru",
+    const formData = new FormData();
+    formData.append('file', new Blob([wavBuffer], { type: 'audio/wav' }), 'audio.wav');
+    formData.append('model', 'openai/whisper-large-v3-turbo');
+
+    const aiRes = await fetch('https://openrouter.ai/api/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+      body: formData,
     });
 
-    console.log('[VOICE] Transcription success:', transcription.text?.slice(0, 100));
-    return res.status(200).json({ text: transcription.text });
+    if (!aiRes.ok) {
+      const err = await aiRes.text();
+      console.error('[VOICE] OpenRouter error:', err);
+      return res.status(500).json({ error: 'Ошибка транскрибации.' });
+    }
+
+    const aiData = await aiRes.json() as any;
+    const text = (aiData.text ?? '').trim();
+
+    console.log('[VOICE] Transcription success:', text.slice(0, 100));
+    return res.status(200).json({ text });
 
   } catch (error: any) {
     console.error("[VOICE] Transcription error:", error?.message || error);
@@ -1023,6 +1155,14 @@ app.post("/api/chat", async (req, res) => {
     const apiKey = process.env.ROUTERAI_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ error: "ROUTERAI_API_KEY не найден в .env" });
+    }
+
+    // Обновляем время активности пользователя
+    if (db && userId) {
+      db.query(
+        `UPDATE user_profiles SET last_active_at = NOW() WHERE user_id = $1`,
+        [userId]
+      ).catch(() => {});
     }
 
     // Build system prompt: base → personal profile → rag context
@@ -1208,8 +1348,187 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
+async function sendProactiveMessages(token: string): Promise<void> {
+  if (!db) return;
+  const apiKey = process.env.ROUTERAI_API_KEY;
+  if (!apiKey) return;
+
+  try {
+    const today = new Date().toISOString().split('T')[0];
+
+    // Берём пользователей с Telegram, которые не были активны сегодня
+    const { rows: users } = await db.query(
+      `SELECT p.user_id, p.telegram_chat_id
+       FROM user_profiles p
+       WHERE p.telegram_chat_id IS NOT NULL
+         AND (p.last_active_at IS NULL OR p.last_active_at::date < $1::date)`,
+      [today]
+    );
+
+    for (const user of users) {
+      try {
+        // Собираем контекст: незакрытые задачи + последние summary из тредов
+        const [tasksRes, threadsRes] = await Promise.all([
+          db.query(
+            `SELECT name, date, time FROM user_tasks
+             WHERE user_id = $1 AND done = false
+             ORDER BY date ASC, time ASC NULLS LAST
+             LIMIT 5`,
+            [user.user_id]
+          ),
+          db.query(
+            `SELECT title, summary FROM user_threads
+             WHERE user_id = $1 AND summary IS NOT NULL AND is_meaningful = true
+             ORDER BY updated_at DESC
+             LIMIT 3`,
+            [user.user_id]
+          ),
+        ]);
+
+        // Если нет никакого контекста — молчим
+        if (tasksRes.rows.length === 0 && threadsRes.rows.length === 0) continue;
+
+        const taskLines = tasksRes.rows.map((t: any) => {
+          const when = t.date === today ? 'сегодня' : t.date;
+          return `- ${t.name} (${when}${t.time ? ', ' + t.time : ''})`;
+        }).join('\n');
+
+        const threadLines = threadsRes.rows.map((t: any) =>
+          `[${t.title}]: ${t.summary?.slice(0, 120)}`
+        ).join('\n');
+
+        const userContext = [
+          taskLines ? `Незакрытые задачи:\n${taskLines}` : '',
+          threadLines ? `Из прошлых разговоров:\n${threadLines}` : '',
+        ].filter(Boolean).join('\n\n');
+
+        const prompt = `Ты — Мысль, персональный AI-ассистент. Сгенерируй одно короткое проактивное сообщение пользователю.
+
+Контекст пользователя:
+${userContext}
+
+Правила:
+- Максимум 2 предложения
+- Конкретная отсылка к реальному контексту — не общие фразы
+- Заканчивается либо вопросом, либо мягким действием
+- Никогда: "Как дела?", "Чем могу помочь?", "Доброе утро!" без контекста
+- Выбери одну самую важную или просроченную задачу — не перечисляй всё
+- Звучи как живой собеседник, не как бот
+- Не упоминай что это автоматическое сообщение
+- Plaintext, без кавычек, без подписи`;
+
+        const response = await fetch('https://routerai.ru/api/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: 'deepseek/deepseek-v4-flash',
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: 150,
+            temperature: 0.8,
+            thinking: false,
+          }),
+        });
+
+        if (!response.ok) continue;
+        const data = await response.json();
+        const text = data.choices?.[0]?.message?.content?.trim();
+        if (!text || text.length < 10) continue;
+
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: user.telegram_chat_id, text }),
+        });
+
+        console.log(`[Proactive] Отправлено пользователю ${user.user_id}`);
+      } catch (e: any) {
+        console.error(`[Proactive] Ошибка для ${user.user_id}:`, e?.message);
+      }
+    }
+  } catch (e: any) {
+    console.error('[Proactive] Ошибка планировщика:', e?.message);
+  }
+}
+
+function startProactiveScheduler(token: string): void {
+  const HOUR = 9; // 9:00 утра по серверному времени
+
+  const scheduleNext = () => {
+    const now = new Date();
+    const next = new Date();
+    next.setHours(HOUR, 0, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+    const delay = next.getTime() - now.getTime();
+    setTimeout(() => {
+      sendProactiveMessages(token).catch(e => console.error('[Proactive]', e));
+      setInterval(() => sendProactiveMessages(token).catch(e => console.error('[Proactive]', e)), 24 * 60 * 60 * 1000);
+    }, delay);
+    console.log(`[Proactive] Следующая отправка в ${next.toISOString()}`);
+  };
+
+  scheduleNext();
+}
+
+async function startNotificationScheduler(token: string): Promise<void> {
+  const REMIND_BEFORE_MIN = 15;
+
+  const tick = async () => {
+    if (!db) return;
+    try {
+      const now = new Date();
+      const targetTime = new Date(now.getTime() + REMIND_BEFORE_MIN * 60 * 1000);
+      const todayStr = now.toISOString().split('T')[0];
+      const hh = String(targetTime.getHours()).padStart(2, '0');
+      const mm = String(targetTime.getMinutes()).padStart(2, '0');
+      const timeStr = `${hh}:${mm}`;
+
+      const { rows } = await db.query(
+        `SELECT t.id, t.name, t.user_id, p.telegram_chat_id
+         FROM user_tasks t
+         JOIN user_profiles p ON p.user_id = t.user_id
+         WHERE t.date = $1
+           AND t.time = $2
+           AND t.done = false
+           AND p.telegram_chat_id IS NOT NULL
+           AND (t.notified_at IS NULL OR t.notified_at < NOW() - INTERVAL '23 hours')`,
+        [todayStr, timeStr]
+      );
+
+      for (const row of rows) {
+        try {
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: row.telegram_chat_id, text: `⏰ Через ${REMIND_BEFORE_MIN} минут: ${row.name}` }),
+          });
+          await db.query(
+            `UPDATE user_tasks SET notified_at = NOW() WHERE id = $1`,
+            [row.id]
+          );
+        } catch (e: any) {
+          console.error('[Notif] Ошибка отправки:', e?.message);
+        }
+      }
+    } catch (e: any) {
+      console.error('[Notif] Ошибка планировщика:', e?.message);
+    }
+  };
+
+  setInterval(tick, 60_000);
+  console.log('[Notif] Планировщик уведомлений запущен (интервал 1 мин)');
+}
+
 const startServer = async () => {
   await ensureAuthSchema();
+  // Добавляем колонку notified_at если её нет
+  if (db) {
+    await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ;`).catch(() => {});
+  }
+
+  // Регистрируем маршруты Telegram-бота
+  if (db) {
+    registerBotRoutes(app, db);
+  }
 
   if (process.env.NODE_ENV !== "production") {
     try {
@@ -1219,8 +1538,14 @@ const startServer = async () => {
         appType: "spa",
       });
       app.use(vite.middlewares);
-      app.listen(PORT, "0.0.0.0", async () => {
+      app.listen(PORT, "0.0.0.0", () => {
         console.log(`Локальный сервер запущен: http://localhost:${PORT}`);
+        if (db) startBot(db).catch(e => console.error('[Bot] startBot error:', e));
+        const botToken = process.env.TELEGRAM_BOT_TOKEN;
+        if (botToken) {
+          startNotificationScheduler(botToken);
+          startProactiveScheduler(botToken);
+        }
       });
     } catch (err) {
       console.error("Ошибка запуска Vite:", err);
@@ -1229,14 +1554,23 @@ const startServer = async () => {
   }
 
   const distPath = path.join(process.cwd(), "dist");
+  app.get("/", (_req, res) => {
+    res.sendFile(path.join(distPath, "landing.html"));
+  });
   app.use(express.static(distPath));
   app.get("*", (req, res) => {
     if (req.path.startsWith("/api/")) return;
     res.sendFile(path.join(distPath, "index.html"));
   });
 
-  app.listen(PORT, "0.0.0.0", async () => {
+  app.listen(PORT, "0.0.0.0", () => {
     console.log(`Продакшн сервер запущен: http://localhost:${PORT}`);
+    if (db) startBot(db).catch(e => console.error('[Bot] startBot error:', e));
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (botToken) {
+      startNotificationScheduler(botToken);
+      startProactiveScheduler(botToken);
+    }
   });
 };
 

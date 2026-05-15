@@ -4,6 +4,7 @@ import { ArrowUp, Copy, Check } from 'lucide-react';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
 import { getCurrentUser } from '../lib/auth';
+import { SYSTEM_INSTRUCTION } from '../lib/groq';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
@@ -22,6 +23,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const [showAiPrompt, setShowAiPrompt] = useState(false);
   const [skipped, setSkipped] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [aiReply, setAiReply] = useState('');
   const [copied, setCopied] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -43,12 +45,42 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       const threadId = uuid();
       const now = Date.now();
       const timeStr = new Date().toTimeString().slice(0, 5);
+      const nowCtx = new Date().toLocaleString('ru-RU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+      // Call AI for a real response
+      let assistantText = '';
+      try {
+        const aiRes = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content }],
+            systemInstruction: SYSTEM_INSTRUCTION.replace('DATETIME_PLACEHOLDER', nowCtx),
+            tools: [],
+            tool_choice: 'none',
+            userId,
+          }),
+        });
+        if (aiRes.ok) {
+          const data = await aiRes.json();
+          assistantText = data?.choices?.[0]?.message?.content?.trim() ?? '';
+        }
+      } catch {}
+
+      setAiReply(assistantText);
+
+      const messages: Array<{ role: 'user' | 'assistant'; content: string; time: string }> = [
+        { role: 'user', content, time: timeStr },
+      ];
+      if (assistantText) {
+        messages.push({ role: 'assistant', content: assistantText, time: new Date().toTimeString().slice(0, 5) });
+      }
 
       const thread = {
         id: threadId,
         title: 'О себе',
         preview: content.slice(0, 100),
-        messages: [{ role: 'user' as const, content, time: timeStr }],
+        messages,
         createdAt: now,
         source: 'заметка' as const,
         is_meaningful: true,
@@ -63,6 +95,11 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ messages: thread.messages, threadId, userId, raw: true, rawSummary: content }),
         }).catch(() => {});
+      }
+
+      // If we got a reply, show it briefly before completing
+      if (assistantText) {
+        await new Promise(r => setTimeout(r, 2800));
       }
 
       onComplete(threadId);
@@ -158,6 +195,28 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
       <div style={{ flex: 1 }} />
 
+      {/* AI reply bubble */}
+      <AnimatePresence>
+        {aiReply && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            style={{ padding: '0 20px 16px' }}
+          >
+            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#0B0D10', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <MysliLogo size={16} strokeWidth={14} />
+              </div>
+              <div style={{ background: '#ffffff', borderRadius: '4px 16px 16px 16px', padding: '10px 14px', fontFamily: M, fontSize: 14, color: '#222224', lineHeight: 1.6, maxWidth: 'calc(100% - 42px)' }}>
+                {aiReply}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Bottom card */}
       <motion.div
         initial={{ y: 20, opacity: 0 }}
@@ -239,22 +298,31 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           </div>
 
           <AnimatePresence>
-            {text.trim() && (
+            {text.trim() && !loading && (
               <motion.button
                 initial={{ scale: 0, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0, opacity: 0 }}
                 whileTap={{ scale: 0.88 }}
                 onClick={handleSubmit}
-                disabled={loading}
                 style={{
                   width: 40, height: 40, borderRadius: '50%', background: '#0B0D10',
                   border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  flexShrink: 0, opacity: loading ? 0.5 : 1, transition: 'opacity 0.15s',
+                  flexShrink: 0,
                 }}
               >
                 <ArrowUp size={17} color="#fff" strokeWidth={2} />
               </motion.button>
+            )}
+            {loading && (
+              <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0, opacity: 0 }}
+                style={{ width: 40, height: 40, borderRadius: '50%', background: '#0B0D10', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+              >
+                <div style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+              </motion.div>
             )}
           </AnimatePresence>
         </div>

@@ -100,8 +100,43 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     return n.getHours().toString().padStart(2, '0') + ':' + n.getMinutes().toString().padStart(2, '0');
   };
 
+  const REMIND_KEYWORDS = /напомн|remind|уведом|пришли|пинг|ping/i;
+
   const sendText = async (text: string) => {
     if (!text || !threadId) return;
+
+    // Умный ответ: если просят напоминание — проверяем Telegram
+    if (REMIND_KEYWORDS.test(text)) {
+      const userId = db.getUserId();
+      if (userId) {
+        try {
+          const res = await fetch(`/api/data/bootstrap?userId=${encodeURIComponent(userId)}`);
+          const data = await res.json();
+          const hasTelegram = Boolean(data?.profile?.telegram_chat_id);
+          if (!hasTelegram) {
+            const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || 'MindexBot';
+            const botUrl = `https://t.me/${botUsername}`;
+            const userMsg: Message = { role: 'user', content: text, time: ft() };
+            const assistantMsg: Message = {
+              role: 'assistant',
+              content: `Хотела бы напомнить — но в браузере я не могу отправлять уведомления.\n\nЕсли подключишь меня в Telegram, буду писать тебе прямо перед задачей. Это займёт 10 секунд: просто нажми /start в боте.\n\n👉 ${botUrl}`,
+              time: ft()
+            };
+            setThreads(prev => prev.map(t => {
+              if (t.id === threadId) {
+                const updated = { ...t, messages: [...t.messages, userMsg, assistantMsg] };
+                db.saveThread(updated);
+                return updated;
+              }
+              return t;
+            }));
+            return;
+          }
+        } catch {
+          // Если не удалось проверить — пропускаем перехват, идём в AI как обычно
+        }
+      }
+    }
 
     const userMsg: Message = { role: 'user', content: text, time: ft() };
     const isFirstMessage = thread.messages.length === 0;
@@ -310,10 +345,10 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   };
 
   useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.style.height = 'auto';
-      inputRef.current.style.height = inputRef.current.scrollHeight + 'px';
-    }
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
   }, [input]);
 
   const handleSend = () => {
@@ -1056,6 +1091,8 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
               lineHeight: 1.55,
               border: 'none',
               display: 'block',
+              maxHeight: '120px',
+              overflowY: 'auto',
             }}
             placeholder="Есть мысли?"
             value={input}

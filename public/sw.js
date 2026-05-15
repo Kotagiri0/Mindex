@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mindex-cache-v2';
+const CACHE_NAME = 'mindex-cache-v3';
 const URLS_TO_CACHE = [
   '/',
   '/index.html',
@@ -45,6 +45,11 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') {
+    return;
+  }
+
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith('/api/')) {
     return;
   }
 
