@@ -718,7 +718,8 @@ app.get("/api/data/bootstrap", async (req, res) => {
         label: row.label || undefined,
       })),
     });
-  } catch {
+  } catch (err) {
+    console.error('[API] bootstrap error:', err);
     return res.status(500).json({ error: "Не удалось загрузить данные пользователя." });
   }
 });
