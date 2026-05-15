@@ -956,19 +956,14 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
     const wavBuffer = fs.readFileSync(tmpOut);
     console.log('[VOICE] Converted to wav:', wavBuffer.length, 'bytes');
 
-    const audioBase64 = wavBuffer.toString('base64');
+    const formData = new FormData();
+    formData.append('file', new Blob([wavBuffer], { type: 'audio/wav' }), 'audio.wav');
+    formData.append('model', 'openai/whisper-1');
 
     const aiRes = await fetch('https://openrouter.ai/api/v1/audio/transcriptions', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'openai/whisper-large-v3-turbo',
-        file: audioBase64,
-        language: 'ru',
-      }),
+      headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}` },
+      body: formData,
     });
 
     if (!aiRes.ok) {
