@@ -958,7 +958,7 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
 
     const formData = new FormData();
     formData.append('file', new Blob([wavBuffer], { type: 'audio/wav' }), 'audio.wav');
-    formData.append('model', 'openai/whisper-1');
+    formData.append('model', 'openai/whisper-large-v3-turbo');
 
     const aiRes = await fetch('https://openrouter.ai/api/v1/audio/transcriptions', {
       method: 'POST',
