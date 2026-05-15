@@ -958,17 +958,18 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
 
     const formData = new FormData();
     formData.append('file', new Blob([wavBuffer], { type: 'audio/wav' }), 'audio.wav');
-    formData.append('model', 'google/chirp-3');
+    formData.append('model', 'whisper-large-v3-turbo');
+    formData.append('language', 'ru');
 
-    const aiRes = await fetch('https://openrouter.ai/api/v1/audio/transcriptions', {
+    const aiRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}` },
+      headers: { 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` },
       body: formData,
     });
 
     if (!aiRes.ok) {
       const err = await aiRes.text();
-      console.error('[VOICE] OpenRouter error:', err);
+      console.error('[VOICE] Groq error:', err);
       return res.status(500).json({ error: 'Ошибка транскрибации.' });
     }
 
