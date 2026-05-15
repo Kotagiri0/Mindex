@@ -9,14 +9,14 @@
 import type { Express } from 'express';
 import type { Pool } from 'pg';
 import crypto from 'crypto';
-import { SocksProxyAgent } from 'socks-proxy-agent';
+import { fetch as undiciFetch, ProxyAgent } from 'undici';
 
 const SOCKS_PROXY = process.env.SOCKS_PROXY_URL;
-const proxyAgent = SOCKS_PROXY ? new SocksProxyAgent(SOCKS_PROXY) : null;
+const proxyDispatcher = SOCKS_PROXY ? new ProxyAgent(SOCKS_PROXY) : null;
 
-const tgFetch = (url: string, options: RequestInit = {}) => {
-  if (proxyAgent) {
-    return fetch(url, { ...options, dispatcher: proxyAgent as any });
+const tgFetch = (url: string, options: Record<string, any> = {}) => {
+  if (proxyDispatcher) {
+    return undiciFetch(url, { ...options, dispatcher: proxyDispatcher });
   }
   return fetch(url, options);
 };
