@@ -21,6 +21,7 @@ import DesktopApp from './components/DesktopApp';
 import TodayMobile from './components/TodayMobile';
 
 const defaultSettings = { agent: true, confirm: true, notifs: true };
+const TASK_REFRESH_INTERVAL_MS = 60_000;
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<LocalUser | null>(getCurrentUser());
@@ -101,8 +102,52 @@ export default function App() {
 
     loadData();
 
+    let refreshInFlight = false;
+    let intervalId: number | null = null;
+
+    const refreshTasks = async (source: 'interval' | 'visibility') => {
+      if (cancelled || refreshInFlight) return;
+      if (source === 'interval' && document.visibilityState !== 'visible') return;
+      refreshInFlight = true;
+      try {
+        const fresh = await db.refreshTasks();
+        if (!cancelled) setTasks(fresh);
+      } catch (error) {
+        console.warn('Failed to refresh tasks:', error);
+      } finally {
+        refreshInFlight = false;
+      }
+    };
+
+    const startInterval = () => {
+      if (intervalId !== null) return;
+      intervalId = window.setInterval(() => {
+        refreshTasks('interval');
+      }, TASK_REFRESH_INTERVAL_MS);
+    };
+
+    const stopInterval = () => {
+      if (intervalId === null) return;
+      window.clearInterval(intervalId);
+      intervalId = null;
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        startInterval();
+        refreshTasks('visibility');
+        return;
+      }
+      stopInterval();
+    };
+
+    handleVisibilityChange();
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       cancelled = true;
+      stopInterval();
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [currentUser]);
 
