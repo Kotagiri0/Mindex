@@ -51,7 +51,17 @@
       "PowerShell(Rename-Item \"d:\\\\Mindex-1\\\\public\\\\landing\\\\screenshots\\\\case 1.png\" \"screen1.png\")",
       "PowerShell(Rename-Item \"d:\\\\Mindex-1\\\\public\\\\landing\\\\screenshots\\\\case 2.png\" \"screen2.png\")",
       "PowerShell(Rename-Item \"d:\\\\Mindex-1\\\\public\\\\landing\\\\screenshots\\\\case 3.png\" \"screen3.png\")",
-      "PowerShell(Rename-Item \"d:\\\\Mindex-1\\\\public\\\\landing\\\\screenshots\\\\case 4.png\" \"screen4.png\")"
+      "PowerShell(Rename-Item \"d:\\\\Mindex-1\\\\public\\\\landing\\\\screenshots\\\\case 4.png\" \"screen4.png\")",
+      "Bash(dd if=/dev/urandom bs=1024 count=1)",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s -X POST https://routerai.ru/api/v1/audio/transcriptions -H 'Authorization: Bearer sk--TdiVFANXGWK0DTd9r2E5856VtxAtP9N' -F model=whisper-1 -F 'file=@/dev/null;type=audio/wav')",
+      "Bash(node -e ' *)",
+      "Bash(curl -s -X POST https://routerai.ru/api/v1/audio/transcriptions -H 'Authorization: Bearer sk--TdiVFANXGWK0DTd9r2E5856VtxAtP9N' -F model=whisper-1 -F 'file=@/tmp/test.wav;type=audio/wav')",
+      "PowerShell($env:TELEGRAM_BOT_TOKEN=\"8000191907:AAHOoOcxhUA-GLNCXO8Xbz-DO0Nf122YrKY\"; $env:VITE_TELEGRAM_BOT_USERNAME=\"mysle_tgbot\"; docker compose up --build -d 2>&1 | Select-Object -Last 10)",
+      "PowerShell($env:TELEGRAM_BOT_TOKEN=\"8000191907:AAHOoOcxhUA-GLNCXO8Xbz-DO0Nf122YrKY\"; $env:VITE_TELEGRAM_BOT_USERNAME=\"mysle_tgbot\"; $env:OPENROUTER_API_KEY=\"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\"; docker compose up --build -d 2>&1 | Select-Object -Last 8)",
+      "Bash(Get-Content d:\\\\Mindex-1\\\\.env)",
+      "Bash(Select-String \"OPENROUTER\")",
+      "Bash(curl -s http://localhost:3000/api/health)"
     ]
   }
 }

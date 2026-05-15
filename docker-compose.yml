@@ -14,10 +14,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - DATABASE_URL=${DATABASE_URL:-postgresql://mindex:mindex@postgres:5432/mindex}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - ROUTERAI_API_KEY=${ROUTERAI_API_KEY}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - DATABASE_URL=postgresql://mindex:mindex@postgres:5432/mindex
     depends_on:
       postgres:
         condition: service_healthy

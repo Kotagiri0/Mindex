@@ -797,7 +797,8 @@ app.post("/api/data/task", dataRateLimit, async (req, res) => {
       ]
     );
     return res.status(200).json({ success: true });
-  } catch {
+  } catch (err) {
+    console.error('[API] POST /api/data/task error:', err);
     return res.status(500).json({ error: "Не удалось сохранить задачу." });
   }
 });
@@ -957,7 +958,6 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
     const formData = new FormData();
     formData.append('file', new Blob([wavBuffer], { type: 'audio/wav' }), 'audio.wav');
     formData.append('model', 'openai/whisper-large-v3-turbo');
-    formData.append('language', 'ru');
 
     const aiRes = await fetch('https://openrouter.ai/api/v1/audio/transcriptions', {
       method: 'POST',
