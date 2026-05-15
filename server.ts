@@ -9,7 +9,6 @@ import fs from 'fs';
 import os from 'os';
 import { Pool } from "pg";
 import multer from "multer";
-import FormDataNode from "form-data";
 import {
   Counter,
   Gauge,
@@ -957,17 +956,15 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
     const wavBuffer = fs.readFileSync(tmpOut);
     console.log('[VOICE] Converted to wav:', wavBuffer.length, 'bytes');
 
-    const formData = new FormDataNode();
-    formData.append('file', wavBuffer, { filename: 'audio.wav', contentType: 'audio/wav' });
+    const formData = new FormData();
+    formData.append('file', new Blob([wavBuffer], { type: 'audio/wav' }), 'audio.wav');
     formData.append('model', 'openai/whisper-large-v3-turbo');
+    formData.append('language', 'ru');
 
     const aiRes = await fetch('https://openrouter.ai/api/v1/audio/transcriptions', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        ...formData.getHeaders(),
-      },
-      body: formData as any,
+      headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}` },
+      body: formData,
     });
 
     if (!aiRes.ok) {
