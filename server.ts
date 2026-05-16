@@ -914,6 +914,37 @@ app.get("/api/chat", (req, res) => {
   res.json({ status: "ok", message: "Local Chat API is running" });
 });
 
+app.post("/api/admin/backfill-embeddings", async (req, res) => {
+  if (!db) return res.status(500).json({ error: "БД не настроена." });
+  const secret = String(req.body?.secret || "").trim();
+  if (secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: "Forbidden." });
+
+  try {
+    const { rows } = await db.query(
+      `SELECT id, title, summary, preview FROM user_threads WHERE embedding IS NULL AND source != 'skill' LIMIT 200`
+    );
+
+    let done = 0;
+    for (const row of rows) {
+      const text = [row.title, row.summary, row.preview].filter(Boolean).join(' ');
+      const embedding = await generateEmbedding(text);
+      if (embedding) {
+        await db.query(
+          `UPDATE user_threads SET embedding = $1::vector WHERE id = $2`,
+          [`[${embedding.join(',')}]`, row.id]
+        );
+        done++;
+      }
+      await new Promise(r => setTimeout(r, 50));
+    }
+
+    return res.json({ total: rows.length, done });
+  } catch (err: any) {
+    console.error('[BACKFILL] error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/search", async (req, res) => {
   if (!db) return res.status(500).json({ error: "БД не настроена." });
   const userId = String(req.query.userId || "").trim();
