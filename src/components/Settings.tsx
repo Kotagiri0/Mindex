@@ -485,42 +485,13 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
           />
         </div>
 
-        {/* Toggles */}
-        <SectionDivider />
-        <div style={{ paddingTop: 16, marginBottom: 8 }}>
-          <div style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 4 }}>
-            Поведение
-          </div>
-          <SettingRow
-            label="Агент-режим"
-            desc="Мысль сама создаёт и редактирует задачи"
-            value={settings.agent}
-            onChange={v => setSettings({ ...settings, agent: v })}
-          />
-          <SettingRow
-            label="Подтверждение действий"
-            desc="Спрашивать перед изменением задач"
-            value={settings.confirm}
-            onChange={v => setSettings({ ...settings, confirm: v })}
-          />
-          <SettingRow
-            label="Уведомления"
-            desc="Напоминания о задачах"
-            value={settings.notifs}
-            onChange={v => setSettings({ ...settings, notifs: v })}
-          />
-        </div>
-
         {/* Integrations */}
         <SectionDivider />
         <div style={{ paddingTop: 16, marginBottom: 8 }}>
           <div style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 4 }}>
             Интеграции
           </div>
-          <TelegramRow />
           <GoogleCalendarRow />
-          <IntegrationRow name="Яндекс Календарь" desc="Синхронизация твоих событий и задач" />
-          <IntegrationRow name="Notion" desc="Импорт страниц как заметок" />
         </div>
 
         {/* Account */}

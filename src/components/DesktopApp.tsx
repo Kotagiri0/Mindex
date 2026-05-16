@@ -471,10 +471,6 @@ function TodayScreen({
           {/* Input */}
           <div style={{ borderTop: total > 0 ? '1px solid #f5f5f5' : undefined, padding: '13px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}
-                onClick={() => alert('Вложения — скоро')}>
-                <Plus size={17} strokeWidth={1.5} color="#bbb" />
-              </button>
               <input
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
@@ -1830,7 +1826,6 @@ function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
       {/* Quick chat — висячее поле внизу */}
       <div style={{ flexShrink: 0, padding: '12px 24px 20px' }}>
         <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: '1px solid var(--border)', borderRadius: 40, padding: '10px 16px', boxShadow: '0 2px 12px rgba(0,0,0,0.07)' }}>
-          <Plus size={17} strokeWidth={1.5} color="#bbb" />
           <input
             value={chatInput}
             onChange={e => setChatInput(e.target.value)}

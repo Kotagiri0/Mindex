@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, Settings, Star, Plus, ArrowUp, MessageCircle, StickyNote, Mic, Loader, Copy, MoreHorizontal, X, BookOpen, ChevronRight } from 'lucide-react';
+import { ChevronLeft, Settings, Star, ArrowUp, MessageCircle, StickyNote, Mic, Loader, Copy, MoreHorizontal, X, BookOpen, ChevronRight } from 'lucide-react';
 import { MysliThinking } from './MysliThinking';
 import NoteView from './NoteView';
 import { Thread, Screen, Message, Task, SubTask } from '../types';
@@ -1099,13 +1099,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => !isTouchDevice && e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
           />
-          <div className="flex items-center justify-between mt-3">
-            <button
-              className="w-9 h-9 flex items-center justify-center"
-              onClick={() => alert('Вложения будут в ближайших обновлениях')}
-            >
-              <Plus size={22} strokeWidth={1.75} color="rgba(34,34,36,0.35)" />
-            </button>
+          <div className="flex items-center justify-end mt-3">
             <div className="flex items-center gap-2">
               <motion.button
                 title={isMobile ? 'Удерживай для записи' : 'Нажми для записи, ещё раз — стоп'}
