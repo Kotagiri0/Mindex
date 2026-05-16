@@ -3,6 +3,7 @@ import { Search, Settings, MoreVertical, ChevronLeft, Plus, Pencil } from 'lucid
 import { motion, AnimatePresence } from 'motion/react';
 import { Thread, Screen, Task } from '../types';
 import { db } from '../lib/db';
+import { getCurrentUser } from '../lib/auth';
 import NoteView from './NoteView';
 import NoteEditor from './NoteEditor';
 
@@ -29,7 +30,24 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [searchResults, setSearchResults] = useState<Thread[] | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!search.trim()) { setSearchResults(null); return; }
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const user = getCurrentUser();
+        if (!user) return;
+        const res = await fetch(`/api/search?userId=${encodeURIComponent(user.id)}&q=${encodeURIComponent(search)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setSearchResults(data.results || []);
+      } catch { setSearchResults(null); }
+    }, 400);
+  }, [search]);
 
   const editingNote = editingNoteId ? threads.find(t => t.id === editingNoteId) : undefined;
 
@@ -54,8 +72,9 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
   const isNoteThread = (t: Thread) =>
     t.source === 'заметка' || (Boolean(t.summary?.trim()) && t.is_meaningful !== false);
 
-  const filtered = threads.filter(t => {
+  const filtered = (search.trim() && searchResults ? searchResults : threads).filter(t => {
     if (t.source === 'skill') return false;
+    if (search.trim() && searchResults) return activeTab === 'thoughts' ? t.source !== 'заметка' : isNoteThread(t);
     if (activeTab === 'thoughts') return t.source !== 'заметка' && searchMatch(t);
     return isNoteThread(t) && searchMatch(t);
   });

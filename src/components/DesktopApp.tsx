@@ -15,6 +15,7 @@ import NoteEditor from './NoteEditor';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
+import { getCurrentUser } from '../lib/auth';
 import { useVoiceInput } from '../lib/useVoiceInput';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
@@ -1247,6 +1248,8 @@ function ThreadsView({
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [searchResults, setSearchResults] = useState<Thread[] | null>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -1280,17 +1283,39 @@ function ThreadsView({
   };
 
   const all = Array.isArray(threads) ? threads : [];
-  const searchMatch = (t: Thread) =>
-    t.title.toLowerCase().includes(search.toLowerCase()) ||
-    t.preview.toLowerCase().includes(search.toLowerCase());
 
   const isNoteThread = (t: Thread) =>
     t.source === 'заметка' || (Boolean(t.summary?.trim()) && t.is_meaningful !== false);
 
+  useEffect(() => {
+    if (!search.trim()) { setSearchResults(null); return; }
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const user = getCurrentUser();
+        if (!user) return;
+        const res = await fetch(`/api/search?userId=${encodeURIComponent(user.id)}&q=${encodeURIComponent(search)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setSearchResults(data.results || []);
+      } catch { setSearchResults(null); }
+    }, 400);
+  }, [search]);
+
+  const searchMatch = (t: Thread) =>
+    t.title.toLowerCase().includes(search.toLowerCase()) ||
+    t.preview.toLowerCase().includes(search.toLowerCase());
+
   const thoughts = all.filter(t => t.source !== 'skill' && t.source !== 'заметка' && searchMatch(t));
   const notes = all.filter(t => isNoteThread(t) && searchMatch(t));
 
-  const displayed = tab === 'thoughts' ? thoughts : notes;
+  const searchFiltered = searchResults
+    ? searchResults.filter(t => tab === 'thoughts' ? t.source !== 'заметка' : isNoteThread(t))
+    : null;
+
+  const displayed = search.trim()
+    ? (searchFiltered ?? (tab === 'thoughts' ? thoughts : notes))
+    : (tab === 'thoughts' ? thoughts : notes);
 
   const deleteThread = async (id: string) => {
     setThreads((prev: Thread[]) => (Array.isArray(prev) ? prev : []).filter(t => t.id !== id));

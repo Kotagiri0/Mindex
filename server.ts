@@ -914,6 +914,45 @@ app.get("/api/chat", (req, res) => {
   res.json({ status: "ok", message: "Local Chat API is running" });
 });
 
+app.get("/api/search", async (req, res) => {
+  if (!db) return res.status(500).json({ error: "БД не настроена." });
+  const userId = String(req.query.userId || "").trim();
+  const query = String(req.query.q || "").trim();
+  if (!userId || !query) return res.status(400).json({ error: "userId и q обязательны." });
+
+  try {
+    const embedding = await generateEmbedding(query);
+
+    if (embedding && vectorEnabled) {
+      const { rows } = await db.query(
+        `SELECT id, title, preview, source, updated_at, summary, is_meaningful, label,
+                1 - (embedding <=> $1::vector) as score
+         FROM user_threads
+         WHERE user_id = $2 AND source != 'skill' AND embedding IS NOT NULL
+         ORDER BY embedding <=> $1::vector
+         LIMIT 20`,
+        [`[${embedding.join(',')}]`, userId]
+      );
+      return res.json({ results: rows, mode: 'semantic' });
+    }
+
+    // Fallback: keyword search
+    const { rows } = await db.query(
+      `SELECT id, title, preview, source, updated_at, summary, is_meaningful, label
+       FROM user_threads
+       WHERE user_id = $1 AND source != 'skill'
+         AND (title ILIKE $2 OR preview ILIKE $2 OR summary ILIKE $2)
+       ORDER BY updated_at DESC
+       LIMIT 20`,
+      [userId, `%${query}%`]
+    );
+    return res.json({ results: rows, mode: 'keyword' });
+  } catch (err: any) {
+    console.error('[SEARCH] error:', err);
+    return res.status(500).json({ error: 'Ошибка поиска.' });
+  }
+});
+
 app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
   let tmpIn = "";
   let tmpOut = "";
