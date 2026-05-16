@@ -1068,12 +1068,12 @@ function ChatView({
                           <AnimatePresence>
                             {openSourcesIdx === i && (
                               <motion.div
-                                initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                                initial={{ opacity: 0, y: -6, scale: 0.97 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: 6, scale: 0.97 }}
+                                exit={{ opacity: 0, y: -6, scale: 0.97 }}
                                 transition={{ duration: 0.14 }}
                                 style={{
-                                  position: 'absolute', left: 0, top: '100%', marginTop: 6,
+                                  position: 'absolute', left: 0, bottom: '100%', marginBottom: 6,
                                   background: '#fff', border: '1px solid #ebebeb',
                                   borderRadius: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
                                   padding: '6px 0', zIndex: 30, minWidth: 240,
