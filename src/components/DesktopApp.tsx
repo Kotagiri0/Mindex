@@ -1350,55 +1350,56 @@ function ThreadsView({
       <div style={{ ...CC, paddingTop: 40, paddingBottom: 40 }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'center', flex: 1 }}>
-            <div style={{ position: 'relative', display: 'flex', background: 'rgba(0,0,0,0.05)', borderRadius: 40, padding: 4, gap: 0 }}>
-              <motion.div
-                layout
-                transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-                style={{
-                  position: 'absolute', top: 4, bottom: 4,
-                  width: 'calc(50% - 4px)',
-                  left: tab === 'thoughts' ? 4 : 'calc(50%)',
-                  background: 'var(--surface)',
-                  borderRadius: 40,
-                  boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-                  zIndex: 0,
-                }}
-              />
-              {([['thoughts', 'ТВОИ МЫСЛИ'], ['notes', 'ЗАМЕТКИ']] as const).map(([key, label]) => (
-                <button key={key} onClick={() => setTab(key)} style={{
-                  fontFamily: F, fontSize: 11, fontWeight: 400, letterSpacing: '0.08em',
-                  padding: '7px 22px', borderRadius: 40, border: 'none', cursor: 'pointer',
-                  background: 'transparent',
-                  color: 'var(--text)',
-                  opacity: tab === key ? 0.8 : 0.5,
-                  transition: 'opacity 0.2s',
-                  position: 'relative', zIndex: 1,
-                }}>
-                  {label}
-                </button>
-              ))}
-            </div>
+          <div style={{ position: 'relative', display: 'flex', background: 'rgba(0,0,0,0.05)', borderRadius: 40, padding: 3, gap: 0 }}>
+            <motion.div
+              transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+              style={{
+                position: 'absolute', top: 3, bottom: 3,
+                width: tab === 'thoughts' ? '50%' : '50%',
+                left: tab === 'thoughts' ? 3 : 'calc(50%)',
+                background: 'var(--surface)',
+                borderRadius: 40,
+                boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+                zIndex: 0,
+              }}
+              animate={{ left: tab === 'thoughts' ? 3 : 'calc(50%)' }}
+            />
+            {([['thoughts', 'Твои мысли'], ['notes', 'Заметки']] as const).map(([key, label]) => (
+              <button key={key} onClick={() => setTab(key)} style={{
+                fontFamily: M, fontSize: 12, fontWeight: 500, letterSpacing: '0.02em',
+                padding: '6px 16px', borderRadius: 40, border: 'none', cursor: 'pointer',
+                background: 'transparent',
+                color: 'var(--text)',
+                opacity: tab === key ? 1 : 0.45,
+                transition: 'opacity 0.2s',
+                position: 'relative', zIndex: 1,
+                whiteSpace: 'nowrap' as const,
+              }}>
+                {label}
+              </button>
+            ))}
           </div>
-          {tab === 'notes' ? (
-            <button onClick={() => openNoteEditor()} style={{
-              fontFamily: M, fontSize: 13, letterSpacing: '0.06em',
-              color: 'var(--text-primary)', background: 'none', border: 'none',
-              cursor: 'pointer', textTransform: 'uppercase' as const, padding: 0,
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}>
-              <Plus size={15} strokeWidth={1.75} />
-              НОВАЯ ЗАМЕТКА
-            </button>
-          ) : (
-            <button onClick={startNewThread} style={{
-              fontFamily: M, fontSize: 13, letterSpacing: '0.06em',
-              color: 'var(--text-primary)', background: 'none', border: 'none',
-              cursor: 'pointer', textTransform: 'uppercase' as const, padding: 0,
-            }}>
-              НОВАЯ МЫСЛЬ
-            </button>
-          )}
+          <div style={{ width: 120, display: 'flex', justifyContent: 'flex-end' }}>
+            {tab === 'notes' ? (
+              <button onClick={() => openNoteEditor()} style={{
+                fontFamily: M, fontSize: 12, letterSpacing: '0.04em',
+                color: 'var(--text-primary)', background: 'none', border: 'none',
+                cursor: 'pointer', textTransform: 'uppercase' as const, padding: 0,
+                display: 'flex', alignItems: 'center', gap: 5, opacity: 0.6,
+              }}>
+                <Plus size={13} strokeWidth={1.75} />
+                Заметка
+              </button>
+            ) : (
+              <button onClick={startNewThread} style={{
+                fontFamily: M, fontSize: 12, letterSpacing: '0.04em',
+                color: 'var(--text-primary)', background: 'none', border: 'none',
+                cursor: 'pointer', textTransform: 'uppercase' as const, padding: 0, opacity: 0.6,
+              }}>
+                + Мысль
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Search */}
@@ -2161,13 +2162,13 @@ export default function DesktopApp({
               {/* Chat/Note toggle header */}
               {curTh && (
                 <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '14px 0 0' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 0, background: 'rgba(9,14,23,0.06)', borderRadius: 40, padding: 4, position: 'relative' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 0, background: 'rgba(9,14,23,0.06)', borderRadius: 40, padding: 3, position: 'relative' }}>
                     <motion.div
-                      layout
+                      animate={{ left: noteMode ? 'calc(50%)' : 3 }}
                       style={{
                         position: 'absolute',
-                        top: 4, left: noteMode ? 'calc(50%)' : 4,
-                        width: 'calc(50% - 4px)', height: 32,
+                        top: 3, left: noteMode ? 'calc(50%)' : 3,
+                        width: 'calc(50% - 3px)', height: 28,
                         borderRadius: 32,
                         background: '#ffffff',
                         boxShadow: '0 1px 3px rgba(0,0,0,0.10)',
@@ -2177,13 +2178,13 @@ export default function DesktopApp({
                     />
                     <button
                       onClick={() => setNoteMode(false)}
-                      style={{ position: 'relative', zIndex: 1, padding: '6px 20px', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 32, fontFamily: M, fontSize: 13, fontWeight: 500, color: !noteMode ? 'var(--text-primary)' : 'var(--text-30)', transition: 'color 0.15s', whiteSpace: 'nowrap' }}
+                      style={{ position: 'relative', zIndex: 1, padding: '5px 16px', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 32, fontFamily: M, fontSize: 12, fontWeight: 500, color: !noteMode ? 'var(--text-primary)' : 'var(--text-30)', transition: 'color 0.15s', whiteSpace: 'nowrap' }}
                     >
                       Чат
                     </button>
                     <button
                       onClick={() => setNoteMode(true)}
-                      style={{ position: 'relative', zIndex: 1, padding: '6px 20px', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 32, fontFamily: M, fontSize: 13, fontWeight: 500, color: noteMode ? 'var(--text-primary)' : 'var(--text-30)', transition: 'color 0.15s', whiteSpace: 'nowrap' }}
+                      style={{ position: 'relative', zIndex: 1, padding: '5px 16px', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 32, fontFamily: M, fontSize: 12, fontWeight: 500, color: noteMode ? 'var(--text-primary)' : 'var(--text-30)', transition: 'color 0.15s', whiteSpace: 'nowrap' }}
                     >
                       Заметка
                     </button>
