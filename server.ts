@@ -1333,13 +1333,22 @@ app.post("/api/chat", async (req, res) => {
       return res.status(500).json({ error: `RouterAI вернул ошибку ${response.status}: ${text}` });
     }
 
-    const data = await response.json();
+    const rawText = await response.text();
+    let data: any;
+    try {
+      data = JSON.parse(rawText);
+    } catch (e) {
+      console.error("[CHAT] Failed to parse RouterAI response:", rawText.slice(0, 300));
+      throw new Error("Мысль вернула некорректный ответ — попробуй ещё раз");
+    }
 
     if (!data.choices?.length) {
       throw new Error("RouterAI вернул пустой список вариантов (choices).");
     }
 
-    res.json({ ...data.choices[0].message, sources: ragSources });
+    const message = data.choices[0].message;
+    const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
+    res.json({ ...message, content, sources: ragSources });
   } catch (error: any) {
     const isTimeout = error?.name === "AbortError";
     const msg = isTimeout
