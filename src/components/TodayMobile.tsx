@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Settings, ChevronLeft, ArrowUp, Plus, Mic, Loader } from 'lucide-react';
+import { Settings, ChevronLeft, ArrowUp, Mic, Loader } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Task, Screen } from '../types';
 import TaskItem from './TaskItem';
@@ -153,10 +153,7 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
               maxHeight: '120px', overflowY: 'auto',
             }}
           />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}>
-              <Plus size={18} strokeWidth={1.75} color="rgba(34,34,36,0.35)" />
-            </button>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
             {input.trim() ? (
               <motion.button
                 whileTap={{ scale: 0.9 }}

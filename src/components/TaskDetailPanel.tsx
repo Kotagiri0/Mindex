@@ -180,7 +180,7 @@ export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onO
             </div>
 
             {/* Open in chat */}
-            {task.threadId && onOpenThread && (
+            {task?.threadId && onOpenThread && (
               <button
                 onClick={() => { onOpenThread(task.threadId!); onClose(); }}
                 style={{
