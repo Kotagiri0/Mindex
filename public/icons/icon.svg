@@ -1,11 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Mindex">
-  <defs>
-    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#2f2f34"/>
-      <stop offset="100%" stop-color="#222224"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="112" fill="#f9f9f9"/>
-  <rect x="64" y="64" width="384" height="384" rx="96" fill="url(#g)"/>
-  <path d="M128 340V172h44l84 112 84-112h44v168h-44V240l-84 108h-2l-82-107v99z" fill="#f0f0f0"/>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="512" height="512" fill="#0B0D10"/>
+<rect x="99.76" y="99.76" width="312.48" height="312.48" rx="156.24" stroke="#F7F7FA" stroke-width="23.52"/>
+<path d="M356.801 256H155.201" stroke="#F7F7FA" stroke-width="23.52"/>
+<path d="M303.508 208.481L208.473 303.517" stroke="#F7F7FA" stroke-width="23.52"/>
+<path d="M303.516 303.518L208.48 208.482" stroke="#F7F7FA" stroke-width="23.52"/>
+<path d="M256 356.799L256 155.199" stroke="#F7F7FA" stroke-width="23.52"/>
 </svg>
