@@ -1933,7 +1933,8 @@ function Sidebar({
   const [dropHovered, setDropHovered] = useState(false);
 
   const recentThreads = (Array.isArray(threads) ? threads : [])
-    .slice().sort((a, b) => b.createdAt - a.createdAt).slice(0, 8);
+    .filter(t => t.source !== 'skill' && t.source !== 'заметка')
+    .sort((a, b) => b.createdAt - a.createdAt).slice(0, 8);
 
   return (
     <motion.div
