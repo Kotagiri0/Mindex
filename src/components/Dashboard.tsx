@@ -144,6 +144,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [weekDir, setWeekDir] = useState(0);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const touchStartX = useRef(0);
   const suppressClickRef = useRef(false);
@@ -166,6 +167,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
   );
 
   const goWeek = (dir: number) => {
+    setWeekDir(dir);
     setWeekOffset(v => v + dir);
   };
 
@@ -253,11 +255,13 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
     }, 0);
 
     if (deltaX < 0) {
+      setWeekDir(1);
       setWeekOffset((value) => value + 1);
       const next = new Date(weekDays[0]);
       next.setDate(next.getDate() + 7);
       setSelectedDate(next.toISOString().split('T')[0]);
     } else {
+      setWeekDir(-1);
       setWeekOffset((value) => value - 1);
       const prev = new Date(weekDays[0]);
       prev.setDate(prev.getDate() - 7);
@@ -340,11 +344,21 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
 
       {/* Week strip — swipeable */}
       <div
-        style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', padding: '20px 20px 8px', touchAction: 'none' }}
+        style={{ overflow: 'hidden', touchAction: 'none' }}
         onTouchStart={(e) => handleWeekSwipeStart(e.touches[0].clientX, e.touches[0].clientY)}
         onTouchEnd={(e) => handleWeekSwipeEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY)}
         onTouchCancel={() => { swipeStartRef.current = null; }}
       >
+        <AnimatePresence mode="popLayout" initial={false} custom={weekDir}>
+        <motion.div
+          key={weekOffset}
+          custom={weekDir}
+          initial={{ x: weekDir * 60, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: weekDir * -60, opacity: 0 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 38 }}
+          style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', padding: '20px 20px 8px' }}
+        >
         {weekDays.map((d, i) => {
           const ds = dateToStr(d);
           const isSel = ds === selectedDate;
@@ -379,6 +393,8 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
             </motion.button>
           );
         })}
+        </motion.div>
+        </AnimatePresence>
       </div>
 
       {/* Tasks panel */}
