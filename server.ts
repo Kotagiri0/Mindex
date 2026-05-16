@@ -929,9 +929,9 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
       return res.status(400).json({ error: "Аудиофайл пуст (0 байт)." });
     }
 
-    const apiKey = process.env.OPENROUTER_API_KEY;
+    const apiKey = process.env.VSEGPT_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: "OPENROUTER_API_KEY не найден." });
+      return res.status(500).json({ error: "VSEGPT_API_KEY не найден." });
     }
 
     const inputExtension = resolveAudioExtension(req.file.mimetype, req.file.originalname);
@@ -961,15 +961,15 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
     formData.append('model', 'openai/whisper-large-v3-turbo');
     formData.append('language', 'ru');
 
-    const aiRes = await fetch('https://openrouter.ai/api/v1/audio/transcriptions', {
+    const aiRes = await fetch('https://api.vsegpt.ru/v1/audio/transcriptions', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}` },
+      headers: { 'Authorization': `Bearer ${apiKey}` },
       body: formData,
     });
 
     if (!aiRes.ok) {
       const err = await aiRes.text();
-      console.error('[VOICE] OpenRouter error:', err);
+      console.error('[VOICE] VseGPT error:', err);
       return res.status(500).json({ error: 'Ошибка транскрибации.' });
     }
 
