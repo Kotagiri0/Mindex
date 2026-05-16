@@ -530,7 +530,7 @@ function EmptyChatScreen({ onSend }: { onSend: (msg: string) => void }) {
 // ─── Chat view ──────────────────────────────────────────────────────────────────
 
 function ChatView({
-  threadId, threads, setThreads, tasks, setTasks, initialMessage, onInitialConsumed, onNetworkError, onOpenThread,
+  threadId, threads, setThreads, tasks, setTasks, initialMessage, onInitialConsumed, onNetworkError, onOpenThread, onOpenNote,
 }: {
   key?: React.Key;
   threadId: string;
@@ -542,6 +542,7 @@ function ChatView({
   onInitialConsumed?: () => void;
   onNetworkError?: () => void;
   onOpenThread?: (id: string) => void;
+  onOpenNote?: (id: string) => void;
 }) {
   const THINKING_PHRASES = ['Думаю...', 'Анализирую...', 'Ищу в архиве...', 'Формулирую...', 'Пишу ответ...'];
 
@@ -1086,7 +1087,12 @@ function ChatView({
                                   return (
                                     <button
                                       key={si}
-                                      onClick={() => { setOpenSourcesIdx(null); if (thr && onOpenThread) onOpenThread(thr.id); }}
+                                      onClick={() => {
+                                        setOpenSourcesIdx(null);
+                                        if (!thr) return;
+                                        if (thr.source === 'заметка' && onOpenNote) onOpenNote(thr.id);
+                                        else if (onOpenThread) onOpenThread(thr.id);
+                                      }}
                                       style={{
                                         width: '100%', display: 'flex', alignItems: 'center', gap: 10,
                                         padding: '8px 14px', background: 'none', border: 'none',
@@ -2212,6 +2218,7 @@ export default function DesktopApp({
                   onInitialConsumed={() => setPendingMessage(null)}
                   onNetworkError={() => setNoInternet(true)}
                   onOpenThread={handleOpenThread}
+                  onOpenNote={handleOpenNote}
                 />
               ) : (
                 <EmptyChatScreen onSend={startNewThreadWithMessage} />
