@@ -958,7 +958,7 @@ app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
 
     const formData = new FormData();
     formData.append('file', new Blob([wavBuffer], { type: 'audio/wav' }), 'audio.wav');
-    formData.append('model', 'openai/whisper-large-v3-turbo');
+    formData.append('model', 'stt-openai/whisper-v3-turbo');
     formData.append('language', 'ru');
 
     const aiRes = await fetch('https://api.vsegpt.ru/v1/audio/transcriptions', {
