@@ -70,7 +70,7 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
     t.preview.toLowerCase().includes(search.toLowerCase());
 
   const isNoteThread = (t: Thread) =>
-    t.source === 'заметка' || (Boolean(t.summary?.trim()) && t.is_meaningful !== false);
+    t.source !== 'skill' && (t.source === 'заметка' || (Boolean(t.summary?.trim()) && t.is_meaningful !== false));
 
   const filtered = (search.trim() && searchResults ? searchResults : threads).filter(t => {
     if (t.source === 'skill') return false;

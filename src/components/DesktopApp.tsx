@@ -1291,7 +1291,7 @@ function ThreadsView({
   const all = Array.isArray(threads) ? threads : [];
 
   const isNoteThread = (t: Thread) =>
-    t.source === 'заметка' || (Boolean(t.summary?.trim()) && t.is_meaningful !== false);
+    t.source !== 'skill' && (t.source === 'заметка' || (Boolean(t.summary?.trim()) && t.is_meaningful !== false));
 
   useEffect(() => {
     if (!search.trim()) { setSearchResults(null); return; }
