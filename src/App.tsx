@@ -3,12 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db } from './lib/db';
 import { getCurrentUser, logoutLocalUser } from './lib/auth';
 import { Screen, Task, Thread, Settings, LocalUser } from './types';
 import { uuid } from './lib/utils';
+import { sortTasks } from './lib/sortTasks';
 import LocalAuth from './components/LocalAuth';
 import Onboarding from './components/Onboarding';
 import Dashboard from './components/Dashboard';
@@ -26,7 +27,13 @@ const TASK_REFRESH_INTERVAL_MS = 60_000;
 export default function App() {
   const [currentUser, setCurrentUser] = useState<LocalUser | null>(getCurrentUser());
   const [screen, setScreen] = useState<Screen>(() => getCurrentUser() ? 'dash' : 'ob');
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasksRaw] = useState<Task[]>([]);
+  const setTasks = useCallback((arg: Task[] | ((prev: Task[]) => Task[])) => {
+    setTasksRaw(prev => {
+      const next = typeof arg === 'function' ? arg(prev) : arg;
+      return sortTasks(next);
+    });
+  }, []);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [curTh, setCurTh] = useState<string | null>(null);
