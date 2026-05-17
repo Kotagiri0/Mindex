@@ -1100,14 +1100,24 @@ function ChatView({
                                   Из архива · {m.sources.length}
                                 </div>
                                 {m.sources.map((s: { title: string; snippet?: string }, si: number) => {
+                                  const thr = threads.find(t => t.title === s.title);
                                   return (
-                                    <div
+                                    <button
                                       key={si}
+                                      onClick={() => {
+                                        setOpenSourcesIdx(null);
+                                        if (!thr) return;
+                                        if (thr.source === 'заметка' && onOpenNote) onOpenNote(thr.id);
+                                        else if (onOpenThread) onOpenThread(thr.id);
+                                      }}
                                       style={{
                                         width: '100%', display: 'flex', alignItems: 'flex-start', gap: 10,
-                                        padding: '8px 14px', textAlign: 'left',
+                                        padding: '8px 14px', background: 'none', border: 'none',
+                                        cursor: thr ? 'pointer' : 'default', textAlign: 'left',
                                         borderTop: si > 0 ? '1px solid #f0f0f0' : undefined,
                                       }}
+                                      onMouseEnter={e => (e.currentTarget.style.background = '#f7f7f7')}
+                                      onMouseLeave={e => (e.currentTarget.style.background = 'none')}
                                     >
                                       <div style={{
                                         width: 22, height: 22, borderRadius: '50%', flexShrink: 0, marginTop: 1,
@@ -1127,7 +1137,7 @@ function ChatView({
                                           </div>
                                         )}
                                       </div>
-                                    </div>
+                                    </button>
                                   );
                                 })}
                               </motion.div>
