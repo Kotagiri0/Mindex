@@ -77,7 +77,7 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
     if (search.trim() && searchResults) return activeTab === 'thoughts' ? t.source !== 'заметка' : isNoteThread(t);
     if (activeTab === 'thoughts') return t.source !== 'заметка' && searchMatch(t);
     return isNoteThread(t) && searchMatch(t);
-  });
+  }).sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
 
   const handleRename = async (id: string) => {
     const val = renameValue.trim();
