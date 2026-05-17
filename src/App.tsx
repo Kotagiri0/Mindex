@@ -183,7 +183,7 @@ export default function App() {
   const updateThreads = (newThreads: Thread[] | ((prev: Thread[]) => Thread[])) => {
     setThreads((prev) => {
       const updated = typeof newThreads === 'function' ? newThreads(prev) : newThreads;
-      return updated;
+      return [...updated].sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
     });
   };
 
