@@ -6,6 +6,7 @@ import { Thread, Screen, Message, Task, SubTask } from '../types';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
+import { apiFetch } from '../lib/auth';
 import { motion, AnimatePresence } from 'motion/react';
 import { useVoiceInput, isMobileDevice } from '../lib/useVoiceInput';
 
@@ -110,7 +111,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       const userId = db.getUserId();
       if (userId) {
         try {
-          const res = await fetch(`/api/data/bootstrap?userId=${encodeURIComponent(userId)}`);
+          const res = await apiFetch(`/api/data/bootstrap`);
           const data = await res.json();
           const hasTelegram = Boolean(data?.profile?.telegram_chat_id);
           if (!hasTelegram) {
@@ -266,14 +267,11 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             };
             db.saveThread(savedNote);
             setThreads((prev: Thread[]) => [savedNote, ...(Array.isArray(prev) ? prev : [])]);
-            const userId = db.getUserId();
-            if (userId) {
-              fetch('/api/summarize', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId }),
-              }).catch(() => {});
-            }
+            apiFetch('/api/summarize', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId: db.getUserId() }),
+            }).catch(() => {});
             result = { status: 'success', noteId };
           }
 
@@ -553,7 +551,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     if (userId && thread && !thread.summary) {
       const userMsgs = thread.messages.filter(m => m.role === 'user');
       if (userMsgs.length >= 2) {
-        fetch('/api/summarize', {
+        apiFetch('/api/summarize', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ messages: thread.messages, threadId: thread.id, userId }),
@@ -583,14 +581,11 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     };
     db.saveThread(note);
     setThreads((prev: Thread[]) => [note, ...(Array.isArray(prev) ? prev : [])]);
-    const userId = db.getUserId();
-    if (userId) {
-      fetch('/api/summarize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId, raw: true, rawSummary: content.trim() }),
-      }).catch(() => {});
-    }
+    apiFetch('/api/summarize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId: db.getUserId(), raw: true, rawSummary: content.trim() }),
+    }).catch(() => {});
   };
 
   const deleteMessage = (msg: Message) => {

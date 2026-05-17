@@ -61,7 +61,13 @@
       "PowerShell($env:TELEGRAM_BOT_TOKEN=\"8000191907:AAHOoOcxhUA-GLNCXO8Xbz-DO0Nf122YrKY\"; $env:VITE_TELEGRAM_BOT_USERNAME=\"mysle_tgbot\"; $env:OPENROUTER_API_KEY=\"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\"; docker compose up --build -d 2>&1 | Select-Object -Last 8)",
       "Bash(Get-Content d:\\\\Mindex-1\\\\.env)",
       "Bash(Select-String \"OPENROUTER\")",
-      "Bash(curl -s http://localhost:3000/api/health)"
+      "Bash(curl -s http://localhost:3000/api/health)",
+      "Bash(git revert *)",
+      "Bash(cd \"D:\\\\Mindex-1\" && cp \"D:\\\\logo.png\" \"public/icons/icon-512.png\")",
+      "Bash(git merge *)"
+    ],
+    "additionalDirectories": [
+      "D:\\"
     ]
   }
 }

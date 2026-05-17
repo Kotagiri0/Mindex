@@ -412,13 +412,22 @@ const ensureAuthSchema = async () => {
       used BOOLEAN NOT NULL DEFAULT FALSE
     );
   `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      token TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+  `);
+  await db.query(`CREATE INDEX IF NOT EXISTS user_sessions_user_id_idx ON user_sessions (user_id);`);
 };
 
 // Генерация одноразового кода для привязки Telegram
-app.post("/api/telegram/link-code", async (req, res) => {
+app.post("/api/telegram/link-code", requireAuth, async (req, res) => {
   if (!db) return res.status(500).json({ error: "БД не настроена." });
-  const userId = String(req.body?.userId || "").trim();
-  if (!userId) return res.status(400).json({ error: "userId обязателен." });
+  const userId = (req as any).userId;
 
   const code = `MNDX-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 минут
@@ -433,10 +442,9 @@ app.post("/api/telegram/link-code", async (req, res) => {
 });
 
 // Проверка статуса привязки (polling с фронтенда)
-app.get("/api/telegram/link-status", async (req, res) => {
+app.get("/api/telegram/link-status", requireAuth, async (req, res) => {
   if (!db) return res.status(500).json({ error: "БД не настроена." });
-  const userId = String(req.query.userId || "").trim();
-  if (!userId) return res.status(400).json({ error: "userId обязателен." });
+  const userId = (req as any).userId;
 
   const { rows } = await db.query(
     `SELECT telegram_chat_id FROM user_profiles WHERE user_id = $1 LIMIT 1`,
@@ -447,13 +455,12 @@ app.get("/api/telegram/link-status", async (req, res) => {
 });
 
 // Тестовый эндпоинт — запускает проактивную отправку немедленно для одного userId
-app.post("/api/telegram/proactive-test", async (req, res) => {
+app.post("/api/telegram/proactive-test", requireAuth, async (req, res) => {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return res.status(500).json({ error: "TELEGRAM_BOT_TOKEN не задан" });
   if (!db) return res.status(500).json({ error: "БД не настроена" });
 
-  const userId = String(req.body?.userId || "").trim();
-  if (!userId) return res.status(400).json({ error: "userId обязателен" });
+  const userId = (req as any).userId;
 
   try {
     const apiKey = process.env.ROUTERAI_API_KEY;
@@ -522,6 +529,32 @@ app.post("/api/telegram/proactive-test", async (req, res) => {
   }
 });
 
+const createSession = async (userId: string): Promise<string> => {
+  const token = crypto.randomUUID() + crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 дней
+  await db!.query(
+    `INSERT INTO user_sessions (token, user_id, expires_at) VALUES ($1, $2, $3)`,
+    [token, userId, expiresAt]
+  );
+  return token;
+};
+
+const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (!db) return res.status(500).json({ error: "БД не настроена." });
+  const authHeader = req.headers['authorization'];
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return res.status(401).json({ error: "Не авторизован." });
+
+  const result = await db.query(
+    `SELECT user_id FROM user_sessions WHERE token = $1 AND expires_at > NOW() LIMIT 1`,
+    [token]
+  ).catch(() => null);
+
+  if (!result?.rows?.length) return res.status(401).json({ error: "Сессия истекла или недействительна." });
+  (req as any).userId = result.rows[0].user_id;
+  next();
+};
+
 app.post("/api/auth/register", async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
@@ -558,8 +591,10 @@ app.post("/api/auth/register", async (req, res) => {
     );
 
     createSelfKnowledgeSkill(userId);
+    const token = await createSession(userId);
     return res.status(201).json({
       user: formatAuthUser(result.rows[0]),
+      token,
     });
   } catch (error: any) {
     if (error?.code === "23505") {
@@ -603,8 +638,10 @@ app.post("/api/auth/login", async (req, res) => {
       return res.status(401).json({ error: "Неверный пароль." });
     }
 
+    const token = await createSession(user.id);
     return res.status(200).json({
       user: formatAuthUser(user),
+      token,
     });
   } catch {
     return res.status(500).json({ error: "Не удалось выполнить вход." });
@@ -668,6 +705,7 @@ app.post('/api/auth/google', async (req, res) => {
         [payload.sub, email || null, payload.picture || null, displayName, row.id]
       );
 
+      const tokenExisting = await createSession(row.id);
       return res.status(200).json({
         user: formatAuthUser({
           ...row,
@@ -675,6 +713,7 @@ app.post('/api/auth/google', async (req, res) => {
           email: row.email || email || null,
           avatar_url: row.avatar_url || payload.picture || null,
         }),
+        token: tokenExisting,
       });
     }
 
@@ -698,22 +737,20 @@ app.post('/api/auth/google', async (req, res) => {
     );
 
     createSelfKnowledgeSkill(userId);
-    return res.status(201).json({ user: formatAuthUser(result.rows[0]) });
+    const tokenNew = await createSession(userId);
+    return res.status(201).json({ user: formatAuthUser(result.rows[0]), token: tokenNew });
   } catch (error: any) {
     console.error('[AUTH][GOOGLE]', error?.message || error);
     return res.status(401).json({ error: error?.message || 'Не удалось выполнить вход через Google.' });
   }
 });
 
-app.get("/api/data/bootstrap", async (req, res) => {
+app.get("/api/data/bootstrap", requireAuth, async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }
 
-  const userId = String(req.query.userId || "").trim();
-  if (!userId) {
-    return res.status(400).json({ error: "userId обязателен." });
-  }
+  const userId = (req as any).userId;
 
   try {
     const [profileRes, tasksRes, threadsRes] = await Promise.all([
@@ -789,18 +826,14 @@ app.get("/api/data/bootstrap", async (req, res) => {
   }
 });
 
-app.post("/api/data/profile", dataRateLimit, async (req, res) => {
+app.post("/api/data/profile", requireAuth, dataRateLimit, async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }
 
-  const userId = String(req.body?.userId || "").trim();
+  const userId = (req as any).userId;
   const settings = req.body?.settings || { agent: true, confirm: true, notifs: true };
   const onboardingComplete = Boolean(req.body?.onboarding_complete);
-
-  if (!userId) {
-    return res.status(400).json({ error: "userId обязателен." });
-  }
 
   try {
     await db.query(
@@ -822,14 +855,14 @@ app.post("/api/data/profile", dataRateLimit, async (req, res) => {
   }
 });
 
-app.post("/api/data/task", dataRateLimit, async (req, res) => {
+app.post("/api/data/task", requireAuth, dataRateLimit, async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }
 
+  const userId = (req as any).userId;
   const task = req.body?.task;
-  const userId = String(req.body?.userId || "").trim();
-  if (!userId || !task?.id || !task?.name || !task?.date) {
+  if (!task?.id || !task?.name || !task?.date) {
     return res.status(400).json({ error: "Некорректные данные задачи." });
   }
 
@@ -875,15 +908,15 @@ app.post("/api/data/task", dataRateLimit, async (req, res) => {
   }
 });
 
-app.delete("/api/data/task/:id", dataRateLimit, async (req, res) => {
+app.delete("/api/data/task/:id", requireAuth, dataRateLimit, async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }
 
+  const userId = (req as any).userId;
   const id = String(req.params.id || "").trim();
-  const userId = String(req.query.userId || "").trim();
-  if (!id || !userId) {
-    return res.status(400).json({ error: "id и userId обязательны." });
+  if (!id) {
+    return res.status(400).json({ error: "id обязателен." });
   }
 
   try {
@@ -894,14 +927,14 @@ app.delete("/api/data/task/:id", dataRateLimit, async (req, res) => {
   }
 });
 
-app.post("/api/data/thread", dataRateLimit, async (req, res) => {
+app.post("/api/data/thread", requireAuth, dataRateLimit, async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }
 
+  const userId = (req as any).userId;
   const thread = req.body?.thread;
-  const userId = String(req.body?.userId || "").trim();
-  if (!userId || !thread?.id) {
+  if (!thread?.id) {
     return res.status(400).json({ error: "Некорректные данные треда." });
   }
 
@@ -942,15 +975,15 @@ app.post("/api/data/thread", dataRateLimit, async (req, res) => {
   }
 });
 
-app.delete("/api/data/thread/:id", dataRateLimit, async (req, res) => {
+app.delete("/api/data/thread/:id", requireAuth, dataRateLimit, async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }
 
+  const userId = (req as any).userId;
   const id = String(req.params.id || "").trim();
-  const userId = String(req.query.userId || "").trim();
-  if (!id || !userId) {
-    return res.status(400).json({ error: "id и userId обязательны." });
+  if (!id) {
+    return res.status(400).json({ error: "id обязателен." });
   }
 
   try {
@@ -961,12 +994,12 @@ app.delete("/api/data/thread/:id", dataRateLimit, async (req, res) => {
   }
 });
 
-app.patch("/api/data/thread/:id/archive", async (req, res) => {
+app.patch("/api/data/thread/:id/archive", requireAuth, async (req, res) => {
   if (!db) return res.status(500).json({ error: "База данных не настроена." });
 
+  const userId = (req as any).userId;
   const id = String(req.params.id || "").trim();
-  const { userId } = req.body || {};
-  if (!id || !userId) return res.status(400).json({ error: "id и userId обязательны." });
+  if (!id) return res.status(400).json({ error: "id обязателен." });
 
   try {
     const result = await db.query(
@@ -1016,11 +1049,11 @@ app.post("/api/admin/backfill-embeddings", async (req, res) => {
   }
 });
 
-app.get("/api/search", async (req, res) => {
+app.get("/api/search", requireAuth, async (req, res) => {
   if (!db) return res.status(500).json({ error: "БД не настроена." });
-  const userId = String(req.query.userId || "").trim();
+  const userId = (req as any).userId;
   const query = String(req.query.q || "").trim();
-  if (!userId || !query) return res.status(400).json({ error: "userId и q обязательны." });
+  if (!query) return res.status(400).json({ error: "q обязателен." });
 
   try {
     const embedding = await generateEmbedding(query);
@@ -1293,9 +1326,10 @@ is_meaningful = false если диалог: короткий small-talk, тех
   }
 });
 
-app.post("/api/chat", async (req, res) => {
+app.post("/api/chat", requireAuth, async (req, res) => {
   try {
-    const { messages, userId, no_tools } = req.body;
+    const userId = (req as any).userId;
+    const { messages, no_tools } = req.body;
 
     const apiKey = process.env.ROUTERAI_API_KEY;
     if (!apiKey) {

@@ -1,5 +1,5 @@
 import { Message } from "../types";
-import { getCurrentUser } from "./auth";
+import { storage } from "./storage";
 
 export async function generateResponse(messages: Message[], options: { no_tools?: boolean } = {}) {
   const apiUrl = `${window.location.origin}/api/chat`;
@@ -13,6 +13,7 @@ export async function generateResponse(messages: Message[], options: { no_tools?
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json",
+        ...(storage.getSessionToken() ? { "Authorization": `Bearer ${storage.getSessionToken()}` } : {}),
       },
       signal: controller.signal,
       body: JSON.stringify({
@@ -23,7 +24,6 @@ export async function generateResponse(messages: Message[], options: { no_tools?
           if (m.reasoning_content) msg.reasoning_content = m.reasoning_content;
           return msg;
         }),
-        userId: getCurrentUser()?.id,
         ...(options.no_tools ? { no_tools: true } : {}),
       }),
     });

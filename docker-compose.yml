@@ -34,6 +34,20 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  statsbot:
+    build:
+      context: ./statsbot
+      dockerfile: Dockerfile
+    container_name: mindex-statsbot
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://mindex:mindex@postgres:5432/mindex
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   postgres:
     image: postgres:16-alpine
     container_name: mindex-db

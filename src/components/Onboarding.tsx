@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ArrowUp, Copy, Check } from 'lucide-react';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
-import { getCurrentUser } from '../lib/auth';
+import { getCurrentUser, apiFetch } from '../lib/auth';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
@@ -48,13 +48,10 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       // Call AI for a real response
       let assistantText = '';
       try {
-        const aiRes = await fetch('/api/chat', {
+        const aiRes = await apiFetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: [{ role: 'user', content }],
-            userId,
-          }),
+          body: JSON.stringify({ messages: [{ role: 'user', content }] }),
         });
         if (aiRes.ok) {
           const data = await aiRes.json();
@@ -84,12 +81,11 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
       await db.saveThread(thread);
 
-      if (userId) {
-        fetch('/api/summarize', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: thread.messages, threadId, userId, raw: true, rawSummary: content }),
-        }).catch(() => {});
+      apiFetch('/api/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: thread.messages, threadId, userId, raw: true, rawSummary: content }),
+      }).catch(() => {});
       }
 
       // If we got a reply, show it briefly before completing

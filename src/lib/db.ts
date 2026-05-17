@@ -6,8 +6,20 @@ import { storage } from './storage';
 const getUserId = () => getCurrentUser()?.id;
 const apiBase = () => `${window.location.origin}/api/data`;
 
+const authHeaders = (): Record<string, string> => {
+  const token = storage.getSessionToken();
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 const request = async <T>(url: string, options?: RequestInit): Promise<T> => {
-  const response = await fetch(url, options);
+  const merged: RequestInit = {
+    ...options,
+    headers: {
+      ...authHeaders(),
+      ...(options?.headers as Record<string, string> || {}),
+    },
+  };
+  const response = await fetch(url, merged);
   if (!response.ok) {
     throw new Error(`Request failed: ${response.status}`);
   }
@@ -31,7 +43,7 @@ const persistTask = async (userId: string, task: Task) => {
     await request<{ success: boolean }>(`${apiBase()}/task`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, task }),
+      body: JSON.stringify({ task }),
     });
   } catch {
     // Local fallback already saved.
@@ -55,7 +67,7 @@ export const db = {
 
     try {
       const data = await request<{ profile: LocalProfile | null; tasks: Task[]; threads: Thread[] }>(
-        `${apiBase()}/bootstrap?userId=${encodeURIComponent(userId)}`
+        `${apiBase()}/bootstrap`
       );
 
       if (data.profile) {
@@ -84,11 +96,7 @@ export const db = {
       await request<{ success: boolean }>(`${apiBase()}/profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          settings,
-          onboarding_complete: onboardingComplete,
-        }),
+        body: JSON.stringify({ settings, onboarding_complete: onboardingComplete }),
       });
     } catch {
       // Offline/DB unavailable: local fallback is already saved.
@@ -103,7 +111,7 @@ export const db = {
 
     try {
       const data = await request<{ profile: LocalProfile | null; tasks: Task[]; threads: Thread[] }>(
-        `${apiBase()}/bootstrap?userId=${encodeURIComponent(userId)}`
+        `${apiBase()}/bootstrap`
       );
       const serverThreads = data.threads || [];
       const serverIds = new Set(serverThreads.map((t) => t.id));
@@ -140,7 +148,7 @@ export const db = {
       await request<{ success: boolean }>(`${apiBase()}/thread`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, thread: updated }),
+        body: JSON.stringify({ thread: updated }),
       });
     } catch (err) {
       console.error('[db] saveThread failed, thread only in localStorage:', err);
@@ -155,7 +163,7 @@ export const db = {
       await request<{ success: boolean }>(`${apiBase()}/thread/${encodeURIComponent(id)}/archive`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({}),
       });
     } catch {
       // Local fallback not needed — source update is server-side only
@@ -173,7 +181,7 @@ export const db = {
 
     try {
       await request<{ success: boolean }>(
-        `${apiBase()}/thread/${encodeURIComponent(id)}?userId=${encodeURIComponent(userId)}`,
+        `${apiBase()}/thread/${encodeURIComponent(id)}`,
         { method: 'DELETE' }
       );
     } catch {
@@ -189,7 +197,7 @@ export const db = {
 
     try {
       const data = await request<{ profile: LocalProfile | null; tasks: Task[]; threads: Thread[] }>(
-        `${apiBase()}/bootstrap?userId=${encodeURIComponent(userId)}`
+        `${apiBase()}/bootstrap`
       );
       const serverTasks = data.tasks || [];
       const serverIds = new Set(serverTasks.map((t) => t.id));
@@ -212,7 +220,7 @@ export const db = {
 
     try {
       const data = await request<{ tasks: Task[] }>(
-        `${apiBase()}/bootstrap?userId=${encodeURIComponent(userId)}`
+        `${apiBase()}/bootstrap`
       );
       const serverTasks = data.tasks || [];
       storage.setTasks(userId, serverTasks);
@@ -266,7 +274,7 @@ export const db = {
 
     try {
       await request<{ success: boolean }>(
-        `${apiBase()}/task/${encodeURIComponent(id)}?userId=${encodeURIComponent(userId)}`,
+        `${apiBase()}/task/${encodeURIComponent(id)}`,
         { method: 'DELETE' }
       );
     } catch {

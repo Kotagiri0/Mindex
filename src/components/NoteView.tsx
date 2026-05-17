@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { MessageCircle, Check } from 'lucide-react';
 import { Thread, Task } from '../types';
 import { db } from '../lib/db';
-import { getCurrentUser } from '../lib/auth';
+import { getCurrentUser, apiFetch } from '../lib/auth';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
@@ -91,7 +91,7 @@ export default function NoteView({ threadId, threads, setThreads, tasks, onSwitc
 
     const userId = getCurrentUser()?.id;
     setLoading(true);
-    fetch('/api/summarize', {
+    apiFetch('/api/summarize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: thread.messages, threadId, userId }),

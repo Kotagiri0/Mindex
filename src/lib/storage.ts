@@ -3,6 +3,7 @@ import { LocalProfile, LocalUser, Settings, Task, Thread } from '../types';
 const USERS_KEY = 'mx_users';
 const SESSION_KEY = 'mx_session_user_id';
 const CURRENT_USER_KEY = 'mx_current_user';
+const SESSION_TOKEN_KEY = 'mx_session_token';
 const LEGACY_TASKS_KEY = 'mx_tasks';
 const LEGACY_THREADS_KEY = 'mx_threads';
 const LEGACY_SETTINGS_KEY = 'mx_settings';
@@ -53,6 +54,10 @@ export const storage = {
   getSessionUserId: (): string | null => localStorage.getItem(SESSION_KEY),
   setSessionUserId: (userId: string) => localStorage.setItem(SESSION_KEY, userId),
   clearSessionUserId: () => localStorage.removeItem(SESSION_KEY),
+
+  getSessionToken: (): string | null => localStorage.getItem(SESSION_TOKEN_KEY),
+  setSessionToken: (token: string) => localStorage.setItem(SESSION_TOKEN_KEY, token),
+  clearSessionToken: () => localStorage.removeItem(SESSION_TOKEN_KEY),
 
   getCurrentUser: (): LocalUser | null => {
     const direct = readJson<LocalUser | null>(CURRENT_USER_KEY, null);

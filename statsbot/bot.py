@@ -1,0 +1,128 @@
+"""
+Mindex Stats Bot — метрики продукта прямо в Telegram.
+/stats — текущие цифры по запросу
+Автодайджест в 09:00 МСК каждый день.
+"""
+
+import os
+import asyncio
+import logging
+from datetime import datetime, timezone, timedelta
+
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from telegram import Update, Bot
+from telegram.ext import Application, CommandHandler, ContextTypes
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+log = logging.getLogger(__name__)
+
+BOT_TOKEN = os.environ["STATS_BOT_TOKEN"]
+DATABASE_URL = os.environ["DATABASE_URL"]
+# Telegram ID-ы, которым разрешён доступ (через запятую)
+ALLOWED_IDS = set(int(x) for x in os.environ.get("STATS_ALLOWED_IDS", "").split(",") if x.strip())
+# Куда слать утренний дайджест (chat_id через запятую)
+DIGEST_CHAT_IDS = [int(x) for x in os.environ.get("STATS_DIGEST_CHAT_IDS", "").split(",") if x.strip()]
+
+MSK = timezone(timedelta(hours=3))
+
+
+def get_db():
+    return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+
+
+def fetch_stats() -> dict:
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                  (SELECT COUNT(*) FROM auth_users)                                              AS total_users,
+                  (SELECT COUNT(*) FROM auth_users WHERE created_at >= NOW() - INTERVAL '1 day') AS new_users_1d,
+                  (SELECT COUNT(*) FROM auth_users WHERE created_at >= NOW() - INTERVAL '7 days') AS new_users_7d,
+                  (SELECT COUNT(DISTINCT user_id) FROM user_tasks
+                     WHERE created_at >= NOW() - INTERVAL '1 day')                               AS dau,
+                  (SELECT COUNT(DISTINCT user_id) FROM user_tasks
+                     WHERE created_at >= NOW() - INTERVAL '7 days')                              AS wau,
+                  (SELECT COUNT(*) FROM user_tasks)                                              AS total_tasks,
+                  (SELECT COUNT(*) FROM user_tasks WHERE created_at >= NOW() - INTERVAL '1 day') AS tasks_1d,
+                  (SELECT COUNT(*) FROM user_tasks WHERE created_at >= NOW() - INTERVAL '7 days') AS tasks_7d,
+                  (SELECT COUNT(*) FROM user_threads)                                            AS total_threads,
+                  (SELECT COUNT(*) FROM user_threads
+                     WHERE created_at >= (EXTRACT(EPOCH FROM NOW() - INTERVAL '7 days') * 1000)::bigint) AS threads_7d,
+                  (SELECT COUNT(DISTINCT user_id) FROM user_threads
+                     WHERE updated_at >= NOW() - INTERVAL '7 days')                              AS active_chatters_7d
+            """)
+            return dict(cur.fetchone())
+
+
+def format_stats(s: dict) -> str:
+    dau_wau = f"{round(s['dau'] / s['wau'] * 100)}%" if s['wau'] else "—"
+    now_msk = datetime.now(MSK).strftime("%d.%m.%Y %H:%M МСК")
+    return (
+        f"📊 *Mindex — метрики продукта*\n"
+        f"_{now_msk}_\n\n"
+        f"👥 *Пользователи*\n"
+        f"  Всего: `{s['total_users']}`\n"
+        f"  За сутки: `+{s['new_users_1d']}`\n"
+        f"  За неделю: `+{s['new_users_7d']}`\n\n"
+        f"🔥 *Активность*\n"
+        f"  DAU: `{s['dau']}`\n"
+        f"  WAU: `{s['wau']}`\n"
+        f"  DAU/WAU: `{dau_wau}`\n"
+        f"  Активных в чате за 7д: `{s['active_chatters_7d']}`\n\n"
+        f"✅ *Задачи*\n"
+        f"  Всего: `{s['total_tasks']}`\n"
+        f"  За сутки: `+{s['tasks_1d']}`\n"
+        f"  За неделю: `+{s['tasks_7d']}`\n\n"
+        f"💬 *Треды с Мыслью*\n"
+        f"  Всего: `{s['total_threads']}`\n"
+        f"  За неделю: `+{s['threads_7d']}`"
+    )
+
+
+async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if ALLOWED_IDS and user_id not in ALLOWED_IDS:
+        await update.message.reply_text("⛔ Нет доступа.")
+        return
+    try:
+        stats = fetch_stats()
+        await update.message.reply_text(format_stats(stats), parse_mode="Markdown")
+    except Exception as e:
+        log.exception("Ошибка при получении метрик")
+        await update.message.reply_text(f"❌ Ошибка: {e}")
+
+
+async def send_digest(bot: Bot):
+    if not DIGEST_CHAT_IDS:
+        return
+    try:
+        stats = fetch_stats()
+        text = format_stats(stats)
+        for chat_id in DIGEST_CHAT_IDS:
+            await bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown")
+        log.info("Дайджест отправлен в %d чатов", len(DIGEST_CHAT_IDS))
+    except Exception:
+        log.exception("Ошибка при отправке дайджеста")
+
+
+def main():
+    app = Application.builder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("stats", cmd_stats))
+
+    scheduler = AsyncIOScheduler(timezone=MSK)
+    scheduler.add_job(
+        lambda: asyncio.ensure_future(send_digest(app.bot)),
+        trigger="cron",
+        hour=9,
+        minute=0,
+    )
+    scheduler.start()
+
+    log.info("Stats bot started")
+    app.run_polling(drop_pending_updates=True)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Pencil, ArrowLeft, ChevronDown, Check } from 'lucide-react';
 import { Settings } from '../types';
-import { getCurrentUser } from '../lib/auth';
+import { getCurrentUser, apiFetch } from '../lib/auth';
 import { storage } from '../lib/storage';
 import {
   isGoogleCalendarConnected,
@@ -76,7 +76,7 @@ function TelegramRow() {
   useEffect(() => {
     const user = getCurrentUser();
     if (!user) return;
-    fetch(`/api/telegram/link-status?userId=${encodeURIComponent(user.id)}`)
+    apiFetch(`/api/telegram/link-status`)
       .then(r => r.json())
       .then(d => { if (d.linked) setStep('done'); })
       .catch(() => {});
@@ -87,10 +87,10 @@ function TelegramRow() {
     if (!user) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/telegram/link-code', {
+      const res = await apiFetch('/api/telegram/link-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
+        body: JSON.stringify({}),
       });
       const data = await res.json();
       setCode(data.code);
@@ -98,7 +98,7 @@ function TelegramRow() {
 
       // Polling — проверяем каждые 3 секунды, подключился ли пользователь
       const interval = setInterval(async () => {
-        const r = await fetch(`/api/telegram/link-status?userId=${encodeURIComponent(user.id)}`);
+        const r = await apiFetch(`/api/telegram/link-status`);
         const d = await r.json();
         if (d.linked) {
           clearInterval(interval);

@@ -4,7 +4,7 @@ import { ChevronLeft } from 'lucide-react';
 import { Thread } from '../types';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
-import { getCurrentUser } from '../lib/auth';
+import { getCurrentUser, apiFetch } from '../lib/auth';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
@@ -52,13 +52,11 @@ export default function NoteEditor({ thread, onSaved, onClose }: NoteEditorProps
 
       await db.saveThread(saved);
 
-      if (userId) {
-        fetch('/api/summarize', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId, userId, raw: true, rawSummary: content.trim() }),
-        }).catch(() => {});
-      }
+      apiFetch('/api/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId, userId, raw: true, rawSummary: content.trim() }),
+      }).catch(() => {});
 
       onSaved(saved);
     } catch (e) {

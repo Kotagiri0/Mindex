@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { apiFetch } from './auth';
 
 type VoiceState = 'idle' | 'recording' | 'processing' | 'error';
 
@@ -37,7 +38,7 @@ export const useVoiceInput = (onTranscript: (text: string) => void) => {
       const formData = new FormData();
       formData.append('audio', audioBlob, getFileNameForMimeType(mimeType || audioBlob.type));
 
-      const response = await fetch('/api/voice/transcribe', {
+      const response = await apiFetch('/api/voice/transcribe', {
         method: 'POST',
         body: formData,
       });

@@ -7,6 +7,19 @@ export const getCurrentUser = (): LocalUser | null => {
   return storage.getCurrentUser();
 };
 
+export const getSessionToken = (): string | null => storage.getSessionToken();
+
+export const apiFetch = (url: string, options: RequestInit = {}): Promise<Response> => {
+  const token = storage.getSessionToken();
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...(options.headers as Record<string, string> || {}),
+    },
+  });
+};
+
 const mapApiUser = (user: any): LocalUser => ({
   id: String(user.id),
   username: String(user.username),
@@ -50,27 +63,36 @@ export const registerLocalUser = async (input: { username: string; password: str
     throw new Error('Пароль должен быть не короче 4 символов.');
   }
 
-  const user = await authRequest('register', {
-    username,
-    password: input.password,
-    displayName,
+  const res = await fetch(`${window.location.origin}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password: input.password, displayName }),
   });
+  const data = await res.json().catch(() => ({ error: 'Некорректный ответ сервера.' }));
+  if (!res.ok) throw new Error(data.error || 'Ошибка авторизации.');
 
+  const user = mapApiUser(data.user);
   storage.setSessionUserId(user.id);
   storage.setCurrentUser(user);
+  if (data.token) storage.setSessionToken(data.token);
   return user;
 };
 
 export const loginLocalUser = async (input: { username: string; password: string }) => {
   const username = normalizeUsername(input.username);
 
-  const user = await authRequest('login', {
-    username,
-    password: input.password,
+  const res = await fetch(`${window.location.origin}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password: input.password }),
   });
+  const data = await res.json().catch(() => ({ error: 'Некорректный ответ сервера.' }));
+  if (!res.ok) throw new Error(data.error || 'Ошибка авторизации.');
 
+  const user = mapApiUser(data.user);
   storage.setSessionUserId(user.id);
   storage.setCurrentUser(user);
+  if (data.token) storage.setSessionToken(data.token);
   return user;
 };
 
@@ -91,10 +113,12 @@ export const loginGoogleUser = async (credential: string) => {
   const user = mapApiUser(data.user);
   storage.setSessionUserId(user.id);
   storage.setCurrentUser(user);
+  if (data.token) storage.setSessionToken(data.token);
   return user;
 };
 
 export const logoutLocalUser = () => {
   storage.clearSessionUserId();
   storage.clearCurrentUser();
+  storage.clearSessionToken();
 };

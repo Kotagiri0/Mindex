@@ -15,7 +15,7 @@ import NoteEditor from './NoteEditor';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
-import { getCurrentUser } from '../lib/auth';
+import { getCurrentUser, apiFetch } from '../lib/auth';
 import { useVoiceInput } from '../lib/useVoiceInput';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
@@ -575,7 +575,7 @@ function ChatView({
       if (!userId || !t || t.summary) return;
       const userMsgs = t.messages.filter((m: any) => m.role === 'user');
       if (userMsgs.length < 2) return;
-      fetch('/api/summarize', {
+      apiFetch('/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: t.messages, threadId: t.id, userId }),
@@ -659,14 +659,11 @@ function ChatView({
     };
     db.saveThread(note);
     setThreads((prev: Thread[]) => [note, ...(Array.isArray(prev) ? prev : [])]);
-    const userId = db.getUserId();
-    if (userId) {
-      fetch('/api/summarize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId }),
-      }).catch(() => {});
-    }
+    apiFetch('/api/summarize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId: db.getUserId() }),
+    }).catch(() => {});
   };
 
   const deleteMessage = (msg: Message) => {
@@ -759,14 +756,11 @@ function ChatView({
             };
             db.saveThread(savedNote);
             setThreads(prev => [savedNote, ...(Array.isArray(prev) ? prev : [])]);
-            const userId = db.getUserId();
-            if (userId) {
-              fetch('/api/summarize', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId }),
-              }).catch(() => {});
-            }
+            apiFetch('/api/summarize', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId: db.getUserId() }),
+            }).catch(() => {});
             result = { status: 'success', noteId };
           } else if (name === 'start_planning') {
             const planningMsg = {
@@ -1289,7 +1283,7 @@ function ThreadsView({
       try {
         const user = getCurrentUser();
         if (!user) return;
-        const res = await fetch(`/api/search?userId=${encodeURIComponent(user.id)}&q=${encodeURIComponent(search)}`);
+        const res = await apiFetch(`/api/search?q=${encodeURIComponent(search)}`);
         if (!res.ok) return;
         const data = await res.json();
         setSearchResults(data.results || []);
