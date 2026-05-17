@@ -604,24 +604,35 @@ function ChatView({
     return () => clearInterval(iv);
   }, [isTyping]);
 
+  const wasStreamingRef = useRef(false);
+
+  useEffect(() => {
+    if (streamingContent !== null) wasStreamingRef.current = true;
+    else if (streamingContent === null && !isTyping) wasStreamingRef.current = false;
+  }, [streamingContent, isTyping]);
+
   useEffect(() => {
     if (prevIsTypingRef.current && !isTyping) {
-      const visibleMsgs = (thread?.messages || []).filter(m => m.role !== 'tool' && !m.tool_calls);
-      const last = visibleMsgs[visibleMsgs.length - 1];
-      if (last?.role === 'assistant' && last.content) {
-        const fullText = last.content;
-        let i = 0;
-        setAnimatingContent('');
-        if (animIntervalRef.current) clearInterval(animIntervalRef.current);
-        animIntervalRef.current = setInterval(() => {
-          i += 6;
-          if (i >= fullText.length) {
-            clearInterval(animIntervalRef.current!);
-            setAnimatingContent(null);
-          } else {
-            setAnimatingContent(fullText.slice(0, i));
-          }
-        }, 10);
+      if (wasStreamingRef.current) {
+        wasStreamingRef.current = false;
+      } else {
+        const visibleMsgs = (thread?.messages || []).filter(m => m.role !== 'tool' && !m.tool_calls);
+        const last = visibleMsgs[visibleMsgs.length - 1];
+        if (last?.role === 'assistant' && last.content) {
+          const fullText = last.content;
+          let i = 0;
+          setAnimatingContent('');
+          if (animIntervalRef.current) clearInterval(animIntervalRef.current);
+          animIntervalRef.current = setInterval(() => {
+            i += 6;
+            if (i >= fullText.length) {
+              clearInterval(animIntervalRef.current!);
+              setAnimatingContent(null);
+            } else {
+              setAnimatingContent(fullText.slice(0, i));
+            }
+          }, 10);
+        }
       }
     }
     prevIsTypingRef.current = isTyping;
