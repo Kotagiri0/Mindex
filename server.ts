@@ -648,6 +648,18 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
+app.post('/api/auth/migrate-session', async (req, res) => {
+  if (!db) return res.status(500).json({ error: "БД не настроена." });
+  const userId = String(req.body?.userId || '').trim();
+  if (!userId) return res.status(400).json({ error: "userId обязателен." });
+
+  const exists = await db.query(`SELECT id FROM auth_users WHERE id = $1 LIMIT 1`, [userId]).catch(() => null);
+  if (!exists?.rows?.length) return res.status(404).json({ error: "Пользователь не найден." });
+
+  const token = await createSession(userId);
+  return res.status(200).json({ token });
+});
+
 app.post('/api/auth/google', async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: 'База данных не настроена (DATABASE_URL).' });

@@ -7,6 +7,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db } from './lib/db';
 import { getCurrentUser, logoutLocalUser } from './lib/auth';
+import { storage } from './lib/storage';
 import { Screen, Task, Thread, Settings, LocalUser } from './types';
 import { uuid } from './lib/utils';
 import { sortTasks } from './lib/sortTasks';
@@ -66,6 +67,19 @@ export default function App() {
   useEffect(() => {
     const user = getCurrentUser();
     setCurrentUser(user);
+
+    // Тихая миграция: если пользователь есть но токена нет — получаем токен без повторного логина
+    if (user && !storage.getSessionToken()) {
+      fetch('/api/auth/migrate-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      })
+        .then(r => r.json())
+        .then(d => { if (d.token) storage.setSessionToken(d.token); })
+        .catch(() => {});
+    }
+
     setLoading(false);
   }, []);
 
