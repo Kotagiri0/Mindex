@@ -1301,8 +1301,9 @@ function ThreadsView({
     t.title.toLowerCase().includes(search.toLowerCase()) ||
     t.preview.toLowerCase().includes(search.toLowerCase());
 
-  const thoughts = all.filter(t => t.source !== 'skill' && t.source !== 'заметка' && searchMatch(t));
-  const notes = all.filter(t => isNoteThread(t) && searchMatch(t));
+  const sortByUpdated = (arr: Thread[]) => [...arr].sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
+  const thoughts = sortByUpdated(all.filter(t => t.source !== 'skill' && t.source !== 'заметка' && searchMatch(t)));
+  const notes = sortByUpdated(all.filter(t => isNoteThread(t) && searchMatch(t)));
 
   const searchFiltered = searchResults
     ? searchResults.filter(t => tab === 'thoughts' ? t.source !== 'заметка' : isNoteThread(t))
@@ -1923,7 +1924,7 @@ function Sidebar({
 
   const recentThreads = (Array.isArray(threads) ? threads : [])
     .filter(t => t.source !== 'skill' && t.source !== 'заметка')
-    .sort((a, b) => b.createdAt - a.createdAt).slice(0, 8);
+    .sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt)).slice(0, 8);
 
   return (
     <motion.div

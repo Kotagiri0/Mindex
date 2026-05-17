@@ -112,11 +112,11 @@ export const db = {
       for (const t of pendingLocal) {
         db.saveThread(t).catch(() => {});
       }
-      const merged = [...pendingLocal, ...serverThreads].sort((a, b) => b.createdAt - a.createdAt);
+      const merged = [...pendingLocal, ...serverThreads].sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
       storage.setThreads(userId, merged);
       return merged;
     } catch {
-      return localThreads.sort((a, b) => b.createdAt - a.createdAt);
+      return localThreads.sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
     }
   },
   
@@ -126,12 +126,13 @@ export const db = {
       return;
     }
 
+    const updated = { ...thread, updatedAt: Date.now() };
     const threads = storage.getThreads(userId);
-    const index = threads.findIndex((item) => item.id === thread.id);
+    const index = threads.findIndex((item) => item.id === updated.id);
     if (index >= 0) {
-      threads[index] = thread;
+      threads[index] = updated;
     } else {
-      threads.unshift(thread);
+      threads.unshift(updated);
     }
     storage.setThreads(userId, threads);
 

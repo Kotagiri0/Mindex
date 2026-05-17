@@ -47,6 +47,7 @@ export interface Thread {
   preview: string;
   messages: Message[];
   createdAt: number;
+  updatedAt?: number;
   source?: 'thread' | 'text' | 'мысль' | 'заметка' | 'skill';
   label?: string;
   summary?: string;

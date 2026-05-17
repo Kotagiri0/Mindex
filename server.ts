@@ -718,6 +718,7 @@ app.get("/api/data/bootstrap", async (req, res) => {
         preview: row.preview,
         messages: row.messages || [],
         createdAt: Number(row.created_at),
+        updatedAt: row.updated_at ? new Date(row.updated_at).getTime() : Number(row.created_at),
         summary: row.summary || undefined,
         is_meaningful: row.is_meaningful ?? undefined,
         source: row.source || 'мысль',
