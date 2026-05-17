@@ -1295,7 +1295,7 @@ is_meaningful = false если диалог: короткий small-talk, тех
 
 app.post("/api/chat", async (req, res) => {
   try {
-    const { messages, userId } = req.body;
+    const { messages, userId, no_tools } = req.body;
 
     const apiKey = process.env.ROUTERAI_API_KEY;
     if (!apiKey) {
@@ -1464,8 +1464,8 @@ app.post("/api/chat", async (req, res) => {
     const response = await callRouterAI(apiKey, {
       model: "deepseek/deepseek-v4-flash",
       messages: [{ role: "system", content: finalSystemInstruction }, ...messages],
-      tools: CHAT_TOOLS,
-      tool_choice: "auto",
+      tools: no_tools ? undefined : CHAT_TOOLS,
+      tool_choice: no_tools ? "none" : "auto",
       temperature: 0.7,
       max_tokens: 2048,
       thinking: false,

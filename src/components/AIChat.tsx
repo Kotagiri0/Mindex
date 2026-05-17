@@ -80,7 +80,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     prevIsTypingRef.current = isTyping;
   }, [isTyping]);
 
-  const { state: voiceState, error: voiceError, startRecording, stopRecording, toggleRecording } = useVoiceInput(
+  const { state: voiceState, startRecording, stopRecording, toggleRecording } = useVoiceInput(
     (text) => {
       setInput(prev => prev + (prev ? ' ' : '') + text);
     }
@@ -139,7 +139,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     }
 
     const userMsg: Message = { role: 'user', content: text, time: ft() };
-    const isFirstMessage = thread.messages.length === 0;
+    const isFirstMessage = (thread?.messages.length ?? 0) === 0;
 
     let updatedThread: Thread | undefined;
 
@@ -417,7 +417,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       const response = await generateResponse([
         ...t.messages,
         { role: 'user', content: prompt, time: ft() }
-      ]);
+      ], { no_tools: true });
 
       if (!response || !response.content) {
         throw new Error('AI вернул пустой ответ при генерации плана.');
@@ -533,7 +533,8 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   const generateTitle = async (userText: string, assistantText: string) => {
     try {
       const resp = await generateResponse(
-        [{ role: 'user', content: `Придумай короткое название (3-5 слов, без кавычек) для чата, где пользователь написал:\n«${userText}»\nИИ ответил:\n«${assistantText.slice(0, 200)}»\nТолько название, без пояснений`, time: '' }]
+        [{ role: 'user', content: `Придумай короткое название (3-5 слов, без кавычек) для чата, где пользователь написал:\n«${userText}»\nИИ ответил:\n«${assistantText.slice(0, 200)}»\nТолько название, без пояснений`, time: '' }],
+        { no_tools: true }
       );
       const title = resp?.content?.trim().replace(/^["«]|["»]$/g, '').slice(0, 60);
       if (!title || !threadId) return;

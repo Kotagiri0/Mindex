@@ -1,7 +1,7 @@
 import { Message } from "../types";
 import { getCurrentUser } from "./auth";
 
-export async function generateResponse(messages: Message[]) {
+export async function generateResponse(messages: Message[], options: { no_tools?: boolean } = {}) {
   const apiUrl = `${window.location.origin}/api/chat`;
 
   const controller = new AbortController();
@@ -24,6 +24,7 @@ export async function generateResponse(messages: Message[]) {
           return msg;
         }),
         userId: getCurrentUser()?.id,
+        ...(options.no_tools ? { no_tools: true } : {}),
       }),
     });
 
