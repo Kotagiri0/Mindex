@@ -1077,7 +1077,7 @@ async function generateEmbedding(text: string): Promise<number[] | null> {
 
 async function callRouterAI(apiKey: string, body: object, attempt = 0): Promise<Response> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  const timeoutId = setTimeout(() => controller.abort(), 40000);
   try {
     const response = await fetch("https://routerai.ru/api/v1/chat/completions", {
       method: "POST",
@@ -1089,9 +1089,11 @@ async function callRouterAI(apiKey: string, body: object, attempt = 0): Promise<
     return response;
   } catch (e: any) {
     clearTimeout(timeoutId);
-    if (attempt === 0 && e?.name !== "AbortError") {
-      await new Promise(r => setTimeout(r, 600));
-      return callRouterAI(apiKey, body, 1);
+    if (attempt < 2) {
+      const delay = e?.name === "AbortError" ? 1000 : 600;
+      console.warn(`[CHAT] RouterAI attempt ${attempt + 1} failed (${e?.name}), retrying in ${delay}ms...`);
+      await new Promise(r => setTimeout(r, delay));
+      return callRouterAI(apiKey, body, attempt + 1);
     }
     throw e;
   }

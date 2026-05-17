@@ -217,7 +217,7 @@ export async function generateResponse(messages: Message[], options: { tools?: a
   console.log(`Calling AI API at: ${apiUrl}`);
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s — covers up to 2 server retries
 
   try {
     const response = await fetch(apiUrl, {
