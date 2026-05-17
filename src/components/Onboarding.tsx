@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ArrowUp, Copy, Check } from 'lucide-react';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
-import { getCurrentUser, apiFetch } from '../lib/auth';
+import { apiFetch } from '../lib/auth';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
@@ -40,7 +40,6 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
     setLoading(true);
     try {
-      const userId = getCurrentUser()?.id;
       const threadId = uuid();
       const now = Date.now();
       const timeStr = new Date().toTimeString().slice(0, 5);
@@ -84,7 +83,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       apiFetch('/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: thread.messages, threadId, userId, raw: true, rawSummary: content }),
+        body: JSON.stringify({ messages: thread.messages, threadId, raw: true, rawSummary: content }),
       }).catch(() => {});
       }
 

@@ -30,23 +30,6 @@ const mapApiUser = (user: any): LocalUser => ({
   avatarUrl: user.avatarUrl ? String(user.avatarUrl) : undefined,
 });
 
-const authRequest = async (endpoint: 'register' | 'login', payload: { username: string; password: string; displayName?: string }) => {
-  const response = await fetch(`${window.location.origin}/api/auth/${endpoint}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const data = await response.json().catch(() => ({ error: 'Некорректный ответ сервера.' }));
-  if (!response.ok) {
-    throw new Error(data.error || 'Ошибка авторизации.');
-  }
-
-  return mapApiUser(data.user);
-};
-
 export const registerLocalUser = async (input: { username: string; password: string; displayName?: string }) => {
   const username = normalizeUsername(input.username);
   const displayName = (input.displayName || input.username).trim();

@@ -1215,8 +1215,9 @@ async function callRouterAI(apiKey: string, body: object, attempt = 0): Promise<
   }
 }
 
-app.post("/api/summarize", async (req, res) => {
-  const { messages, threadId, userId, raw, rawSummary } = req.body || {};
+app.post("/api/summarize", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  const { messages, threadId, raw, rawSummary } = req.body || {};
   // raw=true: заметка создана вручную — не нужен LLM, только DB write
   if (raw && rawSummary) {
     try {

@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { MessageCircle, Check } from 'lucide-react';
 import { Thread, Task } from '../types';
 import { db } from '../lib/db';
-import { getCurrentUser, apiFetch } from '../lib/auth';
+import { apiFetch } from '../lib/auth';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
@@ -89,12 +89,11 @@ export default function NoteView({ threadId, threads, setThreads, tasks, onSwitc
     const userMessages = thread.messages.filter(m => m.role === 'user' || m.role === 'assistant');
     if (userMessages.length === 0) { setSummaryReady(true); return; }
 
-    const userId = getCurrentUser()?.id;
     setLoading(true);
     apiFetch('/api/summarize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: thread.messages, threadId, userId }),
+      body: JSON.stringify({ messages: thread.messages, threadId }),
     })
       .then(r => r.json())
       .then(({ summary, is_meaningful }) => {

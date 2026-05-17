@@ -4,7 +4,7 @@ import { ChevronLeft } from 'lucide-react';
 import { Thread } from '../types';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
-import { getCurrentUser, apiFetch } from '../lib/auth';
+import { apiFetch } from '../lib/auth';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
@@ -33,7 +33,6 @@ export default function NoteEditor({ thread, onSaved, onClose }: NoteEditorProps
     if (!canSave || saving) return;
     setSaving(true);
     try {
-      const userId = getCurrentUser()?.id;
       const threadId = thread?.id || uuid();
       const now = thread?.createdAt || Date.now();
       const timeStr = new Date().toTimeString().slice(0, 5);
@@ -55,7 +54,7 @@ export default function NoteEditor({ thread, onSaved, onClose }: NoteEditorProps
       apiFetch('/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId, userId, raw: true, rawSummary: content.trim() }),
+        body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId, raw: true, rawSummary: content.trim() }),
       }).catch(() => {});
 
       onSaved(saved);

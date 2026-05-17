@@ -571,14 +571,13 @@ function ChatView({
   useEffect(() => {
     return () => {
       const t = threadRef.current;
-      const userId = db.getUserId();
-      if (!userId || !t || t.summary) return;
+      if (!t || t.summary) return;
       const userMsgs = t.messages.filter((m: any) => m.role === 'user');
       if (userMsgs.length < 2) return;
       apiFetch('/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: t.messages, threadId: t.id, userId }),
+        body: JSON.stringify({ messages: t.messages, threadId: t.id }),
       }).then(r => r.json()).then(({ summary }) => {
         if (summary) {
           setThreads((prev: Thread[]) => prev.map(p =>
@@ -662,7 +661,7 @@ function ChatView({
     apiFetch('/api/summarize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId: db.getUserId() }),
+      body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId }),
     }).catch(() => {});
   };
 
@@ -759,7 +758,7 @@ function ChatView({
             apiFetch('/api/summarize', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId: db.getUserId() }),
+              body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId }),
             }).catch(() => {});
             result = { status: 'success', noteId };
           } else if (name === 'start_planning') {

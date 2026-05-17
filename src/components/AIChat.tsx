@@ -270,7 +270,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             apiFetch('/api/summarize', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId: db.getUserId() }),
+              body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId }),
             }).catch(() => {});
             result = { status: 'success', noteId };
           }
@@ -546,15 +546,13 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   };
 
   const handleClose = () => {
-    // Fire-and-forget summarize if thread has enough content and no summary yet
-    const userId = db.getUserId();
-    if (userId && thread && !thread.summary) {
+    if (thread && !thread.summary) {
       const userMsgs = thread.messages.filter(m => m.role === 'user');
       if (userMsgs.length >= 2) {
         apiFetch('/api/summarize', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: thread.messages, threadId: thread.id, userId }),
+          body: JSON.stringify({ messages: thread.messages, threadId: thread.id }),
         }).then(r => r.json()).then(({ summary }) => {
           if (summary) {
             setThreads((prev: Thread[]) => prev.map(t =>
@@ -584,7 +582,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     apiFetch('/api/summarize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, userId: db.getUserId(), raw: true, rawSummary: content.trim() }),
+      body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, raw: true, rawSummary: content.trim() }),
     }).catch(() => {});
   };
 
