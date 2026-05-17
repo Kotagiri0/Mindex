@@ -548,6 +548,7 @@ function ChatView({
 
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [streamingContent, setStreamingContent] = useState<string | null>(null);
   const [thinkingIdx, setThinkingIdx] = useState(0);
   const [animatingContent, setAnimatingContent] = useState<string | null>(null);
   const [replyQuote, setReplyQuote] = useState<string | null>(null);
@@ -708,13 +709,16 @@ function ChatView({
     if (updatedThread) db.saveThread(updatedThread);
 
     setIsTyping(true);
+    setStreamingContent('');
     try {
       const current = threads.find(t => t.id === threadId);
       if (!current) return;
 
       let history = [...current.messages, userMsg];
       const turnMsgs: typeof history = [];
-      let response = await generateResponse(history);
+      let response = await generateResponse(history, {}, (delta) => {
+        setStreamingContent(prev => (prev ?? '') + delta);
+      });
 
       while (response.tool_calls) {
         const toolResults: typeof history = [];
@@ -813,6 +817,7 @@ function ChatView({
       }));
     } finally {
       setIsTyping(false);
+      setStreamingContent(null);
     }
   };
 
@@ -1183,7 +1188,11 @@ function ChatView({
               </div>
             );
           })}
-          {isTyping && (
+          {isTyping && streamingContent ? (
+            <div style={{ alignSelf: 'flex-start', maxWidth: '72%', background: 'var(--surface)', borderRadius: '4px 18px 18px 18px', padding: '10px 14px', fontSize: 14, lineHeight: 1.6, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: M }}>
+              {streamingContent}
+            </div>
+          ) : isTyping && (
             <div style={{ alignSelf: 'flex-start', paddingLeft: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
               <MysliThinking />
               <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', fontStyle: 'italic' }}>

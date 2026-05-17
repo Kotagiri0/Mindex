@@ -1397,6 +1397,7 @@ app.post("/api/chat", async (req, res) => {
       temperature: 0.7,
       max_tokens: 2048,
       thinking: false,
+      stream: true,
     });
 
     if (!response.ok) {
@@ -1405,29 +1406,73 @@ app.post("/api/chat", async (req, res) => {
       return res.status(500).json({ error: `RouterAI вернул ошибку ${response.status}: ${text}` });
     }
 
-    const rawText = await response.text();
-    let data: any;
+    // SSE streaming response
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullContent = '';
+    let toolCallsAcc: any[] = [];
+
     try {
-      data = JSON.parse(rawText);
-    } catch (e) {
-      console.error("[CHAT] Failed to parse RouterAI response (length=" + rawText.length + "):", rawText.slice(0, 500));
-      return res.status(500).json({ error: "Мысль вернула некорректный ответ — попробуй ещё раз" });
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const chunk = JSON.parse(data);
+            const delta = chunk.choices?.[0]?.delta;
+            if (!delta) continue;
+
+            if (delta.content) {
+              fullContent += delta.content;
+              res.write(`data: ${JSON.stringify({ type: 'delta', content: delta.content })}\n\n`);
+            }
+
+            if (delta.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                const idx = tc.index ?? 0;
+                if (!toolCallsAcc[idx]) toolCallsAcc[idx] = { id: '', type: 'function', function: { name: '', arguments: '' } };
+                if (tc.id) toolCallsAcc[idx].id = tc.id;
+                if (tc.function?.name) toolCallsAcc[idx].function.name += tc.function.name;
+                if (tc.function?.arguments) toolCallsAcc[idx].function.arguments += tc.function.arguments;
+              }
+            }
+          } catch { /* skip malformed chunk */ }
+        }
+      }
+    } finally {
+      reader.releaseLock();
     }
 
-    if (!data.choices?.length) {
-      throw new Error("RouterAI вернул пустой список вариантов (choices).");
-    }
+    // Send final message with tool_calls and sources
+    const finalMessage: any = { role: 'assistant', content: fullContent, sources: ragSources };
+    if (toolCallsAcc.length > 0) finalMessage.tool_calls = toolCallsAcc;
+    res.write(`data: ${JSON.stringify({ type: 'done', message: finalMessage })}\n\n`);
+    res.end();
 
-    const message = data.choices[0].message;
-    const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
-    res.json({ ...message, content, sources: ragSources });
   } catch (error: any) {
     const isTimeout = error?.name === "AbortError";
     const msg = isTimeout
       ? "RouterAI не ответил за 30 секунд — попробуй ещё раз"
       : error.message || "Ошибка сервера";
     console.error("[CHAT] error:", msg);
-    res.status(500).json({ error: msg });
+    if (!res.headersSent) {
+      res.status(500).json({ error: msg });
+    } else {
+      res.write(`data: ${JSON.stringify({ type: 'error', error: msg })}\n\n`);
+      res.end();
+    }
   }
 });
 

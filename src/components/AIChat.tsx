@@ -43,6 +43,7 @@ interface AIChatProps {
 export default function AIChat({ threadId, threads, setThreads, tasks, setTasks, onClose, onNavigate, onOpenThread, autoSend, onAutoSentClear }: AIChatProps) {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [streamingContent, setStreamingContent] = useState<string | null>(null);
   const [noteMode, setNoteMode] = useState(false);
   const [animatingContent, setAnimatingContent] = useState<string | null>(null);
   const [replyQuote, setReplyQuote] = useState<string | null>(null);
@@ -160,6 +161,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     }
 
     setIsTyping(true);
+    setStreamingContent('');
 
     try {
       const currentThread = threads.find(t => t.id === threadId);
@@ -168,7 +170,9 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       let conversationHistory: Message[] = [...currentThread.messages, userMsg];
       const turnMessages: Message[] = [];
 
-      let response = await generateResponse(conversationHistory);
+      let response = await generateResponse(conversationHistory, {}, (delta) => {
+        setStreamingContent(prev => (prev ?? '') + delta);
+      });
 
       while (response.tool_calls) {
         const toolResults: Message[] = [];
@@ -341,6 +345,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       }));
     } finally {
       setIsTyping(false);
+      setStreamingContent(null);
     }
   };
 
@@ -968,7 +973,11 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           return [backdropEl, ...msgs];
         })()}
 
-        {isTyping && (
+        {isTyping && streamingContent ? (
+          <div style={{ alignSelf: 'flex-start', maxWidth: '85%', background: 'var(--surface)', borderRadius: '4px 18px 18px 18px', padding: '10px 14px', fontSize: 15, lineHeight: 1.5, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            {streamingContent}
+          </div>
+        ) : isTyping && (
           <div style={{ alignSelf: 'flex-start', paddingLeft: 2, paddingBottom: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
             <MysliThinking />
             <ThinkingPhrase />

@@ -210,29 +210,23 @@ export const tools: any[] = [
   }
 ];
 
-export async function generateResponse(messages: Message[], options: { tools?: any[], tool_choice?: string } = {}) {
-  // Use an absolute URL so the browser always reaches the local API endpoint.
+export async function generateResponse(
+  messages: Message[],
+  options: { tools?: any[], tool_choice?: string } = {},
+  onDelta?: (delta: string) => void,
+) {
   const apiUrl = `${window.location.origin}/api/chat`;
-
-  console.log(`Calling AI API at: ${apiUrl}`);
-
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s — covers up to 2 server retries
+  const timeoutId = setTimeout(() => controller.abort(), 90000);
 
   try {
     const response = await fetch(apiUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
+      headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
       signal: controller.signal,
       body: JSON.stringify({
         messages: messages.map(m => {
-          const msg: any = {
-            role: m.role,
-            content: m.content
-          };
+          const msg: any = { role: m.role, content: m.content };
           if (m.tool_calls) msg.tool_calls = m.tool_calls;
           if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
           if (m.reasoning_content) msg.reasoning_content = m.reasoning_content;
@@ -247,41 +241,56 @@ export async function generateResponse(messages: Message[], options: { tools?: a
 
     clearTimeout(timeoutId);
 
-    const text = await response.text();
-    
     if (!response.ok) {
-      let errorMessage = `Server error: ${response.status} (${response.statusText})`;
-      try {
-        const errorData = JSON.parse(text);
-        errorMessage = errorData.error || errorMessage;
-      } catch (e) {
-        if (text) {
-          if (text.includes("<!doctype html>") || text.includes("<html>")) {
-            errorMessage = "Сервер вернул HTML вместо JSON. Возможно, ошибка в маршрутизации или авторизации.";
-          } else {
-            errorMessage = `Server returned: ${text.slice(0, 100)}`;
-          }
+      const text = await response.text();
+      let errorMessage = `Server error: ${response.status}`;
+      try { errorMessage = JSON.parse(text).error || errorMessage; } catch {
+        if (text.includes("<!doctype html>") || text.includes("<html>")) {
+          errorMessage = "Сервер вернул HTML вместо JSON. Возможно, ошибка в маршрутизации или авторизации.";
         }
       }
       throw new Error(errorMessage);
     }
 
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      console.error("Failed to parse JSON response:", text);
-      if (text.includes("<!doctype html>") || text.includes("<html>")) {
-        throw new Error("Ошибка: Сервер вернул HTML-страницу вместо ответа ИИ. Попробуйте перезагрузить страницу.");
+    // Read SSE stream
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const chunk = JSON.parse(data);
+          if (chunk.type === 'delta' && chunk.content && onDelta) {
+            onDelta(chunk.content);
+          } else if (chunk.type === 'done') {
+            return chunk.message;
+          } else if (chunk.type === 'error') {
+            throw new Error(chunk.error);
+          }
+        } catch (e: any) {
+          if (e.message && !e.message.includes('JSON')) throw e;
+        }
       }
-      throw new Error(`Ошибка парсинга ответа ИИ: ${text.slice(0, 100)}`);
     }
+
+    throw new Error("Поток завершился без финального сообщения");
   } catch (e: any) {
     clearTimeout(timeoutId);
     if (e.name === 'AbortError') {
-      throw new Error("Превышено время ожидания ответа от ИИ (20 сек). Возможно, сервер перегружен.");
+      throw new Error("Превышено время ожидания ответа от ИИ. Возможно, сервер перегружен.");
     }
-    if (e.message.includes('Failed to fetch')) {
-      throw new Error("Ошибка сети: Не удалось отправить запрос. Проверьте соединение и доступность локального сервера.");
+    if (e.message?.includes('Failed to fetch')) {
+      throw new Error("Ошибка сети: Не удалось отправить запрос. Проверьте соединение.");
     }
     throw e;
   }
