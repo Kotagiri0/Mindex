@@ -1087,28 +1087,18 @@ function ChatView({
                                 <div style={{ padding: '4px 14px 8px', fontFamily: M, fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase' as const, color: 'var(--text-30)' }}>
                                   Из архива · {m.sources.length}
                                 </div>
-                                {m.sources.map((s: { title: string }, si: number) => {
-                                  const thr = threads.find(t => t.title === s.title);
+                                {m.sources.map((s: { title: string; snippet?: string }, si: number) => {
                                   return (
-                                    <button
+                                    <div
                                       key={si}
-                                      onClick={() => {
-                                        setOpenSourcesIdx(null);
-                                        if (!thr) return;
-                                        if (thr.source === 'заметка' && onOpenNote) onOpenNote(thr.id);
-                                        else if (onOpenThread) onOpenThread(thr.id);
-                                      }}
                                       style={{
-                                        width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                                        padding: '8px 14px', background: 'none', border: 'none',
-                                        cursor: 'pointer', textAlign: 'left',
+                                        width: '100%', display: 'flex', alignItems: 'flex-start', gap: 10,
+                                        padding: '8px 14px', textAlign: 'left',
                                         borderTop: si > 0 ? '1px solid #f0f0f0' : undefined,
                                       }}
-                                      onMouseEnter={e => (e.currentTarget.style.background = '#f7f7f7')}
-                                      onMouseLeave={e => (e.currentTarget.style.background = 'none')}
                                     >
                                       <div style={{
-                                        width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                                        width: 22, height: 22, borderRadius: '50%', flexShrink: 0, marginTop: 1,
                                         background: 'rgba(0,0,0,0.06)',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                         fontFamily: M, fontSize: 10, fontWeight: 600, color: 'var(--text-30)',
@@ -1119,14 +1109,13 @@ function ChatView({
                                         <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                           {s.title}
                                         </div>
-                                        {thr?.preview && (
-                                          <div style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
-                                            {thr.preview}
+                                        {s.snippet && (
+                                          <div style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)', marginTop: 2, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                            {s.snippet}
                                           </div>
                                         )}
                                       </div>
-                                      {thr && <ChevronRight size={13} strokeWidth={1.5} color="var(--text-30)" />}
-                                    </button>
+                                    </div>
                                   );
                                 })}
                               </motion.div>

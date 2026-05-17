@@ -25,7 +25,7 @@ export interface Message {
   tool_calls?: any[];
   tool_call_id?: string;
   reasoning_content?: string;
-  sources?: { title: string }[];
+  sources?: { title: string; snippet?: string }[];
   planning_data?: {
     questions: {
       id: string;
