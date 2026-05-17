@@ -46,7 +46,6 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   const [isTyping, setIsTyping] = useState(false);
   const { display: streamingContent, push: pushChunk, reset: resetStream } = useTypewriter();
   const [noteMode, setNoteMode] = useState(false);
-  const [animatingContent, setAnimatingContent] = useState<string | null>(null);
   const [replyQuote, setReplyQuote] = useState<string | null>(null);
   const [openMsgMenuIdx, setOpenMsgMenuIdx] = useState<number | null>(null);
   const [hoveredMsgIdx, setHoveredMsgIdx] = useState<number | null>(null);
@@ -55,44 +54,8 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const autoSentRef = useRef(false);
-  const animIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const prevIsTypingRef = useRef(false);
 
 
-  const wasStreamingRef = useRef(false);
-
-  useEffect(() => {
-    if (streamingContent !== null) wasStreamingRef.current = true;
-    else if (streamingContent === null && !isTyping) wasStreamingRef.current = false;
-  }, [streamingContent, isTyping]);
-
-  useEffect(() => {
-    if (prevIsTypingRef.current && !isTyping) {
-      // Skip typewriter animation if we already streamed the content
-      if (wasStreamingRef.current) {
-        wasStreamingRef.current = false;
-      } else {
-        const visibleMsgs = (thread?.messages || []).filter(m => m.role !== 'tool' && !m.tool_calls);
-        const last = visibleMsgs[visibleMsgs.length - 1];
-        if (last?.role === 'assistant' && last.content) {
-          const fullText = last.content;
-          let i = 0;
-          setAnimatingContent('');
-          if (animIntervalRef.current) clearInterval(animIntervalRef.current);
-          animIntervalRef.current = setInterval(() => {
-            i += 6;
-            if (i >= fullText.length) {
-              clearInterval(animIntervalRef.current!);
-              setAnimatingContent(null);
-            } else {
-              setAnimatingContent(fullText.slice(0, i));
-            }
-          }, 10);
-        }
-      }
-    }
-    prevIsTypingRef.current = isTyping;
-  }, [isTyping]);
 
   const { state: voiceState, error: voiceError, startRecording, stopRecording, toggleRecording } = useVoiceInput(
     (text) => {
@@ -780,8 +743,6 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           ) : null;
 
           const msgs = visibleMsgs.map((m, i) => {
-            const isLast = i === visibleMsgs.length - 1;
-            const showAnimated = isLast && m.role === 'assistant' && animatingContent !== null;
             const showActions = isTouchDevice || hoveredMsgIdx === i || openMsgMenuIdx === i;
             return (
             <div key={i}
@@ -800,9 +761,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
               }>
                 {m.role === 'user'
                   ? m.content
-                  : showAnimated
-                    ? <span style={{ whiteSpace: 'pre-wrap' }}>{animatingContent}</span>
-                    : renderMarkdown(m.content)
+                  : renderMarkdown(m.content)
                 }
 
                 {m.planning_data && (
@@ -891,7 +850,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
               <div className="text-[11px] text-text-tertiary px-1">{m.time}</div>
 
               {/* Action panel — assistant messages only */}
-              {m.role === 'assistant' && !showAnimated && (
+              {m.role === 'assistant' && (
                 <div style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   width: '100%', marginTop: 2,
@@ -910,7 +869,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                       <Copy size={14} strokeWidth={1.5} />
                     </button>
 
-                    {m.sources && m.sources.length > 0 && !showAnimated && (
+                    {m.sources && m.sources.length > 0 && (
                       <button
                         onClick={() => setOpenSourcesIdx(openSourcesIdx === i ? null : i)}
                         style={{

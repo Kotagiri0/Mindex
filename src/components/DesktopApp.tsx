@@ -551,15 +551,12 @@ function ChatView({
   const [isTyping, setIsTyping] = useState(false);
   const { display: streamingContent, push: pushChunk, reset: resetStream } = useTypewriter();
   const [thinkingIdx, setThinkingIdx] = useState(0);
-  const [animatingContent, setAnimatingContent] = useState<string | null>(null);
   const [replyQuote, setReplyQuote] = useState<string | null>(null);
   const [openMsgMenuIdx, setOpenMsgMenuIdx] = useState<number | null>(null);
   const [hoveredMsgIdx, setHoveredMsgIdx] = useState<number | null>(null);
   const [openSourcesIdx, setOpenSourcesIdx] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const didAutoSend = useRef(false);
-  const animIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const prevIsTypingRef = useRef(false);
 
   const thread = threads.find(t => t.id === threadId);
   const threadRef = useRef(thread);
@@ -605,39 +602,6 @@ function ChatView({
     return () => clearInterval(iv);
   }, [isTyping]);
 
-  const wasStreamingRef = useRef(false);
-
-  useEffect(() => {
-    if (streamingContent !== null) wasStreamingRef.current = true;
-    else if (streamingContent === null && !isTyping) wasStreamingRef.current = false;
-  }, [streamingContent, isTyping]);
-
-  useEffect(() => {
-    if (prevIsTypingRef.current && !isTyping) {
-      if (wasStreamingRef.current) {
-        wasStreamingRef.current = false;
-      } else {
-        const visibleMsgs = (thread?.messages || []).filter(m => m.role !== 'tool' && !m.tool_calls);
-        const last = visibleMsgs[visibleMsgs.length - 1];
-        if (last?.role === 'assistant' && last.content) {
-          const fullText = last.content;
-          let i = 0;
-          setAnimatingContent('');
-          if (animIntervalRef.current) clearInterval(animIntervalRef.current);
-          animIntervalRef.current = setInterval(() => {
-            i += 6;
-            if (i >= fullText.length) {
-              clearInterval(animIntervalRef.current!);
-              setAnimatingContent(null);
-            } else {
-              setAnimatingContent(fullText.slice(0, i));
-            }
-          }, 10);
-        }
-      }
-    }
-    prevIsTypingRef.current = isTyping;
-  }, [isTyping]);
 
   if (!thread) return null;
 
@@ -954,8 +918,6 @@ function ChatView({
 
           {visible.map((m, i) => {
             const realIdx = thread.messages.indexOf(m);
-            const isLast = i === visible.length - 1;
-            const showAnimated = isLast && m.role === 'assistant' && animatingContent !== null;
             const showActions = hoveredMsgIdx === i || openMsgMenuIdx === i || openSourcesIdx === i;
             return (
               <div key={i}
@@ -975,10 +937,7 @@ function ChatView({
                   </div>
                 ) : (
                   <div style={{ width: '100%' }}>
-                    {showAnimated
-                      ? <span style={{ fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>{animatingContent}</span>
-                      : <MarkdownText text={m.content} style={{ fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.75 }} />
-                    }
+                    <MarkdownText text={m.content} style={{ fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.75 }} />
 
                     {/* Planning: questionnaire */}
                     {m.planning_data?.status === 'questionnaire' && (
@@ -1046,7 +1005,7 @@ function ChatView({
                 <span style={{ fontFamily: M, fontSize: 11, color: 'var(--text-30)' }}>{m.time}</span>
 
                 {/* Action panel — assistant messages only */}
-                {m.role === 'assistant' && !showAnimated && (
+                {m.role === 'assistant' && (
                   <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     width: '100%', marginTop: 2,
