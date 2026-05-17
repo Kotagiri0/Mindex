@@ -1200,7 +1200,7 @@ function ChatView({
             );
           })}
           {isTyping && streamingContent ? (
-            <div style={{ alignSelf: 'flex-start', maxWidth: '72%', background: 'var(--surface)', borderRadius: '4px 18px 18px 18px', padding: '10px 14px', fontSize: 14, lineHeight: 1.6, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: M }}>
+            <div style={{ alignSelf: 'flex-start', width: '100%', fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.75, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
               {streamingContent}
             </div>
           ) : isTyping && (

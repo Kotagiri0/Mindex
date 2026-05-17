@@ -987,7 +987,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         })()}
 
         {isTyping && streamingContent ? (
-          <div style={{ alignSelf: 'flex-start', maxWidth: '85%', background: 'var(--surface)', borderRadius: '4px 18px 18px 18px', padding: '10px 14px', fontSize: 15, lineHeight: 1.5, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          <div style={{ alignSelf: 'flex-start', width: '100%', fontSize: 15, lineHeight: 1.75, color: '#222224', fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {streamingContent}
           </div>
         ) : isTyping && (
