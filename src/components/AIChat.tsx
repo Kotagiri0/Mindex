@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, Settings, Star, ArrowUp, MessageCircle, StickyNote, Mic, Loader, Copy, MoreHorizontal, X, BookOpen, ChevronRight } from 'lucide-react';
+import { ChevronLeft, Settings, Star, ArrowUp, MessageCircle, StickyNote, Mic, Loader, Copy, MoreHorizontal, X, BookOpen } from 'lucide-react';
 import { MysliThinking } from './MysliThinking';
 import NoteView from './NoteView';
 import { Thread, Screen, Message, Task, SubTask } from '../types';
@@ -1036,13 +1036,12 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                         <div style={{ fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 14, color: '#222224', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {s.title}
                         </div>
-                        {thr?.preview && (
-                          <div style={{ fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 12, color: 'rgba(34,34,36,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
-                            {thr.preview}
+                        {s.snippet && (
+                          <div style={{ fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 12, color: 'rgba(34,34,36,0.4)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', marginTop: 2 }}>
+                            {s.snippet}
                           </div>
                         )}
                       </div>
-                      {thr && <ChevronRight size={15} strokeWidth={1.5} color="rgba(34,34,36,0.25)" />}
                     </button>
                   );
                 })}

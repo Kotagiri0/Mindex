@@ -1376,7 +1376,7 @@ app.post("/api/chat", async (req, res) => {
               finalSystemInstruction = `${finalSystemInstruction}\n\n${ragBlock}`;
               // Источники показываем только при явном совпадении
               if (isExplicitMatch) {
-                ragSources = ragResult.rows.map((r: any) => ({ title: r.title }));
+                ragSources = ragResult.rows.map((r: any) => ({ title: r.title, snippet: r.summary }));
               }
               console.log('[RAG] injected:', ragResult.rows.map((r: any) => r.title), isExplicitMatch ? '(explicit)' : '(fallback, no sources)');
             } else {
