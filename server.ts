@@ -1538,7 +1538,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
     }
 
     const message = data.choices[0].message;
-    const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
+    const content = typeof message.content === 'string' ? message.content : (message.content == null ? '' : JSON.stringify(message.content));
     res.json({ ...message, content, sources: ragSources });
   } catch (error: any) {
     const isTimeout = error?.name === "AbortError";
