@@ -308,6 +308,9 @@ const ensureAuthSchema = async () => {
   `);
 
   await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS calendar_event_id TEXT;`);
+  await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS thread_id TEXT;`);
+  await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS description TEXT;`);
+  await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS location TEXT;`);
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS user_threads (
@@ -705,6 +708,9 @@ app.get("/api/data/bootstrap", async (req, res) => {
         type: row.type || "regular",
         calendarEventId: row.calendar_event_id || undefined,
         subtasks: row.subtasks || [],
+        threadId: row.thread_id || undefined,
+        description: row.description || undefined,
+        location: row.location || undefined,
       })),
       threads: threadsRes.rows.map((row) => ({
         id: row.id,
@@ -772,8 +778,8 @@ app.post("/api/data/task", dataRateLimit, async (req, res) => {
   try {
       await db.query(
         `
-        INSERT INTO user_tasks (id, user_id, name, time, date, done, type, calendar_event_id, subtasks, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, NOW())
+        INSERT INTO user_tasks (id, user_id, name, time, date, done, type, calendar_event_id, subtasks, thread_id, description, location, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, NOW())
         ON CONFLICT (id)
         DO UPDATE SET
           user_id = EXCLUDED.user_id,
@@ -784,6 +790,9 @@ app.post("/api/data/task", dataRateLimit, async (req, res) => {
           type = EXCLUDED.type,
           calendar_event_id = EXCLUDED.calendar_event_id,
           subtasks = EXCLUDED.subtasks,
+          thread_id = EXCLUDED.thread_id,
+          description = EXCLUDED.description,
+          location = EXCLUDED.location,
           updated_at = NOW()
       `,
       [
@@ -796,6 +805,9 @@ app.post("/api/data/task", dataRateLimit, async (req, res) => {
         String(task.type || "regular"),
         task.calendarEventId ? String(task.calendarEventId) : null,
         JSON.stringify(task.subtasks || []),
+        task.threadId ? String(task.threadId) : null,
+        task.description ? String(task.description) : null,
+        task.location ? String(task.location) : null,
       ]
     );
     return res.status(200).json({ success: true });
