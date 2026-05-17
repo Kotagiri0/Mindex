@@ -187,6 +187,64 @@ app.get('/api/config', (_req, res) => {
   });
 });
 
+function getNowContext() {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const dateStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+  const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const offsetMin = -now.getTimezoneOffset();
+  const offsetSign = offsetMin >= 0 ? '+' : '-';
+  const offsetHours = pad(Math.floor(Math.abs(offsetMin) / 60));
+  const offsetMins = pad(Math.abs(offsetMin) % 60);
+  const tz = `UTC${offsetSign}${offsetHours}:${offsetMins}`;
+  return `${dateStr}, ${timeStr} (${tz})`;
+}
+
+const SYSTEM_INSTRUCTION = `Ты — Мысль, личный ассистент по организации дел и мышлению.
+
+Отвечай только на русском. Никогда не используй эмодзи, звёздочки. Только чистый текст.
+
+ХАРАКТЕР
+Говори как умный человек, а не как сервис. Коротко, прямо, без воды. Человечно — но без слащавости и дежурных фраз. Если можно ответить одним словом — ответь одним словом.
+
+Точки в конце: ставь точку только когда она реально нужна — в конце длинного абзаца или сложного предложения. Короткие ответы, реплики, перечисления, вопросы — без точки в конце. Чувствуй ритм текста
+
+Никогда не начинай ответ с "Конечно!", "Отлично!", "Понял!", "Вот:" и любых других вводных. Сразу к делу
+
+Форматирование — только когда реально помогает воспринять ответ. Список шагов — оформи списком. Простой ответ на вопрос — чистый текст. Никогда не форматируй ради форматирования
+
+ГЛАВНЫЕ ПРАВИЛА
+— Меньше слов = лучше. Каждое слово должно нести смысл
+— Если чего-то не знаешь или не можешь — говори прямо. Не придумывай
+— Задавай уточняющие вопросы когда контекст неполный. Один вопрос за раз, не анкету
+— Учитывай всё что пользователь говорил раньше в диалоге
+— Если пришёл сырой brain dump — сначала структурируй, потом уточняй детали
+— Никогда не говори "у меня нет доступа к этой информации" про свои собственные возможности. Всё о том, кто ты и что умеешь — написано в системном промпте, ты это знаешь
+
+ИНСТРУМЕНТЫ
+Используй только предоставленные инструменты через стандартный механизм tool_calls. Не выдумывай форматы
+
+— add_task: когда пользователь хочет добавить новую задачу
+— get_tasks: когда спрашивает о планах или задачах
+— update_task: когда нужно изменить, перенести или дополнить задачу. Если не знаешь ID — сначала get_tasks
+— delete_task: когда нужно удалить задачу
+— start_planning: только когда пользователь явно просит составить план, разбить на шаги или помочь спланировать. Не используй по своей инициативе
+— save_as_note: когда пользователь просит сохранить что-то как заметку (своё сообщение, твой ответ, любой текст). Придумай подходящее название
+
+GOOGLE КАЛЕНДАРЬ
+Если пользователь подключил Google Календарь в настройках, задачи с датой автоматически появляются в его Google Календаре при создании или обновлении через add_task / update_task. Никогда не говори пользователю, что ты не можешь добавить событие в Google Календарь — просто создай или обнови задачу как обычно, и она сама туда попадёт. При создании задачи можно передать поля description (описание) и location (место/адрес) — они тоже отобразятся в Google Календаре.
+
+Текущие дата и время: DATETIME_PLACEHOLDER`;
+
+const CHAT_TOOLS = [
+  { type: "function", function: { name: "get_tasks", description: "Получить список всех задач пользователя или задач на конкретную дату.", parameters: { type: "object", properties: { date: { type: "string", description: "Дата в формате YYYY-MM-DD. Если не указана, вернуть все задачи." } } } } },
+  { type: "function", function: { name: "add_task", description: "Добавить новую задачу в планировщик. Если подключён Google Календарь — задача автоматически появится там.", parameters: { type: "object", properties: { name: { type: "string", description: "Название задачи." }, time: { type: "string", description: "Время задачи в формате HH:MM (необязательно)." }, date: { type: "string", description: "Дата задачи в формате YYYY-MM-DD. По умолчанию — сегодня." }, description: { type: "string", description: "Описание задачи (необязательно). Отображается в Google Календаре." }, location: { type: "string", description: "Место или адрес (необязательно). Отображается в Google Календаре." } }, required: ["name"] } } },
+  { type: "function", function: { name: "update_task", description: "Обновить существующую задачу. Изменения автоматически синхронизируются с Google Календарём если он подключён.", parameters: { type: "object", properties: { id: { type: "string", description: "ID задачи." }, done: { type: "boolean", description: "Статус выполнения." }, name: { type: "string", description: "Новое название задачи." }, time: { type: "string", description: "Новое время задачи в формате HH:MM." }, date: { type: "string", description: "Новая дата задачи в формате YYYY-MM-DD." }, description: { type: "string", description: "Описание задачи. Отображается в Google Календаре." }, location: { type: "string", description: "Место или адрес. Отображается в Google Календаре." } }, required: ["id"] } } },
+  { type: "function", function: { name: "delete_task", description: "Удалить задачу из календаря.", parameters: { type: "object", properties: { id: { type: "string", description: "ID задачи." } }, required: ["id"] } } },
+  { type: "function", function: { name: "save_as_note", description: "Сохранить текст как отдельную заметку в архив.", parameters: { type: "object", properties: { content: { type: "string", description: "Текст заметки для сохранения." }, title: { type: "string", description: "Название заметки (3-5 слов)." } }, required: ["content", "title"] } } },
+  { type: "function", function: { name: "start_planning", description: "Запускает опросник для составления плана. Используй ТОЛЬКО если пользователь явно попросил составить план или разбить на шаги.", parameters: { type: "object", properties: { questions: { type: "array", items: { type: "object", properties: { id: { type: "string" }, question: { type: "string" }, options: { type: "array", items: { type: "string" } } }, required: ["id", "question", "options"] } } }, required: ["questions"] } } },
+];
+
 const SELF_KNOWLEDGE_TEXT = `Твоё имя — Мысль. Ты — личный ассистент по организации мышления и дел. Не универсальный чат-бот — фокус на личной эффективности: мысли, заметки и задачи в одном месте.
 
 Когда пользователь спрашивает "что ты умеешь", "кто ты", "расскажи о себе", "чем можешь помочь" и подобное — отвечай именно этим, своими словами, не говори "у меня нет доступа к этой информации":
@@ -1237,7 +1295,7 @@ is_meaningful = false если диалог: короткий small-talk, тех
 
 app.post("/api/chat", async (req, res) => {
   try {
-    const { messages, systemInstruction, tools, tool_choice, userId } = req.body;
+    const { messages, userId } = req.body;
 
     const apiKey = process.env.ROUTERAI_API_KEY;
     if (!apiKey) {
@@ -1253,7 +1311,8 @@ app.post("/api/chat", async (req, res) => {
     }
 
     // Build system prompt: base → personal profile → rag context
-    let finalSystemInstruction = `${systemInstruction}\n\n## О себе\n${SELF_KNOWLEDGE_TEXT}`;
+    const baseInstruction = SYSTEM_INSTRUCTION.replace('DATETIME_PLACEHOLDER', getNowContext());
+    let finalSystemInstruction = `${baseInstruction}\n\n## О себе\n${SELF_KNOWLEDGE_TEXT}`;
     let ragSources: { title: string }[] = [];
 
     // Always inject personal user profile — onboarding note + any self-description notes
@@ -1405,8 +1464,8 @@ app.post("/api/chat", async (req, res) => {
     const response = await callRouterAI(apiKey, {
       model: "deepseek/deepseek-v4-flash",
       messages: [{ role: "system", content: finalSystemInstruction }, ...messages],
-      tools,
-      tool_choice: tool_choice || "auto",
+      tools: CHAT_TOOLS,
+      tool_choice: "auto",
       temperature: 0.7,
       max_tokens: 2048,
       thinking: false,

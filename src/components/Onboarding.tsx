@@ -4,7 +4,6 @@ import { ArrowUp, Copy, Check } from 'lucide-react';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
 import { getCurrentUser } from '../lib/auth';
-import { SYSTEM_INSTRUCTION } from '../lib/groq';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
@@ -45,7 +44,6 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       const threadId = uuid();
       const now = Date.now();
       const timeStr = new Date().toTimeString().slice(0, 5);
-      const nowCtx = new Date().toLocaleString('ru-RU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
       // Call AI for a real response
       let assistantText = '';
@@ -55,9 +53,6 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [{ role: 'user', content }],
-            systemInstruction: SYSTEM_INSTRUCTION.replace('DATETIME_PLACEHOLDER', nowCtx),
-            tools: [],
-            tool_choice: 'none',
             userId,
           }),
         });

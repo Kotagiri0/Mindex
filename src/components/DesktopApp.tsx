@@ -847,7 +847,7 @@ function ChatView({
           return `Вопрос: ${q?.question}\nОтвет: ${ans}`;
         }).join('\n\n');
       const prompt = `Пользователь ответил на уточняющие вопросы:\n\n${answersText}\n\nНа основе этих ответов составь пошаговый план действий.\nОтвечай СТРОГО в формате JSON:\n{\n  "title": "Название плана",\n  "steps": ["шаг 1", "шаг 2", ...]\n}`;
-      const response = await generateResponse([...t.messages, { role: 'user', content: prompt, time: nowTime() }], { tool_choice: 'none' } as any);
+      const response = await generateResponse([...t.messages, { role: 'user', content: prompt, time: nowTime() }]);
       if (!response?.content) throw new Error('Пустой ответ');
       let json = response.content.trim();
       if (json.includes('```json')) json = json.split('```json')[1].split('```')[0].trim();

@@ -417,7 +417,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       const response = await generateResponse([
         ...t.messages,
         { role: 'user', content: prompt, time: ft() }
-      ], { tool_choice: 'none' });
+      ]);
 
       if (!response || !response.content) {
         throw new Error('AI вернул пустой ответ при генерации плана.');
@@ -533,8 +533,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   const generateTitle = async (userText: string, assistantText: string) => {
     try {
       const resp = await generateResponse(
-        [{ role: 'user', content: `Придумай короткое название (3-5 слов, без кавычек) для чата, где пользователь написал:\n«${userText}»\nИИ ответил:\n«${assistantText.slice(0, 200)}»\nТолько название, без пояснений`, time: '' }],
-        { tools: [], tool_choice: 'none' } as any
+        [{ role: 'user', content: `Придумай короткое название (3-5 слов, без кавычек) для чата, где пользователь написал:\n«${userText}»\nИИ ответил:\n«${assistantText.slice(0, 200)}»\nТолько название, без пояснений`, time: '' }]
       );
       const title = resp?.content?.trim().replace(/^["«]|["»]$/g, '').slice(0, 60);
       if (!title || !threadId) return;
