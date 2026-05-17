@@ -140,7 +140,7 @@ export const db = {
       await request<{ success: boolean }>(`${apiBase()}/thread`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, thread }),
+        body: JSON.stringify({ userId, thread: updated }),
       });
     } catch (err) {
       console.error('[db] saveThread failed, thread only in localStorage:', err);

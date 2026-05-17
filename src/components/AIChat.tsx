@@ -289,7 +289,8 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           const updated = {
             ...t,
             messages: [...baseMessages, ...turnMessages, assistantMsg],
-            preview: assistantMsg.content.slice(0, 60) + '…'
+            preview: assistantMsg.content.slice(0, 60) + '…',
+            updatedAt: Date.now(),
           };
           db.saveThread(updated);
           return updated;
