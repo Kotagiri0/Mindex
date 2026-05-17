@@ -1393,7 +1393,7 @@ app.post("/api/chat", async (req, res) => {
       tools,
       tool_choice: tool_choice || "auto",
       temperature: 0.7,
-      max_tokens: 1024,
+      max_tokens: 2048,
       thinking: false,
     });
 
@@ -1408,8 +1408,8 @@ app.post("/api/chat", async (req, res) => {
     try {
       data = JSON.parse(rawText);
     } catch (e) {
-      console.error("[CHAT] Failed to parse RouterAI response:", rawText.slice(0, 300));
-      throw new Error("Мысль вернула некорректный ответ — попробуй ещё раз");
+      console.error("[CHAT] Failed to parse RouterAI response (length=" + rawText.length + "):", rawText.slice(0, 500));
+      return res.status(500).json({ error: "Мысль вернула некорректный ответ — попробуй ещё раз" });
     }
 
     if (!data.choices?.length) {
