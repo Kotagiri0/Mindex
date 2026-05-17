@@ -17,6 +17,7 @@ import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
 import { getCurrentUser } from '../lib/auth';
 import { useVoiceInput } from '../lib/useVoiceInput';
+import { useTypewriter } from '../lib/useTypewriter';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
@@ -548,7 +549,7 @@ function ChatView({
 
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [streamingContent, setStreamingContent] = useState<string | null>(null);
+  const { display: streamingContent, push: pushChunk, reset: resetStream } = useTypewriter();
   const [thinkingIdx, setThinkingIdx] = useState(0);
   const [animatingContent, setAnimatingContent] = useState<string | null>(null);
   const [replyQuote, setReplyQuote] = useState<string | null>(null);
@@ -720,7 +721,7 @@ function ChatView({
     if (updatedThread) db.saveThread(updatedThread);
 
     setIsTyping(true);
-    setStreamingContent('');
+    resetStream();
     try {
       const current = threads.find(t => t.id === threadId);
       if (!current) return;
@@ -728,7 +729,7 @@ function ChatView({
       let history = [...current.messages, userMsg];
       const turnMsgs: typeof history = [];
       let response = await generateResponse(history, {}, (delta) => {
-        setStreamingContent(prev => (prev ?? '') + delta);
+        pushChunk(delta);
       });
 
       while (response.tool_calls) {
@@ -828,7 +829,7 @@ function ChatView({
       }));
     } finally {
       setIsTyping(false);
-      setStreamingContent(null);
+      resetStream();
     }
   };
 

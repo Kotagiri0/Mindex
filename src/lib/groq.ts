@@ -272,7 +272,6 @@ export async function generateResponse(
           const chunk = JSON.parse(data);
           if (chunk.type === 'delta' && chunk.content && onDelta) {
             onDelta(chunk.content);
-            await new Promise(r => setTimeout(r, 0)); // yield to React renderer
           } else if (chunk.type === 'done') {
             return chunk.message;
           } else if (chunk.type === 'error') {

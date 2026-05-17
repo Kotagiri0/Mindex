@@ -8,6 +8,7 @@ import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useVoiceInput, isMobileDevice } from '../lib/useVoiceInput';
+import { useTypewriter } from '../lib/useTypewriter';
 
 const THINKING_PHRASES = ['Думаю...', 'Анализирую...', 'Ищу в архиве...', 'Формулирую...', 'Пишу ответ...'];
 
@@ -43,7 +44,7 @@ interface AIChatProps {
 export default function AIChat({ threadId, threads, setThreads, tasks, setTasks, onClose, onNavigate, onOpenThread, autoSend, onAutoSentClear }: AIChatProps) {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [streamingContent, setStreamingContent] = useState<string | null>(null);
+  const { display: streamingContent, push: pushChunk, reset: resetStream } = useTypewriter();
   const [noteMode, setNoteMode] = useState(false);
   const [animatingContent, setAnimatingContent] = useState<string | null>(null);
   const [replyQuote, setReplyQuote] = useState<string | null>(null);
@@ -173,7 +174,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     }
 
     setIsTyping(true);
-    setStreamingContent('');
+    resetStream();
 
     try {
       const currentThread = threads.find(t => t.id === threadId);
@@ -183,7 +184,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       const turnMessages: Message[] = [];
 
       let response = await generateResponse(conversationHistory, {}, (delta) => {
-        setStreamingContent(prev => (prev ?? '') + delta);
+        pushChunk(delta);
       });
 
       while (response.tool_calls) {
@@ -357,7 +358,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       }));
     } finally {
       setIsTyping(false);
-      setStreamingContent(null);
+      resetStream();
     }
   };
 
