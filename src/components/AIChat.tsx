@@ -743,8 +743,9 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             <div key="msg-backdrop" style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => setOpenMsgMenuIdx(null)} />
           ) : null;
 
+          const lastAssistantIdx = visibleMsgs.reduce((last, m, i) => m.role === 'assistant' ? i : last, -1);
           const msgs = visibleMsgs.map((m, i) => {
-            const showActions = isTouchDevice || hoveredMsgIdx === i || openMsgMenuIdx === i;
+            const showActions = hoveredMsgIdx === i || openMsgMenuIdx === i || (m.role === 'assistant' && i === lastAssistantIdx);
             return (
             <div key={i}
               onMouseEnter={() => m.role === 'assistant' && setHoveredMsgIdx(i)}
