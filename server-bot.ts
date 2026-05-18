@@ -9,6 +9,7 @@
 import type { Express } from 'express';
 import type { Pool } from 'pg';
 import crypto from 'crypto';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,7 +38,11 @@ interface StoredMessage {
   tool_call_id?: string;
 }
 
+const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+const proxyAgent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
+
 function tgFetchOptions(extra: RequestInit = {}): RequestInit {
+  if (proxyAgent) return { ...extra, dispatcher: proxyAgent as any };
   return extra;
 }
 
@@ -310,12 +315,12 @@ async function callRouterAI(apiKey: string, body: object): Promise<any> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
   try {
-    const response = await fetch('https://routerai.ru/api/v1/chat/completions', {
+    const response = await fetch('https://routerai.ru/api/v1/chat/completions', tgFetchOptions({
       method: 'POST',
       signal: controller.signal,
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify(body),
-    });
+    }));
     clearTimeout(timeoutId);
     if (!response.ok) throw new Error(`RouterAI error: ${response.status}`);
     return await response.json();
@@ -468,11 +473,11 @@ async function ensureProfile(db: Pool, userId: string, chatId?: number): Promise
 // ─── Telegram API helper ──────────────────────────────────────────────────────
 
 async function tgApi(token: string, method: string, body: any): Promise<any> {
-  const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+  const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, tgFetchOptions({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  });
+  }));
   return res.json();
 }
 
@@ -670,7 +675,7 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
 
 async function validateToken(token: string): Promise<boolean> {
   try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/getMe`, { signal: AbortSignal.timeout(10_000) });
+    const res = await fetch(`https://api.telegram.org/bot${token}/getMe`, tgFetchOptions({ signal: AbortSignal.timeout(10_000) }));
     if (res.status === 401 || res.status === 404) {
       console.error('[Bot] Неверный токен TELEGRAM_BOT_TOKEN — проверь значение в .env и перезапусти сервер.');
       return false;
@@ -691,11 +696,11 @@ async function validateToken(token: string): Promise<boolean> {
 async function setupWebhook(token: string, appUrl: string): Promise<void> {
   const webhookUrl = `${appUrl}/api/telegram`;
   try {
-    await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+    await fetch(`https://api.telegram.org/bot${token}/setWebhook`, tgFetchOptions({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: webhookUrl, allowed_updates: ['message', 'callback_query'], drop_pending_updates: true }),
-    });
+    }));
     console.log(`[Bot] Webhook установлен: ${webhookUrl}`);
   } catch (e: any) {
     console.error('[Bot] Ошибка установки webhook:', e?.message);
@@ -706,11 +711,11 @@ async function setupWebhook(token: string, appUrl: string): Promise<void> {
 
 async function startLongPolling(token: string, db: Pool, apiKey: string): Promise<void> {
   try {
-    await fetch(`https://api.telegram.org/bot${token}/deleteWebhook`, {
+    await fetch(`https://api.telegram.org/bot${token}/deleteWebhook`, tgFetchOptions({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ drop_pending_updates: true }),
-    });
+    }));
     console.log('[Bot] Webhook удалён, запускаем long-polling');
   } catch (e: any) {
     console.warn('[Bot] Не удалось удалить webhook:', e?.message);
@@ -726,7 +731,7 @@ async function startLongPolling(token: string, db: Pool, apiKey: string): Promis
       const timeoutId = setTimeout(() => controller.abort(), 35_000);
       const res = await fetch(
         `https://api.telegram.org/bot${token}/getUpdates?offset=${offset}&timeout=30&allowed_updates=["message","callback_query"]`,
-        { signal: controller.signal }
+        tgFetchOptions({ signal: controller.signal })
       );
       clearTimeout(timeoutId);
       const data = await res.json();
