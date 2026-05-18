@@ -37,6 +37,10 @@ interface StoredMessage {
   tool_call_id?: string;
 }
 
+function tgFetchOptions(extra: RequestInit = {}): RequestInit {
+  return extra;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const BOT_THREAD_TITLE = 'Telegram Bot';
