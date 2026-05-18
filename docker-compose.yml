@@ -55,8 +55,6 @@ services:
       - POSTGRES_USER=mindex
       - POSTGRES_PASSWORD=mindex
       - POSTGRES_DB=mindex
-    ports:
-      - "5432:5432"
     volumes:
       - mindex_pgdata:/var/lib/postgresql/data
     healthcheck:
