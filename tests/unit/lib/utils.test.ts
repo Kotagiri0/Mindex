@@ -3,20 +3,20 @@ import { test } from 'node:test';
 import { uuid } from '../../../src/lib/utils';
 
 test('returns crypto uuid when available', () => {
-  const originalCrypto = (globalThis as any).crypto;
-  (globalThis as any).crypto = { randomUUID: () => 'test-uuid' };
+  const originalRandomUUID = globalThis.crypto.randomUUID;
+  globalThis.crypto.randomUUID = () => 'test-uuid' as any;
 
   try {
     assert.equal(uuid(), 'test-uuid');
   } finally {
-    (globalThis as any).crypto = originalCrypto;
+    globalThis.crypto.randomUUID = originalRandomUUID;
   }
 });
 
 test('falls back to random template when crypto uuid missing', () => {
-  const originalCrypto = (globalThis as any).crypto;
+  const originalRandomUUID = globalThis.crypto.randomUUID;
   const originalRandom = Math.random;
-  (globalThis as any).crypto = undefined;
+  (globalThis.crypto as any).randomUUID = undefined;
   Math.random = () => 0.1;
 
   try {
@@ -24,7 +24,7 @@ test('falls back to random template when crypto uuid missing', () => {
     assert.match(value, /^[0-9a-f-]{36}$/i);
     assert.equal(value[14], '4');
   } finally {
-    (globalThis as any).crypto = originalCrypto;
+    globalThis.crypto.randomUUID = originalRandomUUID;
     Math.random = originalRandom;
   }
 });

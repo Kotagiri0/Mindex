@@ -7,7 +7,7 @@ process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = 'postgres://test';
 process.env.GOOGLE_CLIENT_ID = 'google-id';
 
-Pool.prototype.query = async (text: string, params?: any[]) => {
+Pool.prototype.query = (async (text: string, params?: any[]) => {
   if (text.includes('user_sessions')) {
     if (params?.[0] === 'valid') {
       return { rows: [{ user_id: 'user-1' }] } as any;
@@ -15,7 +15,7 @@ Pool.prototype.query = async (text: string, params?: any[]) => {
     return { rows: [] } as any;
   }
   return { rows: [] } as any;
-};
+}) as any;
 
 const { default: app } = await import('../../server');
 

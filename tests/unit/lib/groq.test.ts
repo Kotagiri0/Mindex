@@ -24,6 +24,28 @@ test('throws friendly error when server returns HTML', async () => {
   );
 });
 
+test('throws server error from JSON payload', async () => {
+  installDomStubs();
+  (globalThis as any).fetch = async () =>
+    jsonResponse({ error: 'bad request' }, { status: 400, statusText: 'Bad' });
+
+  await assert.rejects(
+    () => generateResponse([{ role: 'user', content: 'hi', time: '10:00' }]),
+    /bad request/
+  );
+});
+
+test('throws parse error when response is not JSON', async () => {
+  installDomStubs();
+  (globalThis as any).fetch = async () =>
+    textResponse('not-json', { status: 200, statusText: 'OK' });
+
+  await assert.rejects(
+    () => generateResponse([{ role: 'user', content: 'hi', time: '10:00' }]),
+    /Ошибка парсинга/
+  );
+});
+
 test('throws timeout error on abort', async () => {
   installDomStubs();
   (globalThis as any).fetch = async () => {

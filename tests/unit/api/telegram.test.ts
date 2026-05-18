@@ -13,6 +13,20 @@ test('returns early when required env missing', async () => {
   assert.equal(res.ended, true);
 });
 
+test('rejects non-post methods', async () => {
+  const req = createMockReq({ method: 'GET' });
+  const res = createMockRes();
+  await handler(req, res);
+  assert.equal(res.statusCode, 405);
+});
+
+test('returns method not allowed for OPTIONS', async () => {
+  const req = createMockReq({ method: 'OPTIONS' });
+  const res = createMockRes();
+  await handler(req, res);
+  assert.equal(res.statusCode, 405);
+});
+
 test('ignores commands and empty messages', async () => {
   process.env.TELEGRAM_BOT_TOKEN = 'token';
   process.env.VITE_SUPABASE_URL = 'url';

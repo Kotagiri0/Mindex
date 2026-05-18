@@ -26,3 +26,20 @@ test('returns configured true when telegram responds', async () => {
     axios.get = originalGet;
   }
 });
+
+test('returns configured false when telegram fails', async () => {
+  process.env.TELEGRAM_BOT_TOKEN = 'token';
+  const originalGet = axios.get;
+  axios.get = async () => {
+    throw new Error('fail');
+  };
+
+  try {
+    const req = createMockReq({ method: 'GET' });
+    const res = createMockRes();
+    await handler(req, res);
+    assert.equal(res.body.configured, false);
+  } finally {
+    axios.get = originalGet;
+  }
+});

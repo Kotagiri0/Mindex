@@ -1,13 +1,13 @@
 type HeadersMap = Record<string, string>;
 
-export const createMockReq = (overrides: Partial<any> = {}) => ({
+export const createMockReq = (overrides: Partial<any> = {}): any => ({
   method: 'GET',
   headers: {} as HeadersMap,
   body: undefined,
   ...overrides,
 });
 
-export const createMockRes = () => {
+export const createMockRes = (): any => {
   const headers: HeadersMap = {};
   const res: any = {
     statusCode: 200,

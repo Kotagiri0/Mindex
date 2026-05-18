@@ -13,8 +13,8 @@
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "npm run test:unit && npm run test:integration",
-    "test:unit": "NODE_ENV=test node --loader tsx --test --experimental-test-coverage \"tests/unit/**/*.test.ts\"",
-    "test:integration": "NODE_ENV=test node --loader tsx --test \"tests/integration/**/*.test.ts\""
+    "test:unit": "NODE_ENV=test node --import tsx --test --experimental-test-coverage tests/unit/**/*.test.ts",
+    "test:integration": "NODE_ENV=test node --import tsx --test tests/integration"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.1",

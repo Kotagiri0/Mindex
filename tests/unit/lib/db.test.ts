@@ -32,6 +32,23 @@ test('getTasks returns empty list when user not set', async () => {
   assert.deepEqual(tasks, []);
 });
 
+test('getProfile stores server profile when available', async () => {
+  storage.setCurrentUser(createUser());
+  (globalThis as any).fetch = async () =>
+    jsonResponse({
+      profile: {
+        settings: { agent: false, confirm: true, notifs: false },
+        onboarding_complete: true,
+        updated_at: new Date().toISOString(),
+      },
+      tasks: [],
+      threads: [],
+    });
+
+  const profile = await db.getProfile();
+  assert.equal(profile.onboarding_complete, true);
+});
+
 test('getThreads merges pending local threads with server threads', async () => {
   storage.setCurrentUser(createUser());
   storage.setThreads('user-1', [
@@ -49,7 +66,8 @@ test('getThreads merges pending local threads with server threads', async () => 
 
   const threads = await db.getThreads();
   assert.equal(threads.length, 2);
-  assert.equal(threads[0].id, 'local');
+  const ids = threads.map((t) => t.id).sort();
+  assert.deepEqual(ids, ['local', 'server']);
 });
 
 test('saveThread persists locally even if server fails', async () => {
@@ -141,6 +159,45 @@ test('saveTask persists locally and calls API', async () => {
   assert.equal(called, true);
   const stored = storage.getTasks('user-1');
   assert.equal(stored[0].id, 'task-1');
+});
+
+test('getTasks merges pending local tasks with server data', async () => {
+  storage.setCurrentUser(createUser());
+  storage.setTasks('user-1', [
+    { id: 'local', name: 'Local', date: '2026-05-18', time: '', done: false },
+  ]);
+
+  (globalThis as any).fetch = async () =>
+    jsonResponse({
+      profile: null,
+      tasks: [{ id: 'server', name: 'Server', date: '2026-05-19', time: '', done: false }],
+      threads: [],
+    });
+
+  const tasks = await db.getTasks();
+  const ids = tasks.map((t) => t.id).sort();
+  assert.deepEqual(ids, ['local', 'server']);
+});
+
+test('refreshTasks stores server tasks on success', async () => {
+  storage.setCurrentUser(createUser());
+  (globalThis as any).fetch = async () =>
+    jsonResponse({ tasks: [{ id: 'server', name: 'Task', date: '2026-05-18', time: '', done: false }] });
+
+  const tasks = await db.refreshTasks();
+  assert.equal(tasks[0].id, 'server');
+});
+
+test('archiveThread calls API when user present', async () => {
+  storage.setCurrentUser(createUser());
+  let called = false;
+  (globalThis as any).fetch = async () => {
+    called = true;
+    return jsonResponse({ success: true });
+  };
+
+  await db.archiveThread('thread-1');
+  assert.equal(called, true);
 });
 
 test('refreshTasks falls back to local storage on fetch error', async () => {

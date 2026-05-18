@@ -5,17 +5,14 @@ import type { Task } from '../../../src/types';
 
 const withFixedDate = (iso: string, fn: () => void) => {
   const RealDate = Date;
-  class MockDate extends RealDate {
-    constructor(...args: any[]) {
-      if (args.length === 0) {
-        return new RealDate(iso) as any;
-      }
-      return new RealDate(...args) as any;
+  const MockDate: any = function (...args: any[]) {
+    if (args.length === 0) {
+      return new RealDate(iso);
     }
-    static now() {
-      return new RealDate(iso).getTime();
-    }
-  }
+    return Reflect.construct(RealDate, args);
+  };
+  MockDate.now = () => new RealDate(iso).getTime();
+  MockDate.prototype = RealDate.prototype;
   (globalThis as any).Date = MockDate;
   try {
     fn();

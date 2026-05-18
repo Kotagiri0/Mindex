@@ -9,7 +9,7 @@ import Dashboard from '../../../src/components/Dashboard';
 import DesktopApp from '../../../src/components/DesktopApp';
 import EditTaskModal from '../../../src/components/EditTaskModal';
 import LocalAuth from '../../../src/components/LocalAuth';
-import MysliThinking from '../../../src/components/MysliThinking';
+import { MysliThinking } from '../../../src/components/MysliThinking';
 import NoteEditor from '../../../src/components/NoteEditor';
 import NoteView from '../../../src/components/NoteView';
 import Onboarding from '../../../src/components/Onboarding';

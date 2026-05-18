@@ -18,12 +18,18 @@ import type { Task } from '../../../src/types';
 beforeEach(() => {
   installDomStubs();
   storage.setCurrentUser({ id: 'user-1', username: 'demo', displayName: 'Demo', createdAt: 1 });
+  (globalThis as any).fetch = async (url: string) => {
+    if (url === '/api/config') {
+      return jsonResponse({ googleClientId: 'client' });
+    }
+    return new Response('', { status: 200 });
+  };
 });
 
 const seedToken = () => {
   localStorage.setItem('mx_google_calendar_token_user-1', JSON.stringify({
     accessToken: 'token',
-    expiresAt: Date.now() + 10_000,
+    expiresAt: Date.now() + 120_000,
   }));
 };
 
@@ -80,8 +86,12 @@ test('returns empty calendar list without token', async () => {
 
 test('fetches calendar list when token exists', async () => {
   seedToken();
-  (globalThis as any).fetch = async () =>
-    jsonResponse({ items: [{ id: 'primary', summary: 'Main' }] });
+  (globalThis as any).fetch = async (url: string) => {
+    if (url === '/api/config') {
+      return jsonResponse({ googleClientId: 'client' });
+    }
+    return jsonResponse({ items: [{ id: 'primary', summary: 'Main' }] });
+  };
 
   const calendars = await fetchCalendarList();
   assert.equal(calendars[0].id, 'primary');
@@ -90,6 +100,9 @@ test('fetches calendar list when token exists', async () => {
 test('syncs calendar task by creating event', async () => {
   seedToken();
   (globalThis as any).fetch = async (url: string, options: any) => {
+    if (url === '/api/config') {
+      return jsonResponse({ googleClientId: 'client' });
+    }
     assert.equal(options.method, 'POST');
     assert.ok(url.includes('/events'));
     return jsonResponse({ id: 'event-1' });
@@ -100,9 +113,37 @@ test('syncs calendar task by creating event', async () => {
   assert.equal(result?.calendarEventId, 'event-1');
 });
 
+test('updates calendar task with time and recreates missing event', async () => {
+  seedToken();
+  let created = false;
+  (globalThis as any).fetch = async (url: string, options: any) => {
+    if (url === '/api/config') {
+      return jsonResponse({ googleClientId: 'client' });
+    }
+    if (options.method === 'PATCH') {
+      return new Response('', { status: 404 });
+    }
+    if (options.method === 'POST') {
+      created = true;
+      return jsonResponse({ id: 'event-2' });
+    }
+    return new Response('', { status: 200 });
+  };
+
+  const task: Task = { id: 't2', name: 'Task', date: '2026-05-18', time: '09:30', done: false, calendarEventId: 'old' };
+  const result = await syncGoogleCalendarTask(task);
+  assert.equal(result?.calendarEventId, 'event-2');
+  assert.equal(created, true);
+});
+
 test('clears token on delete event auth failure', async () => {
   seedToken();
-  (globalThis as any).fetch = async () => new Response('', { status: 401 });
+  (globalThis as any).fetch = async (url: string) => {
+    if (url === '/api/config') {
+      return jsonResponse({ googleClientId: 'client' });
+    }
+    return new Response('', { status: 401 });
+  };
   await deleteGoogleCalendarEvent('event-1');
   assert.equal(localStorage.getItem('mx_google_calendar_token_user-1'), null);
 });
