@@ -85,7 +85,6 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: thread.messages, threadId, raw: true, rawSummary: content }),
       }).catch(() => {});
-      }
 
       // If we got a reply, show it briefly before completing
       if (assistantText) {
