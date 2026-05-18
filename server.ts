@@ -28,6 +28,22 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const DATABASE_URL = process.env.DATABASE_URL;
 const db = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL }) : null;
+
+const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (!db) return res.status(500).json({ error: "БД не настроена." });
+  const authHeader = req.headers['authorization'];
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return res.status(401).json({ error: "Не авторизован." });
+
+  const result = await db.query(
+    `SELECT user_id FROM user_sessions WHERE token = $1 AND expires_at > NOW() LIMIT 1`,
+    [token]
+  ).catch(() => null);
+
+  if (!result?.rows?.length) return res.status(401).json({ error: "Сессия истекла или недействительна." });
+  (req as any).userId = result.rows[0].user_id;
+  next();
+};
 let vectorEnabled = false;
 
 // Render and similar platforms terminate TLS on the proxy layer.
@@ -537,22 +553,6 @@ const createSession = async (userId: string): Promise<string> => {
     [token, userId, expiresAt]
   );
   return token;
-};
-
-const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  if (!db) return res.status(500).json({ error: "БД не настроена." });
-  const authHeader = req.headers['authorization'];
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) return res.status(401).json({ error: "Не авторизован." });
-
-  const result = await db.query(
-    `SELECT user_id FROM user_sessions WHERE token = $1 AND expires_at > NOW() LIMIT 1`,
-    [token]
-  ).catch(() => null);
-
-  if (!result?.rows?.length) return res.status(401).json({ error: "Сессия истекла или недействительна." });
-  (req as any).userId = result.rows[0].user_id;
-  next();
 };
 
 app.post("/api/auth/register", async (req, res) => {
