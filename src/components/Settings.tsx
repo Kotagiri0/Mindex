@@ -117,7 +117,10 @@ function TelegramRow() {
       <div style={{ padding: '18px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontFamily: M, fontSize: 15, color: 'var(--text-primary)', marginBottom: 3 }}>Telegram</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                <span style={{ fontFamily: M, fontSize: 15, color: 'var(--text-primary)' }}>Telegram</span>
+                <span style={{ fontFamily: M, fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: 'rgba(99,102,241,0.9)', background: 'rgba(99,102,241,0.1)', padding: '2px 7px', borderRadius: 20 }}>бета</span>
+              </div>
             <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)' }}>
               {step === 'done' ? '✅ Подключён — уведомления активны' : 'Уведомления о задачах прямо в Telegram'}
             </div>
@@ -488,9 +491,12 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
         {/* Integrations */}
         <SectionDivider />
         <div style={{ paddingTop: 16, marginBottom: 8 }}>
-          <div style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 4 }}>
-            Интеграции
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <div style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>
+              Интеграции
+            </div>
           </div>
+          <TelegramRow />
           <GoogleCalendarRow />
         </div>
 
