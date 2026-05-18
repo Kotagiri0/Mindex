@@ -2,7 +2,7 @@ name: CD
 
 on:
   push:
-    branches: [main]
+    branches: [copilot/complete-test-suite-and-ci-pipeline]
 
 jobs:
   ci:
