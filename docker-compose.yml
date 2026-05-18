@@ -43,6 +43,8 @@ services:
       - .env
     environment:
       - DATABASE_URL=postgresql://mindex:mindex@postgres:5432/mindex
+      - HTTPS_PROXY=http://user409503:9cm1p3@151.243.152.51:3096
+      - HTTP_PROXY=http://user409503:9cm1p3@151.243.152.51:3096
     depends_on:
       postgres:
         condition: service_healthy
