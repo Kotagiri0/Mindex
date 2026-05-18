@@ -3,7 +3,7 @@ import { Search, Settings, MoreVertical, ChevronLeft, Plus, Pencil } from 'lucid
 import { motion, AnimatePresence } from 'motion/react';
 import { Thread, Screen, Task } from '../types';
 import { db } from '../lib/db';
-import { getCurrentUser } from '../lib/auth';
+import { apiFetch } from '../lib/auth';
 import NoteView from './NoteView';
 import NoteEditor from './NoteEditor';
 
@@ -39,9 +39,7 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(async () => {
       try {
-        const user = getCurrentUser();
-        if (!user) return;
-        const res = await fetch(`/api/search?userId=${encodeURIComponent(user.id)}&q=${encodeURIComponent(search)}`);
+        const res = await apiFetch(`/api/search?q=${encodeURIComponent(search)}`);
         if (!res.ok) return;
         const data = await res.json();
         setSearchResults(data.results || []);

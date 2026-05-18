@@ -809,3 +809,142 @@ export async function startBot(db: Pool): Promise<void> {
     startLongPolling(token, db, apiKey);
   }
 }
+
+// ─── Notification & Proactive schedulers ────────────────────────────────────
+
+async function sendProactiveMessages(token: string, db: Pool): Promise<void> {
+  const apiKey = process.env.ROUTERAI_API_KEY;
+  if (!apiKey) return;
+
+  try {
+    const today = new Date().toISOString().split('T')[0];
+
+    const { rows: users } = await db.query(
+      `SELECT p.user_id, p.telegram_chat_id
+       FROM user_profiles p
+       WHERE p.telegram_chat_id IS NOT NULL
+         AND (p.last_active_at IS NULL OR p.last_active_at::date < $1::date)`,
+      [today]
+    );
+
+    for (const user of users) {
+      try {
+        const [tasksRes, threadsRes] = await Promise.all([
+          db.query(
+            `SELECT name, date, time FROM user_tasks
+             WHERE user_id = $1 AND done = false
+             ORDER BY date ASC, time ASC NULLS LAST LIMIT 5`,
+            [user.user_id]
+          ),
+          db.query(
+            `SELECT title, summary FROM user_threads
+             WHERE user_id = $1 AND summary IS NOT NULL AND is_meaningful = true
+             ORDER BY updated_at DESC LIMIT 3`,
+            [user.user_id]
+          ),
+        ]);
+
+        if (tasksRes.rows.length === 0 && threadsRes.rows.length === 0) continue;
+
+        const taskLines = tasksRes.rows.map((t: any) => {
+          const when = t.date === today ? 'сегодня' : t.date;
+          return `- ${t.name} (${when}${t.time ? ', ' + t.time : ''})`;
+        }).join('\n');
+
+        const threadLines = threadsRes.rows.map((t: any) =>
+          `[${t.title}]: ${t.summary?.slice(0, 120)}`
+        ).join('\n');
+
+        const userContext = [
+          taskLines ? `Незакрытые задачи:\n${taskLines}` : '',
+          threadLines ? `Из прошлых разговоров:\n${threadLines}` : '',
+        ].filter(Boolean).join('\n\n');
+
+        const prompt = `Ты — Мысль, персональный AI-ассистент. Сгенерируй одно короткое проактивное сообщение пользователю.\n\nКонтекст пользователя:\n${userContext}\n\nПравила:\n- Максимум 2 предложения\n- Конкретная отсылка к реальному контексту\n- Никогда: "Как дела?", "Чем могу помочь?"\n- Plaintext, без кавычек`;
+
+        const response = await fetch('https://routerai.ru/api/v1/chat/completions', tgFetchOptions({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+          body: JSON.stringify({ model: 'deepseek/deepseek-v4-flash', messages: [{ role: 'user', content: prompt }], max_tokens: 150, temperature: 0.8, thinking: false }),
+        }));
+
+        if (!response.ok) continue;
+        const data = await response.json();
+        const text = data.choices?.[0]?.message?.content?.trim();
+        if (!text || text.length < 10) continue;
+
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, tgFetchOptions({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: user.telegram_chat_id, text }),
+        }));
+
+        console.log(`[Proactive] Отправлено пользователю ${user.user_id}`);
+      } catch (e: any) {
+        console.error(`[Proactive] Ошибка для ${user.user_id}:`, e?.message);
+      }
+    }
+  } catch (e: any) {
+    console.error('[Proactive] Ошибка:', e?.message);
+  }
+}
+
+export function startProactiveScheduler(token: string, db: Pool): void {
+  const HOUR = 9;
+  const scheduleNext = () => {
+    const now = new Date();
+    const next = new Date();
+    next.setHours(HOUR, 0, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+    const delay = next.getTime() - now.getTime();
+    setTimeout(() => {
+      sendProactiveMessages(token, db).catch(e => console.error('[Proactive]', e));
+      setInterval(() => sendProactiveMessages(token, db).catch(e => console.error('[Proactive]', e)), 24 * 60 * 60 * 1000);
+    }, delay);
+    console.log(`[Proactive] Следующая отправка в ${next.toISOString()}`);
+  };
+  scheduleNext();
+}
+
+export async function startNotificationScheduler(token: string, db: Pool): Promise<void> {
+  const REMIND_BEFORE_MIN = 15;
+
+  const tick = async () => {
+    try {
+      const now = new Date();
+      const targetTime = new Date(now.getTime() + REMIND_BEFORE_MIN * 60 * 1000);
+      const todayStr = now.toISOString().split('T')[0];
+      const hh = String(targetTime.getHours()).padStart(2, '0');
+      const mm = String(targetTime.getMinutes()).padStart(2, '0');
+      const timeStr = `${hh}:${mm}`;
+
+      const { rows } = await db.query(
+        `SELECT t.id, t.name, t.user_id, p.telegram_chat_id
+         FROM user_tasks t
+         JOIN user_profiles p ON p.user_id = t.user_id
+         WHERE t.date = $1 AND t.time = $2 AND t.done = false
+           AND p.telegram_chat_id IS NOT NULL
+           AND (t.notified_at IS NULL OR t.notified_at < NOW() - INTERVAL '23 hours')`,
+        [todayStr, timeStr]
+      );
+
+      for (const row of rows) {
+        try {
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, tgFetchOptions({
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: row.telegram_chat_id, text: `⏰ Через ${REMIND_BEFORE_MIN} минут: ${row.name}` }),
+          }));
+          await db.query(`UPDATE user_tasks SET notified_at = NOW() WHERE id = $1`, [row.id]);
+        } catch (e: any) {
+          console.error('[Notif] Ошибка отправки:', e?.message);
+        }
+      }
+    } catch (e: any) {
+      console.error('[Notif] Ошибка планировщика:', e?.message);
+    }
+  };
+
+  setInterval(tick, 60_000);
+  console.log('[Notif] Планировщик уведомлений запущен (интервал 1 мин)');
+}

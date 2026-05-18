@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 import { Pool } from 'pg';
-import { startBot } from './server-bot.ts';
+import { startBot, startNotificationScheduler, startProactiveScheduler } from './server-bot.ts';
 
 dotenv.config();
 
@@ -13,7 +13,16 @@ if (!DATABASE_URL) {
 const db = new Pool({ connectionString: DATABASE_URL });
 
 console.log('[Bot] Запуск автономного контейнера бота...');
+
 startBot(db).catch(e => {
-  console.error('[Bot] Критическая ошибка:', e);
+  console.error('[Bot] Критическая ошибка startBot:', e);
   process.exit(1);
 });
+
+const botToken = process.env.TELEGRAM_BOT_TOKEN;
+if (botToken) {
+  startNotificationScheduler(botToken, db).catch(e => console.error('[Bot] Ошибка планировщика уведомлений:', e));
+  startProactiveScheduler(botToken, db);
+} else {
+  console.warn('[Bot] TELEGRAM_BOT_TOKEN не задан — планировщики не запущены');
+}
