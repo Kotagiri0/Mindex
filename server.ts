@@ -17,7 +17,6 @@ import {
   collectDefaultMetrics,
 } from "prom-client";
 import { verifyGoogleIdToken } from './src/lib/google-auth.ts';
-import { registerBotRoutes, startBot } from './server-bot.ts';
 
 dotenv.config();
 
@@ -1727,11 +1726,6 @@ const startServer = async () => {
     await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ;`).catch(() => {});
   }
 
-  // Регистрируем маршруты Telegram-бота
-  if (db) {
-    registerBotRoutes(app, db);
-  }
-
   if (process.env.NODE_ENV !== "production") {
     try {
       const { createServer } = await import("vite");
@@ -1742,7 +1736,6 @@ const startServer = async () => {
       app.use(vite.middlewares);
       app.listen(PORT, "0.0.0.0", () => {
         console.log(`Локальный сервер запущен: http://localhost:${PORT}`);
-        if (db) startBot(db).catch(e => console.error('[Bot] startBot error:', e));
         const botToken = process.env.TELEGRAM_BOT_TOKEN;
         if (botToken) {
           startNotificationScheduler(botToken);
@@ -1767,7 +1760,6 @@ const startServer = async () => {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Продакшн сервер запущен: http://localhost:${PORT}`);
-    if (db) startBot(db).catch(e => console.error('[Bot] startBot error:', e));
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     if (botToken) {
       startNotificationScheduler(botToken);
