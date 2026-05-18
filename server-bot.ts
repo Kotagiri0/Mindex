@@ -231,15 +231,24 @@ async function executeTool(name: string, args: any, db: Pool, userId: string): P
       return { success: true };
     }
     case 'get_notes': {
-      let query = `SELECT id, title, summary, created_at FROM user_threads WHERE user_id = $1 AND source = 'заметка' AND is_meaningful IS NOT FALSE`;
+      let query = `SELECT id, title, summary, messages, preview, created_at FROM user_threads WHERE user_id = $1 AND source = 'заметка' AND is_meaningful IS NOT FALSE`;
       const params: any[] = [userId];
       if (args.query) {
-        query += ` AND (title ILIKE $2 OR summary ILIKE $2)`;
+        query += ` AND (title ILIKE $2 OR summary ILIKE $2 OR preview ILIKE $2)`;
         params.push(`%${args.query}%`);
       }
       query += ` ORDER BY updated_at DESC LIMIT 10`;
       const { rows } = await db.query(query, params);
-      return rows.map((r: any) => ({ id: r.id, title: r.title, content: r.summary || '' }));
+      return rows.map((r: any) => {
+        // summary заполняется через /api/summarize, может быть пустым
+        // fallback: берём текст из последнего сообщения в messages
+        let content = r.summary || '';
+        if (!content && Array.isArray(r.messages) && r.messages.length > 0) {
+          const last = r.messages.filter((m: any) => m.role === 'user' || m.role === 'assistant').slice(-1)[0];
+          content = last?.content || r.preview || '';
+        }
+        return { id: r.id, title: r.title, content };
+      });
     }
     case 'create_note': {
       const id = crypto.randomUUID();
