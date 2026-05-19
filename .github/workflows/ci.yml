@@ -3,6 +3,9 @@ name: CI
 on:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   ci:
     runs-on: ubuntu-latest
@@ -43,7 +46,7 @@ jobs:
           node - <<'NODE'
           const fs = require('fs');
           const text = fs.readFileSync('coverage.txt', 'utf8');
-          const match = text.match(/All files\\s*\\|\\s*([0-9.]+)%/);
+          const match = text.match(/All files\s*\|\s*([0-9.]+)%/);
           const percent = match ? match[1] : '0';
           const label = 'coverage';
           const color = Number(percent) >= 80 ? '#4c1' : '#e05d44';

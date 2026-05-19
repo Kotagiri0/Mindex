@@ -2,24 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { sortTasks } from '../../../src/lib/sortTasks';
 import type { Task } from '../../../src/types';
-
-const withFixedDate = (iso: string, fn: () => void) => {
-  const RealDate = Date;
-  const MockDate: any = function (...args: any[]) {
-    if (args.length === 0) {
-      return new RealDate(iso);
-    }
-    return Reflect.construct(RealDate, args);
-  };
-  MockDate.now = () => new RealDate(iso).getTime();
-  MockDate.prototype = RealDate.prototype;
-  (globalThis as any).Date = MockDate;
-  try {
-    fn();
-  } finally {
-    (globalThis as any).Date = RealDate;
-  }
-};
+import { withFixedDate } from '../../helpers/date';
 
 test('returns empty array when no tasks', () => {
   const result = sortTasks([]);

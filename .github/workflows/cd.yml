@@ -2,7 +2,11 @@ name: CD
 
 on:
   push:
-    branches: [copilot/complete-test-suite-and-ci-pipeline]
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   ci:
