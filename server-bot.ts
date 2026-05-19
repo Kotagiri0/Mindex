@@ -798,9 +798,7 @@ export async function startBot(db: Pool): Promise<void> {
     return;
   }
 
-  const appUrl =
-    process.env.APP_URL ||
-    (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null);
+  const appUrl = process.env.APP_URL || null;
 
   if (appUrl) {
     await setupWebhook(token, appUrl);
