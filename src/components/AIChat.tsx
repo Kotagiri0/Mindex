@@ -188,7 +188,12 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           const id = call.id;
           let result;
 
-          if (name === 'get_tasks') {
+          if (name === 'get_notes') {
+            const notes = threads.filter((t: Thread) => t.source === 'заметка');
+            result = notes.length > 0
+              ? notes.map((t: Thread) => ({ id: t.id, title: t.title, preview: t.preview }))
+              : 'Заметок нет.';
+          } else if (name === 'get_tasks') {
             const date = args.date;
             const filtered = date ? tasks.filter(t => t.date === date) : tasks;
             result = filtered.length > 0 ? filtered : 'Задач не найдено.';
@@ -251,6 +256,11 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             const { id: taskId } = args;
             setTasks(prev => prev.filter(t => t.id !== taskId));
             db.deleteTask(taskId);
+            result = { status: 'success' };
+          } else if (name === 'delete_note') {
+            const { id: noteId } = args;
+            setThreads((prev: Thread[]) => prev.filter(t => t.id !== noteId));
+            db.deleteThread(noteId);
             result = { status: 'success' };
           } else if (name === 'save_as_note') {
             const { content, title } = args;

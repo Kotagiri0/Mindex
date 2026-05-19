@@ -246,6 +246,8 @@ const SYSTEM_INSTRUCTION = `Ты — Мысль, личный ассистент
 — delete_task: когда нужно удалить задачу
 — start_planning: только когда пользователь явно просит составить план, разбить на шаги или помочь спланировать. Не используй по своей инициативе
 — save_as_note: когда пользователь просит сохранить что-то как заметку (своё сообщение, твой ответ, любой текст). Придумай подходящее название
+— get_notes: когда нужно найти заметку по названию перед удалением
+— delete_note: когда пользователь явно просит удалить заметку. Если не знаешь ID — сначала вызови get_notes
 
 GOOGLE КАЛЕНДАРЬ
 Если пользователь подключил Google Календарь в настройках, задачи с датой автоматически появляются в его Google Календаре при создании или обновлении через add_task / update_task. Никогда не говори пользователю, что ты не можешь добавить событие в Google Календарь — просто создай или обнови задачу как обычно, и она сама туда попадёт. При создании задачи можно передать поля description (описание) и location (место/адрес) — они тоже отобразятся в Google Календаре.
@@ -258,6 +260,8 @@ const CHAT_TOOLS = [
   { type: "function", function: { name: "update_task", description: "Обновить существующую задачу. Изменения автоматически синхронизируются с Google Календарём если он подключён.", parameters: { type: "object", properties: { id: { type: "string", description: "ID задачи." }, done: { type: "boolean", description: "Статус выполнения." }, name: { type: "string", description: "Новое название задачи." }, time: { type: "string", description: "Новое время задачи в формате HH:MM." }, date: { type: "string", description: "Новая дата задачи в формате YYYY-MM-DD." }, description: { type: "string", description: "Описание задачи. Отображается в Google Календаре." }, location: { type: "string", description: "Место или адрес. Отображается в Google Календаре." } }, required: ["id"] } } },
   { type: "function", function: { name: "delete_task", description: "Удалить задачу из календаря.", parameters: { type: "object", properties: { id: { type: "string", description: "ID задачи." } }, required: ["id"] } } },
   { type: "function", function: { name: "save_as_note", description: "Сохранить текст как отдельную заметку в архив.", parameters: { type: "object", properties: { content: { type: "string", description: "Текст заметки для сохранения." }, title: { type: "string", description: "Название заметки (3-5 слов)." } }, required: ["content", "title"] } } },
+  { type: "function", function: { name: "get_notes", description: "Получить список заметок пользователя с их ID и названиями. Используй перед delete_note чтобы найти нужную заметку.", parameters: { type: "object", properties: {} } } },
+  { type: "function", function: { name: "delete_note", description: "Удалить заметку из архива по её ID. Используй только если пользователь явно просит удалить заметку.", parameters: { type: "object", properties: { id: { type: "string", description: "ID заметки для удаления." } }, required: ["id"] } } },
   { type: "function", function: { name: "start_planning", description: "Запускает опросник для составления плана. Используй ТОЛЬКО если пользователь явно попросил составить план или разбить на шаги.", parameters: { type: "object", properties: { questions: { type: "array", items: { type: "object", properties: { id: { type: "string" }, question: { type: "string" }, options: { type: "array", items: { type: "string" } } }, required: ["id", "question", "options"] } } }, required: ["questions"] } } },
 ];
 
