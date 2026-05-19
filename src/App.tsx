@@ -5,7 +5,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { db } from './lib/db';
+import { db, syncTimezone } from './lib/db';
 import { getCurrentUser, logoutLocalUser } from './lib/auth';
 import { storage } from './lib/storage';
 import { Screen, Task, Thread, Settings, LocalUser } from './types';
@@ -103,6 +103,7 @@ export default function App() {
           db.getTasks(),
           db.getThreads(),
         ]);
+        syncTimezone();
 
         if (cancelled) return;
 

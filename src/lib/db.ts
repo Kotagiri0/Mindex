@@ -6,6 +6,18 @@ import { storage } from './storage';
 const getUserId = () => getCurrentUser()?.id;
 const apiBase = () => `${window.location.origin}/api/data`;
 
+export const syncTimezone = async () => {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (!tz) return;
+  try {
+    await request<{ success: boolean }>(`${apiBase()}/timezone`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timezone: tz }),
+    });
+  } catch {}
+};
+
 const authHeaders = (): Record<string, string> => {
   const token = storage.getSessionToken();
   return token ? { 'Authorization': `Bearer ${token}` } : {};

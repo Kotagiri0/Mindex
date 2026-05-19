@@ -58,10 +58,10 @@ const POLLING_ERROR_RETRY_DELAY_MS = 5_000;
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
-function getSystemInstruction(): string {
+function getSystemInstruction(tz = 'Europe/Moscow'): string {
   const now = new Date();
-  const dateStr = now.toLocaleDateString('ru-RU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Europe/Moscow' });
-  const timeStr = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' });
+  const dateStr = now.toLocaleDateString('ru-RU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: tz });
+  const timeStr = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: tz });
 
   return `Ты — Мысль, личный ассистент по организации дел и мышлению.
 
@@ -190,7 +190,8 @@ const botTools: any[] = [
 // ─── Tool execution ───────────────────────────────────────────────────────────
 
 async function executeTool(name: string, args: any, db: Pool, userId: string): Promise<any> {
-  const today = new Date().toISOString().split('T')[0];
+  const userTz = await getUserTimezone(db, userId);
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: userTz });
 
   switch (name) {
     case 'get_tasks': {
@@ -336,6 +337,13 @@ async function callRouterAI(apiKey: string, body: object): Promise<any> {
   }
 }
 
+async function getUserTimezone(db: Pool, userId: string): Promise<string> {
+  try {
+    const { rows } = await db.query(`SELECT timezone FROM user_profiles WHERE user_id = $1 LIMIT 1`, [userId]);
+    return rows[0]?.timezone || 'Europe/Moscow';
+  } catch { return 'Europe/Moscow'; }
+}
+
 async function processWithAI(
   userText: string,
   threadMessages: StoredMessage[],
@@ -345,6 +353,7 @@ async function processWithAI(
 ): Promise<{ aiResponse: string; newMessages: StoredMessage[] }> {
   const now = () => new Date().toISOString();
   const userMsg: StoredMessage = { role: 'user', content: userText, time: now() };
+  const userTz = await getUserTimezone(db, userId);
 
   const loopMessages = [
     ...buildSafeHistory(threadMessages),
@@ -355,7 +364,7 @@ async function processWithAI(
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     const data = await callRouterAI(apiKey, {
       model: 'deepseek/deepseek-v4-flash',
-      messages: [{ role: 'system', content: getSystemInstruction() }, ...loopMessages],
+      messages: [{ role: 'system', content: getSystemInstruction(userTz) }, ...loopMessages],
       tools: botTools,
       tool_choice: 'auto',
       temperature: 0.7,
@@ -551,7 +560,8 @@ async function handleHelp(token: string, chatId: number): Promise<void> {
 }
 
 async function handleTasks(token: string, chatId: number, db: Pool, userId: string): Promise<void> {
-  const today = new Date().toISOString().split('T')[0];
+  const userTz = await getUserTimezone(db, userId);
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: userTz });
   const { rows: tasks } = await db.query(
     `SELECT id, name, time FROM user_tasks
      WHERE user_id = $1 AND date = $2 AND done = false
@@ -823,18 +833,21 @@ async function sendProactiveMessages(token: string, db: Pool): Promise<void> {
   if (!apiKey) return;
 
   try {
-    const today = new Date().toISOString().split('T')[0];
-
     const { rows: users } = await db.query(
-      `SELECT p.user_id, p.telegram_chat_id
+      `SELECT p.user_id, p.telegram_chat_id, COALESCE(p.timezone, 'Europe/Moscow') AS timezone
        FROM user_profiles p
-       WHERE p.telegram_chat_id IS NOT NULL
-         AND (p.last_active_at IS NULL OR p.last_active_at::date < $1::date)`,
-      [today]
+       WHERE p.telegram_chat_id IS NOT NULL`
     );
 
-    for (const user of users) {
+    const now = new Date();
+    const activeUsers = users.filter((u: any) => {
+      const todayInTz = now.toLocaleDateString('sv-SE', { timeZone: u.timezone });
+      return !u.last_active_at || new Date(u.last_active_at).toLocaleDateString('sv-SE', { timeZone: u.timezone }) < todayInTz;
+    });
+
+    for (const user of activeUsers) {
       try {
+        const userTodayInTz = now.toLocaleDateString('sv-SE', { timeZone: user.timezone });
         const [tasksRes, threadsRes] = await Promise.all([
           db.query(
             `SELECT name, date, time FROM user_tasks
@@ -853,7 +866,7 @@ async function sendProactiveMessages(token: string, db: Pool): Promise<void> {
         if (tasksRes.rows.length === 0 && threadsRes.rows.length === 0) continue;
 
         const taskLines = tasksRes.rows.map((t: any) => {
-          const when = t.date === today ? 'сегодня' : t.date;
+          const when = t.date === userTodayInTz ? 'сегодня' : t.date;
           return `- ${t.name} (${when}${t.time ? ', ' + t.time : ''})`;
         }).join('\n');
 
@@ -919,22 +932,27 @@ export async function startNotificationScheduler(token: string, db: Pool): Promi
     try {
       const now = new Date();
       const targetTime = new Date(now.getTime() + REMIND_BEFORE_MIN * 60 * 1000);
-      const todayStr = now.toISOString().split('T')[0];
-      const hh = String(targetTime.getHours()).padStart(2, '0');
-      const mm = String(targetTime.getMinutes()).padStart(2, '0');
-      const timeStr = `${hh}:${mm}`;
 
       const { rows } = await db.query(
-        `SELECT t.id, t.name, t.user_id, p.telegram_chat_id
+        `SELECT t.id, t.name, t.user_id, p.telegram_chat_id,
+                COALESCE(p.timezone, 'Europe/Moscow') AS timezone
          FROM user_tasks t
          JOIN user_profiles p ON p.user_id = t.user_id
-         WHERE t.date = $1 AND t.time = $2 AND t.done = false
+         WHERE t.done = false
            AND p.telegram_chat_id IS NOT NULL
-           AND (t.notified_at IS NULL OR t.notified_at < NOW() - INTERVAL '23 hours')`,
-        [todayStr, timeStr]
+           AND (t.notified_at IS NULL OR t.notified_at < NOW() - INTERVAL '23 hours')
+           AND t.time IS NOT NULL AND t.time != ''`,
+        []
       );
 
-      for (const row of rows) {
+      const toNotify = rows.filter((row: any) => {
+        const tz = row.timezone || 'Europe/Moscow';
+        const todayInTz = targetTime.toLocaleDateString('sv-SE', { timeZone: tz });
+        const timeInTz = targetTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: tz });
+        return row.date === todayInTz && row.time === timeInTz;
+      });
+
+      for (const row of toNotify) {
         try {
           await fetch(`https://api.telegram.org/bot${token}/sendMessage`, tgFetchOptions({
             method: 'POST',

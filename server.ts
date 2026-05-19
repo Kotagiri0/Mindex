@@ -205,17 +205,15 @@ app.get('/api/config', (_req, res) => {
   });
 });
 
-function getNowContext() {
+function getNowContext(tz = 'Europe/Moscow') {
   const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const dateStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
-  const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  const offsetMin = -now.getTimezoneOffset();
-  const offsetSign = offsetMin >= 0 ? '+' : '-';
-  const offsetHours = pad(Math.floor(Math.abs(offsetMin) / 60));
-  const offsetMins = pad(Math.abs(offsetMin) % 60);
-  const tz = `UTC${offsetSign}${offsetHours}:${offsetMins}`;
+  const dateStr = now.toLocaleDateString('sv-SE', { timeZone: tz }); // YYYY-MM-DD
+  const timeStr = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: tz });
   return `${dateStr}, ${timeStr} (${tz})`;
+}
+
+function getTodayInTz(tz = 'Europe/Moscow') {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: tz }); // YYYY-MM-DD
 }
 
 const SYSTEM_INSTRUCTION = `Ты — Мысль, личный ассистент по организации дел и мышлению.
@@ -367,6 +365,7 @@ const ensureAuthSchema = async () => {
 
   await db.query(`ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS telegram_chat_id BIGINT;`);
   await db.query(`ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ;`);
+  await db.query(`ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT 'Europe/Moscow';`);
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS user_tasks (
@@ -486,14 +485,15 @@ app.post("/api/telegram/proactive-test", requireAuth, async (req, res) => {
     if (!apiKey) return res.status(500).json({ error: "ROUTERAI_API_KEY не задан" });
 
     const { rows: profileRows } = await db.query(
-      `SELECT telegram_chat_id FROM user_profiles WHERE user_id = $1 LIMIT 1`,
+      `SELECT telegram_chat_id, timezone FROM user_profiles WHERE user_id = $1 LIMIT 1`,
       [userId]
     );
     if (!profileRows[0]?.telegram_chat_id) {
       return res.status(400).json({ error: "Telegram не привязан к этому аккаунту" });
     }
     const chatId = profileRows[0].telegram_chat_id;
-    const today = new Date().toISOString().split('T')[0];
+    const userTz = profileRows[0].timezone || 'Europe/Moscow';
+    const today = getTodayInTz(userTz);
 
     const [tasksRes, threadsRes] = await Promise.all([
       db.query(
@@ -867,6 +867,23 @@ app.post("/api/data/profile", requireAuth, dataRateLimit, async (req, res) => {
     return res.status(200).json({ success: true });
   } catch {
     return res.status(500).json({ error: "Не удалось сохранить профиль." });
+  }
+});
+
+app.post("/api/data/timezone", requireAuth, async (req, res) => {
+  if (!db) return res.status(500).json({ error: "БД не настроена." });
+  const userId = (req as any).userId;
+  const { timezone } = req.body;
+  if (!timezone || typeof timezone !== 'string') return res.status(400).json({ error: "timezone обязателен" });
+  try {
+    await db.query(
+      `INSERT INTO user_profiles (user_id, timezone, updated_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (user_id) DO UPDATE SET timezone = $2, updated_at = NOW()`,
+      [userId, timezone]
+    );
+    return res.status(200).json({ success: true });
+  } catch {
+    return res.status(500).json({ error: "Не удалось сохранить timezone." });
   }
 });
 
@@ -1352,16 +1369,20 @@ app.post("/api/chat", requireAuth, async (req, res) => {
       return res.status(500).json({ error: "ROUTERAI_API_KEY не найден в .env" });
     }
 
-    // Обновляем время активности пользователя
+    // Получаем таймзону пользователя и обновляем время активности
+    let userTimezone = 'Europe/Moscow';
     if (db && userId) {
-      db.query(
-        `UPDATE user_profiles SET last_active_at = NOW() WHERE user_id = $1`,
-        [userId]
-      ).catch(() => {});
+      try {
+        const tzRes = await db.query(
+          `UPDATE user_profiles SET last_active_at = NOW() WHERE user_id = $1 RETURNING timezone`,
+          [userId]
+        );
+        if (tzRes.rows[0]?.timezone) userTimezone = tzRes.rows[0].timezone;
+      } catch {}
     }
 
     // Build system prompt: base → personal profile → rag context
-    const baseInstruction = SYSTEM_INSTRUCTION.replace('DATETIME_PLACEHOLDER', getNowContext());
+    const baseInstruction = SYSTEM_INSTRUCTION.replace('DATETIME_PLACEHOLDER', getNowContext(userTimezone));
     let finalSystemInstruction = `${baseInstruction}\n\n## О себе\n${SELF_KNOWLEDGE_TEXT}`;
     let ragSources: { title: string }[] = [];
 
