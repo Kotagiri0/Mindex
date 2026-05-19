@@ -275,9 +275,13 @@ async function executeTool(name: string, args: any, db: Pool, userId: string): P
 
 // ─── AI processing with tool loop ────────────────────────────────────────────
 
+const MAX_MSG_CHARS = 2000;
+
 function toGroqFormat(msgs: StoredMessage[]) {
   return msgs.map(m => {
-    const msg: any = { role: m.role, content: typeof m.content === 'string' ? m.content : '' };
+    let content = typeof m.content === 'string' ? m.content : '';
+    if (content.length > MAX_MSG_CHARS) content = content.slice(0, MAX_MSG_CHARS) + '…';
+    const msg: any = { role: m.role, content };
     if (m.tool_calls) msg.tool_calls = m.tool_calls;
     if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
     return msg;
