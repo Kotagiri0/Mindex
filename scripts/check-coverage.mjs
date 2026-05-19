@@ -3,7 +3,7 @@ import fs from 'node:fs';
 const [, , filePath, thresholdArg] = process.argv;
 
 if (!filePath || !thresholdArg) {
-  console.error('Usage: node scripts/check-coverage.mjs <coverage-file> <threshold>');
+  console.error('Usage: check-coverage.mjs <coverage-file> <threshold>');
   process.exit(1);
 }
 
