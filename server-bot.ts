@@ -263,8 +263,8 @@ async function executeTool(name: string, args: any, db: Pool, userId: string): P
       const content = String(args.content);
       await db.query(
         `INSERT INTO user_threads (id, user_id, title, preview, messages, created_at, updated_at, source, summary, is_meaningful)
-         VALUES ($1, $2, $3, $4, '[]'::jsonb, NOW(), NOW(), 'заметка', $5, true)`,
-        [id, userId, title, content.slice(0, 100), content]
+         VALUES ($1, $2, $3, $4, '[]'::jsonb, $6, NOW(), 'заметка', $5, true)`,
+        [id, userId, title, content.slice(0, 100), content, Date.now()]
       );
       return { success: true, id, title };
     }
