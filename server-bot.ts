@@ -9,7 +9,13 @@
 import type { Express } from 'express';
 import type { Pool } from 'pg';
 import crypto from 'crypto';
-import { HttpsProxyAgent } from 'https-proxy-agent';
+import { ProxyAgent, setGlobalDispatcher } from 'undici';
+
+const proxyUrlGlobal = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+if (proxyUrlGlobal) {
+  setGlobalDispatcher(new ProxyAgent(proxyUrlGlobal));
+  console.log('[Bot] Прокси установлен:', proxyUrlGlobal.replace(/:([^@]+)@/, ':***@'));
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,11 +44,7 @@ interface StoredMessage {
   tool_call_id?: string;
 }
 
-const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
-const proxyAgent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
-
 function tgFetchOptions(extra: RequestInit = {}): RequestInit {
-  if (proxyAgent) return { ...extra, dispatcher: proxyAgent as any };
   return extra;
 }
 
