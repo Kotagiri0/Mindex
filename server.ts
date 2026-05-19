@@ -26,7 +26,12 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const DATABASE_URL = process.env.DATABASE_URL;
-const db = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL }) : null;
+const db = DATABASE_URL ? new Pool({
+  connectionString: DATABASE_URL,
+  ssl: DATABASE_URL.includes('rlwy.net') || DATABASE_URL.includes('railway')
+    ? { rejectUnauthorized: false }
+    : undefined,
+}) : null;
 
 const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (!db) return res.status(500).json({ error: "БД не настроена." });
