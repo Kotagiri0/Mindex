@@ -1776,9 +1776,11 @@ const startServer = async () => {
   });
 };
 
-startServer().catch((error) => {
-  console.error("Критическая ошибка запуска сервера:", error);
-  process.exit(1);
-});
+if (process.env.NODE_ENV !== "test") {
+  startServer().catch((error) => {
+    console.error("Критическая ошибка запуска сервера:", error);
+    process.exit(1);
+  });
+}
 
 export default app;

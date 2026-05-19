@@ -1,0 +1,160 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Cache npm downloads to speed up installs across runs.
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            npm-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Integration tests
+        run: npm run test:integration
+
+      # Security audit uses npm's built-in vulnerability scanner.
+      - name: Security audit
+        run: npm audit --audit-level=high
+
+      - name: Build
+        run: npm run build
+
+  docker:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Compute a short SHA tag for the Docker image.
+      - name: Prepare image tags
+        id: meta
+        run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:sha-${{ steps.meta.outputs.short_sha }}
+            ghcr.io/${{ github.repository }}:latest
+
+  deploy-staging:
+    needs: docker
+    runs-on: ubuntu-latest
+    steps:
+      # Deploy step assumes a staging host reachable via SSH.
+      - name: Deploy to staging
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_SSH_HOST }}
+          username: ${{ secrets.STAGING_SSH_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd ${{ secrets.STAGING_APP_PATH }}
+            docker compose pull
+            docker compose up -d
+
+  smoke-test:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    steps:
+      # Poll the staging URL until it responds or the loop times out.
+      - name: Smoke test staging
+        run: |
+          for i in {1..20}; do
+            if curl -fsS "${{ secrets.STAGING_URL }}/metrics" >/dev/null; then
+              echo "Staging is healthy."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Staging smoke test failed."
+          exit 1
+
+  approve-production:
+    needs: smoke-test
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      # Manual approval is enforced by GitHub environment protection rules.
+      - name: Await approval
+        run: echo "Approved via environment protection."
+
+  deploy-production:
+    needs: approve-production
+    runs-on: ubuntu-latest
+    steps:
+      # Deploy step assumes a production host reachable via SSH.
+      - name: Deploy to production
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_SSH_HOST }}
+          username: ${{ secrets.PROD_SSH_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            cd ${{ secrets.PROD_APP_PATH }}
+            docker compose pull
+            docker compose up -d
+
+  notify-slack:
+    if: failure()
+    needs:
+      - ci
+      - docker
+      - deploy-staging
+      - smoke-test
+      - deploy-production
+    runs-on: ubuntu-latest
+    steps:
+      # Slack webhook is used only when the pipeline fails.
+      - name: Notify Slack
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text":"❌ CD pipeline failed for ${{ github.repository }} @ ${{ github.sha }}"}' \
+            "${{ secrets.SLACK_WEBHOOK }}"
