@@ -54,7 +54,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NODE_ENV: test
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -75,6 +74,7 @@ jobs:
           set -euo pipefail
           npm run test:unit | tee coverage.txt
           # Keep a minimal baseline while coverage improves.
+          # TODO: raise the coverage gate once baseline tests are expanded.
           node -e "const fs=require('fs');const text=fs.readFileSync('coverage.txt','utf8');const match=text.match(/All files\\s*\\|\\s*([0-9.]+)%/);if(!match){console.error('Coverage summary not found.');process.exit(1);}const percent=parseFloat(match[1]);console.log(`Coverage: ${percent}%`);if(percent<35){console.error('Coverage below 35%.');process.exit(1);}"
 
       - name: Integration tests
