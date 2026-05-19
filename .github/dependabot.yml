@@ -18,7 +18,15 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 2
     groups:
-      npm-deps:
+      npm-runtime:
+        dependency-type: "production"
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+      npm-dev:
+        dependency-type: "development"
         patterns:
           - "*"
         update-types:

@@ -26,6 +26,10 @@ const columns = coverageLine
   .split('|')
   .map((column) => column.trim())
   .filter(Boolean);
+if (columns.length < 2) {
+  console.error('Coverage summary format is invalid.');
+  process.exit(1);
+}
 const percent = Number.parseFloat(columns[1]);
 if (Number.isNaN(percent)) {
   console.error('Coverage summary value is invalid.');
