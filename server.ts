@@ -28,9 +28,7 @@ const PORT = Number(process.env.PORT || 3000);
 const DATABASE_URL = process.env.DATABASE_URL;
 const db = DATABASE_URL ? new Pool({
   connectionString: DATABASE_URL,
-  ssl: DATABASE_URL.includes('rlwy.net') || DATABASE_URL.includes('railway')
-    ? { rejectUnauthorized: false }
-    : undefined,
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
 }) : null;
 
 const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
