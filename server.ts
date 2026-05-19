@@ -1550,6 +1550,14 @@ app.post("/api/chat", requireAuth, async (req, res) => {
 });
 
 const startServer = async () => {
+  if (db) {
+    for (let i = 0; i < 10; i++) {
+      try { await db.query('SELECT 1'); break; } catch {
+        console.log(`[DB] Ожидание БД... попытка ${i + 1}/10`);
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
+  }
   await ensureAuthSchema();
   // Добавляем колонку notified_at если её нет
   if (db) {
