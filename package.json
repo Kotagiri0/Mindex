@@ -26,7 +26,7 @@
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "form-data": "^4.0.5",
-    "groq-sdk": "^1.1.2",
+    "groq-sdk": "^1.2.0",
     "https-proxy-agent": "^9.0.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
