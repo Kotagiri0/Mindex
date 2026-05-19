@@ -10,7 +10,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "NODE_ENV=test node --import tsx --test --experimental-test-coverage tests/unit/**/*.test.ts",
+    "test:integration": "NODE_ENV=test node --import tsx --test tests/integration/server.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.1",

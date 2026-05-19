@@ -18,7 +18,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!apiKey) return res.status(500).json({ error: 'GROQ_API_KEY missing' });
 
   try {
-    const groq = new Groq({ apiKey });
+    // Allow tests to inject a stubbed client via global override.
+    const groq = (globalThis as any).__GROQ_CLIENT__ || new Groq({ apiKey });
 
     const dialogText = messages
       .filter((m: any) => m.role === 'user' || m.role === 'assistant')

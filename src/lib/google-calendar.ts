@@ -77,7 +77,7 @@ const fetchGoogleClientId = async () => {
     return cachedClientId;
   }
 
-  const envClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+  const envClientId = (import.meta as any)?.env?.VITE_GOOGLE_CLIENT_ID || '';
   if (envClientId) {
     cachedClientId = envClientId;
     return cachedClientId;
