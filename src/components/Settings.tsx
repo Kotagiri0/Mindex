@@ -155,6 +155,9 @@ function TelegramRow() {
             <div style={{ fontFamily: M, fontSize: 12, color: 'var(--text-muted)', marginTop: 10 }}>
               Ожидаю подключения...
             </div>
+            <div style={{ fontFamily: M, fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
+              Код вводится один раз. После этого бот готов к работе.
+            </div>
           </div>
         )}
       </div>
