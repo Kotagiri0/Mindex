@@ -14,7 +14,7 @@ if (Number.isNaN(threshold)) {
 }
 
 const text = fs.readFileSync(filePath, 'utf8');
-const match = text.match(/All files\s*\|\s*([0-9.]+)%/);
+const match = text.match(/all files\s*\|\s*([0-9.]+)\s*\|/i);
 if (!match) {
   console.error('Coverage summary not found.');
   process.exit(1);
