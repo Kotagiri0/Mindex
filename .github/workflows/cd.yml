@@ -4,7 +4,7 @@ on:
   # Run CD only after the CI workflow completes for main.
   workflow_run:
     workflows: ["CI"]
-    branches: [main]
+    branches: [copilot/create-ci-cd-pipeline]
     types: [completed]
 
 permissions:
