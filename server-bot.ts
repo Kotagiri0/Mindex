@@ -508,10 +508,11 @@ async function handleStart(
 
     if (rows[0]) {
       const webUserId = rows[0].user_id;
-      await db.query(
+      const updateResult = await db.query(
         `UPDATE user_profiles SET telegram_chat_id = $1, updated_at = NOW() WHERE user_id = $2`,
         [chatId, webUserId]
       );
+      console.log(`[Bot] UPDATE user_profiles rowCount=${updateResult.rowCount} for user_id=${webUserId}, chatId=${chatId}`);
       await db.query(
         `UPDATE telegram_link_codes SET used = TRUE WHERE code = $1`,
         [linkCode]
