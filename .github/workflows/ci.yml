@@ -75,7 +75,7 @@ jobs:
           npm run test:unit | tee coverage.txt
           # Keep a minimal baseline while coverage improves.
           # TODO: raise the coverage gate once baseline tests are expanded.
-          node -e "const fs=require('fs');const text=fs.readFileSync('coverage.txt','utf8');const match=text.match(/All files\\s*\\|\\s*([0-9.]+)%/);if(!match){console.error('Coverage summary not found.');process.exit(1);}const percent=parseFloat(match[1]);console.log(`Coverage: ${percent}%`);if(percent<35){console.error('Coverage below 35%.');process.exit(1);}"
+          node scripts/check-coverage.mjs coverage.txt 35
 
       - name: Integration tests
         run: npm run test:integration
@@ -98,6 +98,7 @@ jobs:
         run: npm ci
 
       - name: Security audit
+        # TODO: remove continue-on-error once high severity issues are addressed.
         continue-on-error: true
         run: npm audit --audit-level=high
 
