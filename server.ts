@@ -1554,12 +1554,19 @@ app.post("/api/chat", requireAuth, async (req, res) => {
 
 const startServer = async () => {
   if (db) {
-    for (let i = 0; i < 10; i++) {
-      try { await db.query('SELECT 1'); break; } catch {
-        console.log(`[DB] Ожидание БД... попытка ${i + 1}/10`);
+    let connected = false;
+    for (let i = 0; i < 20; i++) {
+      try {
+        await db.query('SELECT 1');
+        connected = true;
+        console.log('[DB] Подключение установлено');
+        break;
+      } catch (e: any) {
+        console.log(`[DB] Ожидание БД... попытка ${i + 1}/20 (${e.code || e.message})`);
         await new Promise(r => setTimeout(r, 3000));
       }
     }
+    if (!connected) throw new Error('[DB] Не удалось подключиться к БД за 60 секунд');
   }
   await ensureAuthSchema();
   // Добавляем колонку notified_at если её нет
