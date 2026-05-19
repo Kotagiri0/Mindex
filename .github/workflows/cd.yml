@@ -4,7 +4,7 @@ on:
   # Run CD only after the CI workflow completes for main.
   workflow_run:
     workflows: ["CI"]
-    branches: [copilot/create-ci-cd-pipeline]
+    branches: [master, main]
     types: [completed]
 
 permissions:
@@ -58,7 +58,7 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
+            ghcr.io/${{ github.repository }}:sha-${{ github.event.workflow_run.head_sha }}
             ghcr.io/${{ github.repository }}:latest
 
   deploy-staging:
