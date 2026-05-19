@@ -1413,6 +1413,34 @@ app.post("/api/chat", requireAuth, async (req, res) => {
       }
     }
 
+    // Inject upcoming tasks context for proactive awareness
+    if (db && userId) {
+      try {
+        const now = new Date();
+        const todayStr = getTodayInTz(userTimezone);
+        const windowMs = 30 * 60 * 1000;
+        const windowEnd = new Date(now.getTime() + windowMs);
+        const currentTimeStr = now.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: userTimezone });
+        const windowEndStr = windowEnd.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: userTimezone });
+
+        const { rows: upcomingTasks } = await db.query(
+          `SELECT name, time FROM user_tasks
+           WHERE user_id = $1 AND date = $2 AND done = false
+             AND time != '' AND time IS NOT NULL
+             AND time >= $3 AND time <= $4
+           ORDER BY time ASC LIMIT 5`,
+          [userId, todayStr, currentTimeStr, windowEndStr]
+        );
+
+        if (upcomingTasks.length > 0) {
+          const lines = upcomingTasks.map((t: any) => `— ${t.name} в ${t.time}`).join('\n');
+          finalSystemInstruction += `\n\n## Ближайшие задачи пользователя (следующие 30 минут)\n${lines}\n\nЕсли твой ответ развёрнутый и пользователь может не знать о предстоящей задаче — упомяни её к месту, один раз, без вопросов. Не упоминай если запрос срочный или пользователь явно в курсе.`;
+        }
+      } catch (e) {
+        console.warn('[CHAT] upcoming tasks inject failed:', e);
+      }
+    }
+
     // Ensure DB skill thread exists for vector search (fire-and-forget for new users)
     if (db && userId) {
       db.query(
