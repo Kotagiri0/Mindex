@@ -349,8 +349,6 @@ const ensureAuthSchema = async () => {
     );
   `);
 
-  await db.query(`ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS telegram_chat_id BIGINT;`);
-  await db.query(`ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ;`);
   await db.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'local';`);
   await db.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS google_sub TEXT;`);
   await db.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS email TEXT;`);
@@ -366,6 +364,9 @@ const ensureAuthSchema = async () => {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  await db.query(`ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS telegram_chat_id BIGINT;`);
+  await db.query(`ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ;`);
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS user_tasks (
