@@ -14,19 +14,11 @@ if (Number.isNaN(threshold)) {
 }
 
 const text = fs.readFileSync(filePath, 'utf8');
-const coverageLine = text
-  .split('\n')
-  .find((line) => /^\s*(?:[#ℹ]+)?\s*all files\s*\|/i.test(line));
-if (!coverageLine) {
-  console.error('Coverage summary not found.');
-  process.exit(1);
-}
-
-const coverageMatch = coverageLine.match(
-  /^\s*(?:[#ℹ]+)?\s*all files\s*\|\s*([0-9.]+)\s*\|/i,
-);
+const coveragePattern =
+  /^\s*(?:[#ℹ]+)?\s*all files\s*\|\s*([0-9.]+)\s*\|/im;
+const coverageMatch = text.match(coveragePattern);
 if (!coverageMatch) {
-  console.error('Coverage summary format is invalid.');
+  console.error('Coverage summary not found.');
   process.exit(1);
 }
 const percent = Number.parseFloat(coverageMatch[1]);

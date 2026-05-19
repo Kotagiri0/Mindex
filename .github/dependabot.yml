@@ -6,7 +6,7 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 3
     groups:
-      actions:
+      github-actions-minor:
         patterns:
           - "*"
         update-types:
