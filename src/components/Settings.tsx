@@ -119,7 +119,7 @@ function TelegramRow() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
                 <span style={{ fontFamily: M, fontSize: 15, color: 'var(--text-primary)' }}>Telegram</span>
-                <span style={{ fontFamily: M, fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: 'rgba(99,102,241,0.9)', background: 'rgba(99,102,241,0.1)', padding: '2px 7px', borderRadius: 20 }}>бета</span>
+                <span style={{ fontFamily: M, fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: 'rgba(120,120,120,0.9)', background: 'rgba(120,120,120,0.12)', padding: '2px 7px', borderRadius: 20 }}>бета</span>
               </div>
             <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)' }}>
               {step === 'done' ? '✅ Подключён — уведомления активны' : 'Уведомления о задачах прямо в Telegram'}
