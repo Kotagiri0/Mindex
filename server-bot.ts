@@ -533,7 +533,7 @@ async function handleStart(
       );
       await tgApi(token, 'sendMessage', {
         chat_id: chatId,
-        text: `✅ Готово, ${escapeHtml(firstName)}! Telegram подключён к Mindex.\n\nТеперь я буду напоминать тебе о задачах прямо сюда, за 15 минут до начала.\n\n/tasks — задачи на сегодня\n/help — список команд`
+        text: `✅ Готово, ${escapeHtml(firstName)}! Telegram подключён к Мысли.\n\nТеперь я буду напоминать тебе о задачах прямо сюда, за 15 минут до начала.\n\n/tasks — задачи на сегодня\n/help — список команд`
       });
       return;
     } else {
@@ -548,7 +548,7 @@ async function handleStart(
   await ensureProfile(db, userId);
   await tgApi(token, 'sendMessage', {
     chat_id: chatId,
-    text: `Привет, ${escapeHtml(firstName)}! Я Мысль — твой персональный помощник по планированию.\n\nЧтобы получать уведомления о задачах, подключи меня в настройках приложения Mindex.\n\nЕсли уже подключил — просто пиши:\n"Встреча с командой завтра в 10"\n"Что у меня на сегодня?"\n\n/tasks — задачи на сегодня\n/help — список команд`
+    text: `Привет, ${escapeHtml(firstName)}! Я Мысль — твой персональный помощник по планированию.\n\nЧтобы получать уведомления о задачах, подключи меня в настройках приложения.\n\nЕсли уже подключил — просто пиши:\n"Встреча с командой завтра в 10"\n"Что у меня на сегодня?"\n\n/tasks — задачи на сегодня\n/help — список команд`
   });
 }
 
@@ -652,7 +652,7 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
   if (!webUserId) {
     await tgApi(token, 'sendMessage', {
       chat_id: chatId,
-      text: `Чтобы общаться со мной, сначала подключи Telegram в приложении Mindex.\n\nОткрой приложение → Настройки → Telegram → Подключить. Получишь код — введи его командой /start КОД`
+      text: `Чтобы общаться со мной, сначала подключи Telegram в приложении.\n\nОткрой приложение → Настройки → Telegram → Подключить. Получишь код — введи его командой /start КОД`
     });
     return;
   }
