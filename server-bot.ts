@@ -187,6 +187,64 @@ const botTools: any[] = [
   }
 ];
 
+// ─── Conflict & dependency check ─────────────────────────────────────────────
+
+async function checkTaskConflicts(
+  db: Pool,
+  userId: string,
+  task: { id: string; name: string; time?: string; date?: string }
+): Promise<string[]> {
+  const warnings: string[] = [];
+
+  // 1. Конфликт по времени (±30 минут, тот же день)
+  if (task.time && task.date) {
+    const [h, m] = task.time.split(':').map(Number);
+    if (!isNaN(h) && !isNaN(m)) {
+      const taskMinutes = h * 60 + m;
+      const { rows: conflicts } = await db.query(
+        `SELECT name, time FROM user_tasks
+         WHERE user_id = $1 AND date = $2 AND id != $3 AND done = false
+           AND time IS NOT NULL AND time != ''`,
+        [userId, task.date, task.id]
+      );
+      for (const c of conflicts) {
+        const [ch, cm] = c.time.split(':').map(Number);
+        if (isNaN(ch) || isNaN(cm)) continue;
+        const diff = Math.abs(taskMinutes - (ch * 60 + cm));
+        if (diff <= 30) {
+          warnings.push(`конфликт по времени: "${c.name}" в ${c.time} — пересечение ±30 минут`);
+        }
+      }
+    }
+  }
+
+  // 2. Дедлайн-цепочка — если у задачи есть время, ищем задачи на тот же день без времени
+  // которые семантически могут быть подготовительными (содержат похожие слова)
+  if (task.date && task.name) {
+    const keywords = task.name.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+    if (keywords.length > 0) {
+      const { rows: related } = await db.query(
+        `SELECT name, time, date FROM user_tasks
+         WHERE user_id = $1 AND id != $2 AND done = false AND date >= $3
+           AND date <= ($3::date + interval '3 days')::text`,
+        [userId, task.id, task.date]
+      );
+      for (const r of related) {
+        if (r.id === task.id) continue;
+        const rWords = r.name.toLowerCase().split(/\s+/);
+        const overlap = keywords.filter(k => rWords.some((w: string) => w.includes(k) || k.includes(w)));
+        if (overlap.length >= 2) {
+          const when = r.date === task.date ? 'сегодня' : `${r.date}`;
+          const timeStr = r.time ? ` в ${r.time}` : '';
+          warnings.push(`связанная задача: "${r.name}"${timeStr} (${when}) — возможно нужно выполнить в связке`);
+        }
+      }
+    }
+  }
+
+  return warnings;
+}
+
 // ─── Tool execution ───────────────────────────────────────────────────────────
 
 async function executeTool(name: string, args: any, db: Pool, userId: string): Promise<any> {
@@ -207,12 +265,16 @@ async function executeTool(name: string, args: any, db: Pool, userId: string): P
     }
     case 'add_task': {
       const id = crypto.randomUUID();
+      const taskDate = String(args.date || today);
+      const taskTime = String(args.time || '');
+      const taskName = String(args.name);
       await db.query(
         `INSERT INTO user_tasks (id, user_id, name, time, date, done, type, subtasks, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, false, 'regular', '[]'::jsonb, NOW(), NOW())`,
-        [id, userId, String(args.name), String(args.time || ''), String(args.date || today)]
+        [id, userId, taskName, taskTime, taskDate]
       );
-      return { success: true, id };
+      const warnings = await checkTaskConflicts(db, userId, { id, name: taskName, time: taskTime, date: taskDate });
+      return { success: true, id, ...(warnings.length > 0 ? { warnings } : {}) };
     }
     case 'update_task': {
       const updates: string[] = [];
@@ -229,6 +291,14 @@ async function executeTool(name: string, args: any, db: Pool, userId: string): P
         `UPDATE user_tasks SET ${updates.join(', ')} WHERE id = $${idx++} AND user_id = $${idx}`,
         params
       );
+      const { rows: updated } = await db.query(
+        `SELECT name, time, date FROM user_tasks WHERE id = $1 AND user_id = $2`,
+        [String(args.id), userId]
+      );
+      if (updated[0] && (args.time || args.date)) {
+        const warnings = await checkTaskConflicts(db, userId, { id: String(args.id), ...updated[0] });
+        return { success: true, ...(warnings.length > 0 ? { warnings } : {}) };
+      }
       return { success: true };
     }
     case 'delete_task': {
