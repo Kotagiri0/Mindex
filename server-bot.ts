@@ -51,7 +51,7 @@ function tgFetchOptions(extra: RequestInit = {}): RequestInit {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const BOT_THREAD_TITLE = 'Telegram Bot';
-const CONTEXT_WINDOW = 20;
+const CONTEXT_WINDOW = 12;
 const MAX_TOOL_ITERATIONS = 5;
 const MAX_BUTTON_TEXT_LENGTH = 32;
 const POLLING_ERROR_RETRY_DELAY_MS = 5_000;
@@ -320,7 +320,7 @@ function buildSafeHistory(msgs: StoredMessage[]): any[] {
 
 async function callRouterAI(apiKey: string, body: object): Promise<any> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  const timeoutId = setTimeout(() => controller.abort(), 55000);
   try {
     const response = await fetch('https://routerai.ru/api/v1/chat/completions', tgFetchOptions({
       method: 'POST',
