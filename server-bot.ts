@@ -682,7 +682,8 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
     );
     console.log(`[Bot] AI ответил: "${aiResponse?.slice(0, 80)}"`);
     await saveBotThread(db, webUserId, thread?.id ?? null, [...existingMessages, ...newMessages]);
-    await tgApi(token, 'sendMessage', { chat_id: chatId, text: aiResponse });
+    const cleanResponse = aiResponse.replace(/\*\*/g, '').replace(/\*/g, '').replace(/^#{1,3}\s/gm, '');
+    await tgApi(token, 'sendMessage', { chat_id: chatId, text: cleanResponse });
   } catch (e: any) {
     console.error(`[Bot] ошибка AI:`, e?.message || e);
     await tgApi(token, 'sendMessage', { chat_id: chatId, text: 'Не могу ответить прямо сейчас, попробуй позже.' });
