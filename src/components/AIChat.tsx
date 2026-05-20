@@ -41,6 +41,47 @@ interface AIChatProps {
   onAutoSentClear?: () => void;
 }
 
+function checkTaskConflicts(allTasks: Task[], task: { id: string; name: string; time?: string; date?: string }): string[] {
+  const warnings: string[] = [];
+
+  if (task.time && task.date) {
+    const [h, m] = task.time.split(':').map(Number);
+    if (!isNaN(h) && !isNaN(m)) {
+      const taskMinutes = h * 60 + m;
+      for (const t of allTasks) {
+        if (t.id === task.id || t.done || t.date !== task.date || !t.time) continue;
+        const [th, tm] = t.time.split(':').map(Number);
+        if (isNaN(th) || isNaN(tm)) continue;
+        if (Math.abs(taskMinutes - (th * 60 + tm)) <= 30) {
+          warnings.push(`конфликт по времени: "${t.name}" в ${t.time} — пересечение ±30 минут`);
+        }
+      }
+    }
+  }
+
+  if (task.date && task.name) {
+    const keywords = task.name.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+    if (keywords.length > 0) {
+      const taskDate = new Date(task.date);
+      for (const t of allTasks) {
+        if (t.id === task.id || t.done || !t.date) continue;
+        const tDate = new Date(t.date);
+        const dayDiff = (tDate.getTime() - taskDate.getTime()) / 86400000;
+        if (dayDiff < 0 || dayDiff > 3) continue;
+        const tWords = t.name.toLowerCase().split(/\s+/);
+        const overlap = keywords.filter(k => tWords.some(w => w.includes(k) || k.includes(w)));
+        if (overlap.length >= 2) {
+          const when = t.date === task.date ? 'сегодня' : t.date;
+          const timeStr = t.time ? ` в ${t.time}` : '';
+          warnings.push(`связанная задача: "${t.name}"${timeStr} (${when})`);
+        }
+      }
+    }
+  }
+
+  return warnings;
+}
+
 export default function AIChat({ threadId, threads, setThreads, tasks, setTasks, onClose, onNavigate, onOpenThread, autoSend, onAutoSentClear }: AIChatProps) {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -211,7 +252,8 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             };
             setTasks(prev => [...prev, newTask]);
             db.saveTask(newTask);
-            result = { status: 'success', task: newTask };
+            const addWarnings = checkTaskConflicts([...tasks, newTask], newTask);
+            result = { status: 'success', task: newTask, ...(addWarnings.length > 0 ? { warnings: addWarnings } : {}) };
           } else if (name === 'start_planning') {
             const { questions } = args;
             const planningMsg: Message = {
@@ -251,7 +293,14 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
               }
               return t;
             }));
-            result = { status: 'success' };
+            const updatedTask = tasks.find(t => t.id === taskId);
+            if (updatedTask && (time !== undefined || date !== undefined)) {
+              const merged = { ...updatedTask, ...(taskName ? { name: taskName } : {}), ...(time !== undefined ? { time } : {}), ...(date !== undefined ? { date } : {}) };
+              const updWarnings = checkTaskConflicts(tasks, merged);
+              result = { status: 'success', ...(updWarnings.length > 0 ? { warnings: updWarnings } : {}) };
+            } else {
+              result = { status: 'success' };
+            }
           } else if (name === 'delete_task') {
             const { id: taskId } = args;
             setTasks(prev => prev.filter(t => t.id !== taskId));
