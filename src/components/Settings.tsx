@@ -382,25 +382,90 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
     window.location.reload();
   };
 
+  if (isDesktop) {
+    return (
+      <div style={{ height: '100%', overflowY: 'auto', background: 'var(--bg)', padding: '48px 56px 60px', boxSizing: 'border-box' }}>
+        <div style={{ fontFamily: F, fontSize: 32, color: 'var(--text-80)', marginBottom: 8 }}>настройки</div>
+        <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', marginBottom: 40 }} />
+
+        <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 48, alignItems: 'start' }}>
+          {/* Левая колонка */}
+          <div>
+            {/* Profile */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
+              <div style={{ width: 52, height: 52, borderRadius: '50%', background: settings.avatar ? 'var(--text-primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {settings.avatar ? (
+                  <img src={settings.avatar} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                ) : (
+                  <svg width="52" height="52" viewBox="0 0 125 125" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="62.5" cy="62.5" r="62.5" fill="#222224"/>
+                    <rect x="29.45" y="30.45" width="65.1" height="65.1" rx="32.55" stroke="#FEFEFE" strokeWidth="4.9"/>
+                    <path d="M77 68L77 51" stroke="#FEFEFE" strokeWidth="4.9"/>
+                    <path d="M65 68L65 51" stroke="#FEFEFE" strokeWidth="4.9"/>
+                  </svg>
+                )}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: M, fontSize: 16, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 2 }}>{displayName}</div>
+                {email && <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)' }}>{email}</div>}
+              </div>
+              <button onClick={editName} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-40)' }}>
+                <Pencil size={16} strokeWidth={1.5} />
+              </button>
+            </div>
+
+            <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', marginBottom: 24 }} />
+
+            {/* Account */}
+            <div style={{ fontFamily: M, fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Аккаунт</div>
+            <AccountRow label="Выйти из аккаунта" action="Выйти" onAction={onLogout} />
+            <AccountRow
+              label="Память модели"
+              action="Очистить"
+              onAction={() => setConfirmClear(true)}
+              danger
+            />
+          </div>
+
+          {/* Правая колонка */}
+          <div>
+            {/* Instructions */}
+            <div style={{ fontFamily: M, fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Инструкции</div>
+            <textarea
+              value={settings.instructions || ''}
+              onChange={e => setSettings({ ...settings, instructions: e.target.value })}
+              placeholder="Опиши, как ты хочешь, чтобы ии с тобой общался"
+              style={{
+                width: '100%', minHeight: 120, borderRadius: 16,
+                border: '1px solid rgba(0,0,0,0.08)', padding: '14px 16px',
+                fontFamily: M, fontSize: 14, color: 'var(--text-primary)',
+                background: 'var(--surface)', resize: 'vertical' as const,
+                outline: 'none', lineHeight: 1.6, boxSizing: 'border-box' as const,
+                marginBottom: 32,
+              }}
+            />
+
+            {/* Integrations */}
+            <div style={{ fontFamily: M, fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Интеграции</div>
+            <TelegramRow />
+            <GoogleCalendarRow />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       height: '100%',
       overflowY: 'auto',
       background: 'var(--bg)',
-      padding: isDesktop ? '40px 40px 60px' : 'env(safe-area-inset-top, 0px) 0 60px',
+      padding: 'env(safe-area-inset-top, 0px) 0 60px',
       boxSizing: 'border-box',
     }}>
-      <div style={{ maxWidth: 680, margin: '0 auto', padding: isDesktop ? '0' : '0 20px' }}>
+      <div style={{ maxWidth: 680, margin: '0 auto', padding: '0 20px' }}>
         {/* Header */}
-        {isDesktop ? (
-          <>
-            <div style={{ fontFamily: F, fontSize: 36, color: 'var(--text-80)', textAlign: 'center', marginBottom: 24 }}>
-              настройки
-            </div>
-            <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', marginBottom: 32 }} />
-          </>
-        ) : (
-          <>
+        <>
             <div style={{ display: 'flex', alignItems: 'center', paddingTop: 16, paddingBottom: 8, marginBottom: 8 }}>
               <button
                 onClick={onBack}
@@ -419,7 +484,6 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
             </div>
             <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', marginBottom: 24 }} />
           </>
-        )}
 
         {/* Profile */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
