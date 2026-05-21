@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowUp } from 'lucide-react';
+import { ArrowUp, Mic } from 'lucide-react';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
 
@@ -167,71 +167,107 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: 'easeOut' }}
-            style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '0 0 0' }}
+            style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
           >
-            {/* Heading */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 28px' }}>
+            {/* CTA block */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '0 28px' }}>
+              {/* Мысль logo */}
+              <svg width="48" height="48" viewBox="0 0 1681 1681" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="58.8315" y="58.8315" width="1563.24" height="1563.24" rx="781.619" stroke={FG} strokeWidth="117.663" />
+                <path d="M1344.73 840.43H336.186" stroke={FG} strokeWidth="117.663" />
+                <path d="M1078.16 602.734L602.734 1078.16" stroke={FG} strokeWidth="117.663" />
+                <path d="M1078.16 1078.16L602.734 602.734" stroke={FG} strokeWidth="117.663" />
+                <path d="M840.469 1344.71L840.469 336.167" stroke={FG} strokeWidth="117.663" />
+              </svg>
               <div style={{ fontFamily: F, fontSize: 26, color: '#222224', lineHeight: 1.2, textAlign: 'center' }}>
-                что у тебя сейчас в голове?
+                Какие планы на сегодня?
+              </div>
+              <div style={{ fontFamily: M, fontSize: 15, color: 'rgba(34,34,36,0.55)', lineHeight: 1.55, textAlign: 'center' }}>
+                Дальше сам разберусь
               </div>
             </div>
 
-            {/* Bottom card with input */}
-            <div style={{ background: '#ffffff', borderRadius: '20px 20px 0 0', padding: '18px 20px 0' }}>
-              <textarea
-                ref={textareaRef}
-                value={text}
-                onChange={e => setText(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmit();
-                }}
-                placeholder="напиши первую мысль..."
-                style={{
-                  width: '100%', border: 'none', outline: 'none', background: 'transparent',
-                  fontFamily: M, fontSize: 15, color: '#222224', lineHeight: 1.65,
-                  resize: 'none', display: 'block', boxSizing: 'border-box',
-                  minHeight: MIN_ROWS_HEIGHT, maxHeight: MAX_HEIGHT, overflowY: 'auto',
-                  transition: 'height 0.1s ease',
-                }}
-              />
-
-              {/* Actions row */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0 4px' }}>
-                <div style={{ fontFamily: M, fontSize: 12, color: 'rgba(34,34,36,0.35)', lineHeight: 1.4 }}>
-                  мысль сохранится и мысль её запомнит
+            {/* Input card — same as chat */}
+            <div style={{ padding: '0 16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))' }}>
+              <div style={{ background: '#ffffff', borderRadius: 20, padding: 16 }}>
+                <textarea
+                  ref={textareaRef}
+                  value={text}
+                  onChange={e => setText(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey && !(window.matchMedia('(hover: none)').matches)) {
+                      e.preventDefault();
+                      handleSubmit();
+                    }
+                  }}
+                  rows={1}
+                  placeholder="Начни первую мысль..."
+                  style={{
+                    width: '100%', border: 'none', outline: 'none', background: 'transparent',
+                    fontFamily: M, fontSize: 15, color: '#222224', lineHeight: 1.55,
+                    resize: 'none', display: 'block', boxSizing: 'border-box',
+                    maxHeight: MAX_HEIGHT, overflowY: 'auto',
+                  }}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginTop: 12, gap: 8 }}>
+                  <AnimatePresence mode="wait">
+                    {!text.trim() && !loading && (
+                      <motion.div
+                        key="mic"
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(34,34,36,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Mic size={15} strokeWidth={1.75} color="rgba(34,34,36,0.5)" />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  <AnimatePresence>
+                    {text.trim() && !loading && (
+                      <motion.button
+                        key="send"
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={handleSubmit}
+                        style={{
+                          width: 44, height: 44, borderRadius: '50%', background: FG,
+                          border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                        }}
+                      >
+                        <ArrowUp size={20} color="#fff" strokeWidth={2} />
+                      </motion.button>
+                    )}
+                    {loading && (
+                      <motion.div
+                        key="loader"
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        style={{ width: 44, height: 44, borderRadius: '50%', background: FG, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                      >
+                        <div style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
-
-                <AnimatePresence>
-                  {text.trim() && !loading && (
-                    <motion.button
-                      initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0, opacity: 0 }}
-                      whileTap={{ scale: 0.88 }}
-                      onClick={handleSubmit}
-                      style={{
-                        width: 40, height: 40, borderRadius: '50%', background: FG,
-                        border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <ArrowUp size={17} color="#fff" strokeWidth={2} />
-                    </motion.button>
-                  )}
-                  {loading && (
-                    <motion.div
-                      initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0, opacity: 0 }}
-                      style={{ width: 40, height: 40, borderRadius: '50%', background: FG, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                    >
-                      <div style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               </div>
 
-              <div style={{ height: 'max(20px, env(safe-area-inset-bottom, 20px))' }} />
+              {/* Skip button */}
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 14 }}>
+                <button
+                  onClick={() => onComplete()}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    fontFamily: M, fontSize: 14, color: 'rgba(34,34,36,0.4)',
+                    padding: '8px 16px',
+                  }}
+                >
+                  Пропустить
+                </button>
+              </div>
             </div>
           </motion.div>
         )}
