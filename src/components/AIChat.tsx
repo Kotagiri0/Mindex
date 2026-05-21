@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, Settings, Star, ArrowUp, MessageCircle, StickyNote, Mic, Loader, Copy, MoreHorizontal, X, BookOpen } from 'lucide-react';
 import { MysliThinking } from './MysliThinking';
 import NoteView from './NoteView';
+import TelegramConnectBlock from './TelegramConnectBlock';
 import { Thread, Screen, Message, Task, SubTask } from '../types';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
@@ -39,9 +40,10 @@ interface AIChatProps {
   onOpenThread?: (id: string) => void;
   autoSend?: string;
   onAutoSentClear?: () => void;
+  isOnboarding?: boolean;
 }
 
-export default function AIChat({ threadId, threads, setThreads, tasks, setTasks, onClose, onNavigate, onOpenThread, autoSend, onAutoSentClear }: AIChatProps) {
+export default function AIChat({ threadId, threads, setThreads, tasks, setTasks, onClose, onNavigate, onOpenThread, autoSend, onAutoSentClear, isOnboarding }: AIChatProps) {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [noteMode, setNoteMode] = useState(false);
@@ -791,6 +793,10 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                     ? <span style={{ whiteSpace: 'pre-wrap' }}>{animatingContent}</span>
                     : renderMarkdown(m.content)
                 }
+
+                {isOnboarding && m.role === 'assistant' && i === visibleMsgs.findIndex(x => x.role === 'assistant') && !showAnimated && (
+                  <TelegramConnectBlock />
+                )}
 
                 {m.planning_data && (
                   <div className="mt-3 flex flex-col gap-3">
