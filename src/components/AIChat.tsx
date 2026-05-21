@@ -105,6 +105,25 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
 
   const REMIND_KEYWORDS = /напомн|remind|уведом|пришли|пинг|ping/i;
 
+  const sendHidden = async (hiddenPrompt: string) => {
+    if (!threadId) return;
+    setIsTyping(true);
+    try {
+      const response = await generateResponse([{ role: 'user', content: hiddenPrompt, time: ft() }]);
+      const assistantMsg: Message = { role: 'assistant', content: response.content || '', time: ft() };
+      setThreads(prev => prev.map(t => {
+        if (t.id !== threadId) return t;
+        const updated = { ...t, messages: [assistantMsg] };
+        db.saveThread(updated);
+        return updated;
+      }));
+    } catch {
+      // silent
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
   const sendText = async (text: string) => {
     if (!text || !threadId) return;
 
@@ -377,7 +396,11 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     if (autoSend && !autoSentRef.current && threadId) {
       autoSentRef.current = true;
       onAutoSentClear?.();
-      sendText(autoSend);
+      if (autoSend === '__onboarding_skip__') {
+        sendHidden('Представься пользователю — коротко, в своём стиле. Скажи кто ты, что умеешь и предложи начать. Без приветственных клише, без "Привет!", сразу по делу.');
+      } else {
+        sendText(autoSend);
+      }
     }
   }, [threadId]);
 

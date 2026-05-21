@@ -49,25 +49,33 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     setTimeout(() => setStage('input'), 1500);
   };
 
+  const createThread = async (title: string) => {
+    const threadId = uuid();
+    const thread = { id: threadId, title, preview: '', messages: [], createdAt: Date.now() };
+    await db.saveThread(thread);
+    return threadId;
+  };
+
   const handleSubmit = async () => {
     const content = text.trim();
     if (!content || loading) return;
     setLoading(true);
     try {
-      const threadId = uuid();
-      const thread = {
-        id: threadId,
-        title: content.length > 40 ? content.slice(0, 40) + '…' : content,
-        preview: content.slice(0, 100),
-        messages: [],
-        createdAt: Date.now(),
-      };
-      await db.saveThread(thread);
+      const threadId = await createThread(content.length > 40 ? content.slice(0, 40) + '…' : content);
       onComplete(threadId, content);
     } catch {
       onComplete();
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSkip = async () => {
+    try {
+      const threadId = await createThread('Знакомство');
+      onComplete(threadId, '__onboarding_skip__');
+    } catch {
+      onComplete();
     }
   };
 
@@ -272,7 +280,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
               {/* Skip button */}
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: 14 }}>
                 <button
-                  onClick={() => onComplete()}
+                  onClick={handleSkip}
                   style={{
                     background: 'none', border: 'none', cursor: 'pointer',
                     fontFamily: M, fontSize: 14, color: 'rgba(34,34,36,0.4)',
