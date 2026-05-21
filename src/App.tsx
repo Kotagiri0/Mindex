@@ -41,6 +41,7 @@ export default function App() {
   const [loading, setLoading] = useState(Boolean(getCurrentUser()));
   const [pendingMsg, setPendingMsg] = useState('');
   const [threadsSubScreen, setThreadsSubScreen] = useState(false);
+  const [isOnboardingChat, setIsOnboardingChat] = useState(false);
 
   const navigateMobile = (next: Screen) => { setScreen(next); if (next !== 'threads') setThreadsSubScreen(false); };
   const [onboardingComplete, setOnboardingComplete] = useState(false);
@@ -207,13 +208,15 @@ export default function App() {
     await db.upsertProfile(onboardingComplete, newSettings);
   };
 
-  const handleOnboardingComplete = async (threadId?: string) => {
+  const handleOnboardingComplete = async (threadId?: string, initialMsg?: string) => {
     setOnboardingComplete(true);
     await db.upsertProfile(true, settings);
     if (threadId) {
       const freshThreads = await db.getThreads();
       setThreads(freshThreads);
       setCurTh(threadId);
+      if (initialMsg) setPendingMsg(initialMsg);
+      setIsOnboardingChat(true);
       setScreen('ai');
     } else {
       setScreen(isDesktopViewport ? 'dash' : 'today');
@@ -357,12 +360,14 @@ export default function App() {
                   setThreads(prev => prev.filter(t => t.id !== curTh));
                   db.deleteThread(curTh!);
                 }
+                setIsOnboardingChat(false);
                 navigateMobile('threads');
               }}
               onNavigate={navigateMobile}
               onOpenThread={(id) => { setCurTh(id); setScreen('ai'); }}
               autoSend={pendingMsg}
               onAutoSentClear={() => setPendingMsg('')}
+              isOnboarding={isOnboardingChat}
             />
           </motion.div>
         )}

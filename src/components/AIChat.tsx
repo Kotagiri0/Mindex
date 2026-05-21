@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, Settings, Star, ArrowUp, MessageCircle, StickyNote, Mic, Loader, Copy, MoreHorizontal, X, BookOpen } from 'lucide-react';
 import { MysliThinking } from './MysliThinking';
 import NoteView from './NoteView';
+import TelegramConnectBlock from './TelegramConnectBlock';
 import { Thread, Screen, Message, Task, SubTask } from '../types';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
@@ -39,6 +40,7 @@ interface AIChatProps {
   onOpenThread?: (id: string) => void;
   autoSend?: string;
   onAutoSentClear?: () => void;
+  isOnboarding?: boolean;
 }
 
 function checkTaskConflicts(allTasks: Task[], task: { id: string; name: string; time?: string; date?: string }): string[] {
@@ -82,7 +84,7 @@ function checkTaskConflicts(allTasks: Task[], task: { id: string; name: string; 
   return warnings;
 }
 
-export default function AIChat({ threadId, threads, setThreads, tasks, setTasks, onClose, onNavigate, onOpenThread, autoSend, onAutoSentClear }: AIChatProps) {
+export default function AIChat({ threadId, threads, setThreads, tasks, setTasks, onClose, onNavigate, onOpenThread, autoSend, onAutoSentClear, isOnboarding }: AIChatProps) {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [noteMode, setNoteMode] = useState(false);
@@ -143,6 +145,25 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   };
 
   const REMIND_KEYWORDS = /напомн|remind|уведом|пришли|пинг|ping/i;
+
+  const sendHidden = async (hiddenPrompt: string) => {
+    if (!threadId) return;
+    setIsTyping(true);
+    try {
+      const response = await generateResponse([{ role: 'user', content: hiddenPrompt, time: ft() }]);
+      const assistantMsg: Message = { role: 'assistant', content: response.content || '', time: ft() };
+      setThreads(prev => prev.map(t => {
+        if (t.id !== threadId) return t;
+        const updated = { ...t, messages: [assistantMsg] };
+        db.saveThread(updated);
+        return updated;
+      }));
+    } catch {
+      // silent
+    } finally {
+      setIsTyping(false);
+    }
+  };
 
   const sendText = async (text: string) => {
     if (!text || !threadId) return;
@@ -424,7 +445,11 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     if (autoSend && !autoSentRef.current && threadId) {
       autoSentRef.current = true;
       onAutoSentClear?.();
-      sendText(autoSend);
+      if (autoSend === '__onboarding_skip__') {
+        sendHidden('Представься пользователю — коротко, в своём стиле. Скажи кто ты, что умеешь и предложи начать. Без приветственных клише, без "Привет!", сразу по делу.');
+      } else {
+        sendText(autoSend);
+      }
     }
   }, [threadId]);
 
@@ -840,6 +865,10 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                     ? <span style={{ whiteSpace: 'pre-wrap' }}>{animatingContent}</span>
                     : renderMarkdown(m.content)
                 }
+
+                {isOnboarding && m.role === 'assistant' && i === visibleMsgs.findIndex(x => x.role === 'assistant') && !showAnimated && (
+                  <TelegramConnectBlock />
+                )}
 
                 {m.planning_data && (
                   <div className="mt-3 flex flex-col gap-3">

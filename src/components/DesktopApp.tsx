@@ -1807,6 +1807,22 @@ function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
               placeholder="Добавить задачу"
               style={{ flex: 1, border: 'none', outline: 'none', fontFamily: M, fontSize: 14, color: 'var(--text-primary)', background: 'transparent' }}
             />
+            <AnimatePresence>
+              {addInput.trim() && (
+                <motion.button
+                  key="add-btn"
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0, opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={handleAddTask}
+                  style={{ width: 32, height: 32, borderRadius: '50%', background: '#0B0D10', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                >
+                  <ArrowUp size={16} color="#fff" strokeWidth={2} />
+                </motion.button>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Tasks with stagger animation on day change */}
