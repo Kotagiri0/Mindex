@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ArrowUp } from 'lucide-react';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
-import { apiFetch } from '../lib/auth';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
@@ -14,7 +13,7 @@ const MAX_HEIGHT = 220;
 const MIN_ROWS_HEIGHT = 80;
 
 interface OnboardingProps {
-  onComplete: (threadId?: string) => void;
+  onComplete: (threadId?: string, initialMsg?: string) => void;
 }
 
 export default function Onboarding({ onComplete }: OnboardingProps) {
@@ -51,46 +50,15 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     setLoading(true);
     try {
       const threadId = uuid();
-      const now = Date.now();
-      const timeStr = new Date().toTimeString().slice(0, 5);
-
-      let assistantText = '';
-      try {
-        const aiRes = await apiFetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: [{ role: 'user', content }] }),
-        });
-        if (aiRes.ok) {
-          const data = await aiRes.json();
-          assistantText = data?.choices?.[0]?.message?.content?.trim() ?? '';
-        }
-      } catch {}
-
-      const messages: Array<{ role: 'user' | 'assistant'; content: string; time: string }> = [
-        { role: 'user', content, time: timeStr },
-        ...(assistantText ? [{ role: 'assistant' as const, content: assistantText, time: new Date().toTimeString().slice(0, 5) }] : []),
-      ];
-
       const thread = {
         id: threadId,
-        title: 'О себе',
+        title: content.length > 40 ? content.slice(0, 40) + '…' : content,
         preview: content.slice(0, 100),
-        messages,
-        createdAt: now,
-        source: 'заметка' as const,
-        is_meaningful: true,
-        summary: content,
+        messages: [],
+        createdAt: Date.now(),
       };
-
       await db.saveThread(thread);
-      apiFetch('/api/summarize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: thread.messages, threadId, raw: true, rawSummary: content }),
-      }).catch(() => {});
-
-      onComplete(threadId);
+      onComplete(threadId, content);
     } catch {
       onComplete();
     } finally {

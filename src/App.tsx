@@ -207,13 +207,14 @@ export default function App() {
     await db.upsertProfile(onboardingComplete, newSettings);
   };
 
-  const handleOnboardingComplete = async (threadId?: string) => {
+  const handleOnboardingComplete = async (threadId?: string, initialMsg?: string) => {
     setOnboardingComplete(true);
     await db.upsertProfile(true, settings);
     if (threadId) {
       const freshThreads = await db.getThreads();
       setThreads(freshThreads);
       setCurTh(threadId);
+      if (initialMsg) setPendingMsg(initialMsg);
       setScreen('ai');
     } else {
       setScreen(isDesktopViewport ? 'dash' : 'today');
