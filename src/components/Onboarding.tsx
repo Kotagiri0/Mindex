@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowUp, Mic } from 'lucide-react';
+import { ArrowUp, Loader } from 'lucide-react';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
+import { useVoiceInput, isMobileDevice } from '../lib/useVoiceInput';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
@@ -21,6 +22,10 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isMobile = isMobileDevice();
+  const { state: voiceState, startRecording, stopRecording, toggleRecording } = useVoiceInput(
+    (transcribed) => setText(prev => prev + (prev ? ' ' : '') + transcribed)
+  );
 
   // Auto-resize textarea
   useEffect(() => {
@@ -179,11 +184,11 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 <path d="M1078.16 1078.16L602.734 602.734" stroke={FG} strokeWidth="117.663" />
                 <path d="M840.469 1344.71L840.469 336.167" stroke={FG} strokeWidth="117.663" />
               </svg>
-              <div style={{ fontFamily: F, fontSize: 26, color: '#222224', lineHeight: 1.2, textAlign: 'center' }}>
-                Какие планы на сегодня?
+              <div style={{ fontFamily: F, fontSize: 26, color: '#222224', lineHeight: 1.2, textAlign: 'center', whiteSpace: 'pre-line' }}>
+                {'Какие планы\nна сегодня?'}
               </div>
               <div style={{ fontFamily: M, fontSize: 15, color: 'rgba(34,34,36,0.55)', lineHeight: 1.55, textAlign: 'center' }}>
-                Дальше сам разберусь
+                Я помогу не забыть
               </div>
             </div>
 
@@ -210,19 +215,28 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                   }}
                 />
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginTop: 12, gap: 8 }}>
-                  <AnimatePresence mode="wait">
-                    {!text.trim() && !loading && (
-                      <motion.div
-                        key="mic"
-                        initial={{ scale: 0, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0, opacity: 0 }}
-                        style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(34,34,36,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      >
-                        <Mic size={15} strokeWidth={1.75} color="rgba(34,34,36,0.5)" />
-                      </motion.div>
+                  {/* Microphone — functional, same as chat */}
+                  <motion.button
+                    title={isMobile ? 'Удерживай для записи' : 'Нажми для записи, ещё раз — стоп'}
+                    {...(isMobile
+                      ? { onPointerDown: startRecording, onPointerUp: stopRecording, onPointerCancel: stopRecording }
+                      : { onClick: toggleRecording }
                     )}
-                  </AnimatePresence>
+                    disabled={voiceState === 'processing'}
+                    style={{
+                      width: 32, height: 32, borderRadius: '50%', border: 'none', cursor: 'pointer', flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: voiceState === 'recording' ? '#c0392b' : voiceState === 'processing' ? 'rgba(34,34,36,0.15)' : 'rgba(34,34,36,0.08)',
+                      transition: 'background 0.15s',
+                    }}
+                  >
+                    {voiceState === 'processing'
+                      ? <Loader size={15} strokeWidth={2} color="#222224" className="animate-spin" />
+                      : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={voiceState === 'recording' ? '#fff' : 'rgba(34,34,36,0.5)'} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10c0 3.9 2.7 7 7 7s7-3.1 7-7"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                    }
+                  </motion.button>
+
+                  {/* Send / loader */}
                   <AnimatePresence>
                     {text.trim() && !loading && (
                       <motion.button
@@ -233,11 +247,11 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                         whileTap={{ scale: 0.9 }}
                         onClick={handleSubmit}
                         style={{
-                          width: 44, height: 44, borderRadius: '50%', background: FG,
+                          width: 36, height: 36, borderRadius: '50%', background: FG,
                           border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                         }}
                       >
-                        <ArrowUp size={20} color="#fff" strokeWidth={2} />
+                        <ArrowUp size={17} color="#fff" strokeWidth={2} />
                       </motion.button>
                     )}
                     {loading && (
@@ -246,9 +260,9 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                         initial={{ scale: 0, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
                         exit={{ scale: 0, opacity: 0 }}
-                        style={{ width: 44, height: 44, borderRadius: '50%', background: FG, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                        style={{ width: 36, height: 36, borderRadius: '50%', background: FG, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                       >
-                        <div style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                        <div style={{ width: 13, height: 13, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
                       </motion.div>
                     )}
                   </AnimatePresence>
