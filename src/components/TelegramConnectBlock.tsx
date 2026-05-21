@@ -28,6 +28,11 @@ export default function TelegramConnectBlock() {
       {/* Divider */}
       <div style={{ height: 1, background: 'rgba(34,34,36,0.08)', margin: '0 -2px' }} />
 
+      {/* Description */}
+      <div style={{ fontFamily: M, fontSize: 13, color: 'rgba(34,34,36,0.55)', lineHeight: 1.55 }}>
+        Кстати, со мной можно общаться через тг, чтобы быстро ставить задачи, строить планы и получать напоминания быстрее всех
+      </div>
+
       {/* Button */}
       <a
         href={`https://t.me/${BOT_USERNAME}`}
@@ -56,7 +61,7 @@ export default function TelegramConnectBlock() {
           }}
         >
           <span style={{ fontFamily: M, fontSize: 13, color: 'rgba(34,34,36,0.5)' }}>
-            код для бота
+            Отправь этот код боту
           </span>
           <span style={{
             fontFamily: M, fontSize: 13, fontWeight: 600,
