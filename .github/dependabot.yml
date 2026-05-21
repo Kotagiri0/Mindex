@@ -4,14 +4,43 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 3
+    groups:
+      github-actions-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 3
+    groups:
+      npm-runtime:
+        dependency-type: "production"
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+      npm-dev:
+        dependency-type: "development"
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 3
+    groups:
+      docker-deps:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
