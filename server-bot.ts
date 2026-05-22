@@ -20,11 +20,17 @@ if (proxyUrlGlobal) {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface TgUser { id: number; first_name: string; username?: string; }
+interface TgVoice { file_id: string; duration: number; }
 interface TgMessage {
   message_id: number;
   from: TgUser;
   chat: { id: number };
   text?: string;
+  voice?: TgVoice;
+  forward_date?: number;
+  forward_from?: TgUser;
+  forward_from_chat?: { title?: string };
+  caption?: string;
 }
 interface TgCallbackQuery {
   id: string;
@@ -751,24 +757,24 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
   }
 
   const message: TgMessage = update.message;
-  if (!message?.from || !message.text) return;
+  if (!message?.from) return;
+  // Принимаем: текст, голос, пересланные сообщения (с текстом или caption)
+  if (!message.text && !message.voice && !message.caption) return;
 
   const chatId = message.chat.id;
-  const text = message.text.trim();
 
-  if (text.startsWith('/start')) {
+  // /start обрабатываем до проверки привязки
+  if (message.text?.startsWith('/start')) {
     const tgUserId = message.from.id;
     const tgUserfallbackId = `tg_${tgUserId}`;
-    const parts = text.split(' ');
+    const parts = message.text.split(' ');
     const linkCode = parts[1]?.trim() || undefined;
     await handleStart(token, chatId, message.from.first_name, db, tgUserfallbackId, linkCode);
     return;
   }
 
   // Проверяем привязку — без неё общение закрыто
-  console.log(`[Bot] сообщение от chatId=${chatId}, text="${text}"`);
   const webUserId = await getWebUserId(db, chatId);
-  console.log(`[Bot] webUserId для chatId=${chatId}: ${webUserId}`);
   if (!webUserId) {
     await tgApi(token, 'sendMessage', {
       chat_id: chatId,
@@ -777,27 +783,66 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
     return;
   }
 
-  if (text === '/help') {
-    await handleHelp(token, chatId);
-    return;
+  if (message.text === '/help') { await handleHelp(token, chatId); return; }
+  if (message.text === '/tasks') { await handleTasks(token, chatId, db, webUserId); return; }
+
+  // ── Голосовое сообщение → транскрипция через Whisper ─────────────────────
+  let userText = message.text?.trim() || message.caption?.trim() || '';
+
+  if (message.voice) {
+    try {
+      const fileRes = await tgApi(token, 'getFile', { file_id: message.voice.file_id });
+      const filePath = fileRes?.result?.file_path;
+      if (!filePath) throw new Error('file_path не получен');
+
+      const audioUrl = `https://api.telegram.org/file/bot${token}/${filePath}`;
+      const audioRes = await fetch(audioUrl, tgFetchOptions());
+      if (!audioRes.ok) throw new Error(`Ошибка скачивания аудио: ${audioRes.status}`);
+      const audioBuffer = await audioRes.arrayBuffer();
+
+      const formData = new FormData();
+      formData.append('file', new Blob([audioBuffer], { type: 'audio/ogg' }), 'voice.ogg');
+      formData.append('model', 'whisper-large-v3-turbo');
+      formData.append('language', 'ru');
+      formData.append('response_format', 'json');
+
+      const groqKey = process.env.GROQ_API_KEY || apiKey;
+      const whisperRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${groqKey}` },
+        body: formData,
+      });
+      if (!whisperRes.ok) throw new Error(`Whisper error: ${whisperRes.status}`);
+      const whisperData: any = await whisperRes.json();
+      userText = whisperData.text?.trim() || '';
+      console.log(`[Bot] Транскрипция: "${userText}"`);
+    } catch (e: any) {
+      console.error('[Bot] Ошибка транскрипции:', e?.message);
+      await tgApi(token, 'sendMessage', { chat_id: chatId, text: 'Не смог распознать голосовое, попробуй ещё раз' });
+      return;
+    }
   }
 
-  if (text === '/tasks') {
-    await handleTasks(token, chatId, db, webUserId);
-    return;
+  if (!userText) return;
+
+  // ── Пересланное сообщение — подсказываем ИИ контекст ────────────────────
+  const isForwarded = Boolean(message.forward_date);
+  if (isForwarded) {
+    const source = message.forward_from_chat?.title || message.forward_from?.first_name || '';
+    userText = `[Пересланное сообщение${source ? ` от "${source}"` : ''}]\n${userText}\n\n[Вытащи из этого события дату, время и название. Добавь как задачу если там есть конкретное мероприятие или дедлайн]`;
   }
 
-  // Обновляем last_active_at — чтобы проактивный планировщик не слал повторно сегодня
+  // Обновляем last_active_at
   db.query(`UPDATE user_profiles SET last_active_at = NOW() WHERE user_id = $1`, [webUserId]).catch(() => {});
 
-  // Все остальные сообщения → AI (Мысль) — используем webUserId для доступа к данным
+  // Все остальные сообщения → AI (Мысль)
   const thread = await loadBotThread(db, webUserId);
   const existingMessages = thread?.messages ?? [];
 
-  console.log(`[Bot] вызываю AI для ${webUserId}, сообщение: "${text}"`);
+  console.log(`[Bot] вызываю AI для ${webUserId}, сообщение: "${userText.slice(0, 80)}"`);
   try {
     const { aiResponse, newMessages } = await processWithAI(
-      text,
+      userText,
       existingMessages,
       db,
       webUserId,
