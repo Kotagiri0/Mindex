@@ -1054,6 +1054,85 @@ app.get("/api/chat", (req, res) => {
   res.json({ status: "ok", message: "Local Chat API is running" });
 });
 
+app.get("/api/admin/stats", async (req, res) => {
+  if (!db) return res.status(500).json({ error: "БД не настроена." });
+  const secret = String(req.query?.secret || "").trim();
+  if (secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: "Forbidden." });
+
+  try {
+    // 1. Всего пользователей
+    const { rows: [totalRow] } = await db.query(`SELECT COUNT(*) AS total FROM auth_users`);
+
+    // 2. Retention 7d — пользователи зарегистрированные 7+ дней назад и активные в последние 7 дней
+    const { rows: [retRow] } = await db.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE a.created_at <= NOW() - INTERVAL '7 days') AS cohort_7d,
+        COUNT(*) FILTER (
+          WHERE a.created_at <= NOW() - INTERVAL '7 days'
+          AND p.last_active_at >= NOW() - INTERVAL '7 days'
+        ) AS retained_7d
+      FROM auth_users a
+      LEFT JOIN user_profiles p ON p.user_id = a.id
+    `);
+
+    const cohort = parseInt(retRow.cohort_7d) || 0;
+    const retained = parseInt(retRow.retained_7d) || 0;
+    const retention7d = cohort > 0 ? Math.round((retained / cohort) * 100) : null;
+
+    // 3. Telegram-интеграция — % пользователей с привязанным ботом
+    const { rows: [tgRow] } = await db.query(`
+      SELECT
+        COUNT(*) AS total_profiles,
+        COUNT(*) FILTER (WHERE telegram_chat_id IS NOT NULL) AS tg_connected
+      FROM user_profiles
+    `);
+
+    const totalProfiles = parseInt(tgRow.total_profiles) || 0;
+    const tgConnected = parseInt(tgRow.tg_connected) || 0;
+    const tgPercent = totalProfiles > 0 ? Math.round((tgConnected / totalProfiles) * 100) : 0;
+
+    // 4. Всего сообщений Мысли (assistant role во всех тредах)
+    const { rows: [msgRow] } = await db.query(`
+      SELECT COALESCE(SUM(
+        (SELECT COUNT(*) FROM jsonb_array_elements(messages) AS m WHERE m->>'role' = 'assistant')
+      ), 0) AS assistant_messages
+      FROM user_threads
+      WHERE messages IS NOT NULL AND jsonb_array_length(messages) > 0
+    `);
+
+    // 5. Активные за последние 7 дней
+    const { rows: [activeRow] } = await db.query(`
+      SELECT COUNT(*) AS active_7d FROM user_profiles
+      WHERE last_active_at >= NOW() - INTERVAL '7 days'
+    `);
+
+    return res.json({
+      users: {
+        total: parseInt(totalRow.total),
+        active_7d: parseInt(activeRow.active_7d),
+      },
+      retention: {
+        cohort_7d: cohort,
+        retained_7d: retained,
+        percent: retention7d,
+        label: retention7d !== null ? `${retention7d}%` : 'недостаточно данных',
+      },
+      telegram: {
+        connected: tgConnected,
+        total: totalProfiles,
+        percent: tgPercent,
+        label: `${tgConnected} из ${totalProfiles} (${tgPercent}%)`,
+      },
+      messages: {
+        total_assistant: parseInt(msgRow.assistant_messages),
+      },
+    });
+  } catch (e: any) {
+    console.error('[Stats]', e?.message);
+    return res.status(500).json({ error: e?.message });
+  }
+});
+
 app.post("/api/admin/backfill-embeddings", async (req, res) => {
   if (!db) return res.status(500).json({ error: "БД не настроена." });
   const secret = String(req.body?.secret || "").trim();
