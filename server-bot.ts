@@ -1049,6 +1049,14 @@ export function startProactiveScheduler(token: string, db: Pool): void {
   scheduleNext();
 }
 
+// Возвращает смещение таймзоны в миллисекундах для данного момента
+// Пример: для Europe/Moscow (UTC+3) вернёт -3*60*60*1000 = -10800000
+function getTimezoneOffsetMs(date: Date, tz: string): number {
+  const utcStr = date.toLocaleString('en-US', { timeZone: 'UTC' });
+  const tzStr  = date.toLocaleString('en-US', { timeZone: tz });
+  return new Date(utcStr).getTime() - new Date(tzStr).getTime();
+}
+
 export async function startNotificationScheduler(token: string, db: Pool): Promise<void> {
   const REMIND_BEFORE_MIN = 15;
 
@@ -1071,6 +1079,11 @@ export async function startNotificationScheduler(token: string, db: Pool): Promi
       const targetTime = new Date(now.getTime() + REMIND_BEFORE_MIN * 60 * 1000);
 
       // ── 1. Напоминания за 15 минут до задачи с временем ──────────────────────
+      // Строим временной диапазон: задача должна начаться между +14 и +16 минутами от сейчас
+      // Это даёт окно в 2 минуты, но notified_at защищает от повторов
+      const windowStart = new Date(now.getTime() + (REMIND_BEFORE_MIN - 1) * 60 * 1000);
+      const windowEnd   = new Date(now.getTime() + (REMIND_BEFORE_MIN + 1) * 60 * 1000);
+
       const { rows } = await db.query(
         `SELECT t.id, t.name, t.date, t.time, t.user_id, p.telegram_chat_id,
                 COALESCE(p.timezone, 'Europe/Moscow') AS timezone
@@ -1085,9 +1098,17 @@ export async function startNotificationScheduler(token: string, db: Pool): Promi
 
       const toNotify = rows.filter((row: any) => {
         const tz = row.timezone || 'Europe/Moscow';
-        const targetDateInTz = targetTime.toLocaleDateString('sv-SE', { timeZone: tz });
-        const targetTimeInTz = targetTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: tz });
-        return row.date === targetDateInTz && row.time === targetTimeInTz;
+        const dateStr = row.date; // YYYY-MM-DD
+        const timeStr = row.time; // HH:MM
+        if (!dateStr || !timeStr || !/^\d{2}:\d{2}$/.test(timeStr)) return false;
+        // Получаем UTC-момент задачи:
+        // 1. Парсим как UTC (суффикс Z)
+        // 2. Узнаём смещение таймзоны пользователя в этот момент
+        // 3. Корректируем
+        const naiveUtc = new Date(`${dateStr}T${timeStr}:00Z`);
+        const tzOffset = getTimezoneOffsetMs(naiveUtc, tz);
+        const taskUtc = new Date(naiveUtc.getTime() - tzOffset);
+        return taskUtc >= windowStart && taskUtc <= windowEnd;
       });
 
       for (const row of toNotify) {
