@@ -787,6 +787,9 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
     return;
   }
 
+  // Обновляем last_active_at — чтобы проактивный планировщик не слал повторно сегодня
+  db.query(`UPDATE user_profiles SET last_active_at = NOW() WHERE user_id = $1`, [webUserId]).catch(() => {});
+
   // Все остальные сообщения → AI (Мысль) — используем webUserId для доступа к данным
   const thread = await loadBotThread(db, webUserId);
   const existingMessages = thread?.messages ?? [];
