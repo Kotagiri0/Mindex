@@ -1165,18 +1165,17 @@ export async function startNotificationScheduler(token: string, db: Pool): Promi
         []
       );
 
+      console.log(`[Notif] tick: кандидатов из БД=${rows.length}, окно ${windowStart.toISOString()}..${windowEnd.toISOString()}`);
+
       const toNotify = rows.filter((row: any) => {
         const tz = row.timezone || 'Europe/Moscow';
         const dateStr = row.date; // YYYY-MM-DD
         const timeStr = row.time; // HH:MM
         if (!dateStr || !timeStr || !/^\d{2}:\d{2}$/.test(timeStr)) return false;
-        // Получаем UTC-момент задачи:
-        // 1. Парсим как UTC (суффикс Z)
-        // 2. Узнаём смещение таймзоны пользователя в этот момент
-        // 3. Корректируем
         const naiveUtc = new Date(`${dateStr}T${timeStr}:00Z`);
         const tzOffset = getTimezoneOffsetMs(naiveUtc, tz);
         const taskUtc = new Date(naiveUtc.getTime() - tzOffset);
+        console.log(`[Notif] задача "${row.name}" date=${dateStr} time=${timeStr} tz=${tz} taskUtc=${taskUtc.toISOString()} попадает=${taskUtc >= windowStart && taskUtc <= windowEnd}`);
         return taskUtc >= windowStart && taskUtc <= windowEnd;
       });
 
