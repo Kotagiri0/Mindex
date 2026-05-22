@@ -579,7 +579,7 @@ const createSession = async (userId: string): Promise<string> => {
 
 // ─── Email OTP auth ───────────────────────────────────────────────────────────
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 function generateOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -615,6 +615,11 @@ app.post("/api/auth/send-otp", async (req, res) => {
     `INSERT INTO email_otp_codes (id, email, code_hash, expires_at) VALUES ($1, $2, $3, $4)`,
     [id, email, hashOtp(otp), expiresAt]
   );
+
+  if (!resend) {
+    console.error('[OTP] RESEND_API_KEY не задан — письмо не отправлено, код:', otp);
+    return res.status(500).json({ error: "Email-сервис не настроен. Обратитесь к администратору." });
+  }
 
   try {
     await resend.emails.send({
