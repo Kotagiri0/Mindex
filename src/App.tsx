@@ -12,6 +12,7 @@ import { Screen, Task, Thread, Settings, LocalUser } from './types';
 import { uuid } from './lib/utils';
 import { sortTasks } from './lib/sortTasks';
 import LocalAuth from './components/LocalAuth';
+import EmailAttachBanner, { shouldShowEmailBanner } from './components/EmailAttachBanner';
 import Onboarding from './components/Onboarding';
 import Dashboard from './components/Dashboard';
 import AIChat from './components/AIChat';
@@ -42,6 +43,10 @@ export default function App() {
   const [pendingMsg, setPendingMsg] = useState('');
   const [threadsSubScreen, setThreadsSubScreen] = useState(false);
   const [isOnboardingChat, setIsOnboardingChat] = useState(false);
+  const [showEmailBanner, setShowEmailBanner] = useState(() => {
+    const user = getCurrentUser();
+    return shouldShowEmailBanner(user?.provider, user?.email);
+  });
 
   const navigateMobile = (next: Screen) => { setScreen(next); if (next !== 'threads') setThreadsSubScreen(false); };
   const [onboardingComplete, setOnboardingComplete] = useState(false);
@@ -176,6 +181,7 @@ export default function App() {
 
   const handleAuthenticated = (user: LocalUser) => {
     setCurrentUser(user);
+    setShowEmailBanner(shouldShowEmailBanner(user.provider, user.email));
   };
 
   const handleLogout = () => {
@@ -267,20 +273,27 @@ export default function App() {
 
   if (isDesktopViewport) {
     return (
-      <DesktopApp
-        tasks={tasks}
-        setTasks={updateTasks}
-        threads={threads}
-        setThreads={updateThreads}
-        settings={settings}
-        setSettings={updateSettings}
-        screen={screen}
-        setScreen={setScreen}
-        curTh={curTh}
-        setCurTh={setCurTh}
-        startNewThread={startNewThread}
-        handleLogout={handleLogout}
-      />
+      <div className="relative">
+        <DesktopApp
+          tasks={tasks}
+          setTasks={updateTasks}
+          threads={threads}
+          setThreads={updateThreads}
+          settings={settings}
+          setSettings={updateSettings}
+          screen={screen}
+          setScreen={setScreen}
+          curTh={curTh}
+          setCurTh={setCurTh}
+          startNewThread={startNewThread}
+          handleLogout={handleLogout}
+        />
+        <AnimatePresence>
+          {showEmailBanner && (
+            <EmailAttachBanner onDismiss={() => setShowEmailBanner(false)} />
+          )}
+        </AnimatePresence>
+      </div>
     );
   }
 
@@ -434,6 +447,12 @@ export default function App() {
           onNewThread={startNewThread}
         />
       )}
+
+      <AnimatePresence>
+        {showEmailBanner && (
+          <EmailAttachBanner onDismiss={() => setShowEmailBanner(false)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

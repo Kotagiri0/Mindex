@@ -1,15 +1,14 @@
-import type { ChangeEvent, FormEvent } from 'react';
+import type { FormEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2 } from 'lucide-react';
 import { LocalUser } from '../types';
-import { loginGoogleUser, loginLocalUser, registerLocalUser } from '../lib/auth';
+import { loginGoogleUser } from '../lib/auth';
+import { storage } from '../lib/storage';
 
 interface LocalAuthProps {
   onAuthenticated: (user: LocalUser) => void;
 }
-
-type Mode = 'login' | 'register';
 
 declare global {
   interface Window {
@@ -71,36 +70,54 @@ const GoogleMark = () => (
   </svg>
 );
 
+const F = "'Random Grotesque', sans-serif";
+const M = "'Muller', sans-serif";
+
+async function sendOtp(email: string): Promise<void> {
+  const res = await fetch('/api/auth/send-otp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Не удалось отправить код');
+}
+
+async function verifyOtp(email: string, otp: string): Promise<LocalUser> {
+  const res = await fetch('/api/auth/verify-otp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, otp }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Неверный код');
+  storage.setSessionToken(data.token);
+  return data.user;
+}
+
 export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
-  const [mode, setMode] = useState<Mode>('register');
-  const [username, setUsername] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [password, setPassword] = useState('');
+  const [step, setStep] = useState<'email' | 'otp'>('email');
+  const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleClientId, setGoogleClientId] = useState<string>(import.meta.env.VITE_GOOGLE_CLIENT_ID || '');
+  const [resendCooldown, setResendCooldown] = useState(0);
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
+  const otpRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (googleClientId) return;
-    let cancelled = false;
-    const loadConfig = async () => {
-      try {
-        const response = await fetch('/api/config');
-        if (!response.ok) return;
-        const data = await response.json().catch(() => null) as { googleClientId?: string } | null;
-        if (!cancelled && data?.googleClientId) setGoogleClientId(data.googleClientId);
-      } catch { /* silent */ }
-    };
-    loadConfig();
-    return () => { cancelled = true; };
+    fetch('/api/config').then(r => r.json()).then(d => {
+      if (d?.googleClientId) setGoogleClientId(d.googleClientId);
+    }).catch(() => {});
   }, [googleClientId]);
 
   useEffect(() => {
     if (!googleClientId || !googleButtonRef.current) return;
     let cancelled = false;
-    const renderGoogleButton = async () => {
+    const render = async () => {
       try {
         await loadGoogleIdentityScript();
         if (cancelled || !googleButtonRef.current || !window.google?.accounts?.id) return;
@@ -113,11 +130,9 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
             try {
               const user = await loginGoogleUser(credential);
               onAuthenticated(user);
-            } catch (authError) {
-              setError(authError instanceof Error ? authError.message : 'Не удалось войти через Google.');
-            } finally {
-              setGoogleLoading(false);
-            }
+            } catch (e) {
+              setError(e instanceof Error ? e.message : 'Не удалось войти через Google.');
+            } finally { setGoogleLoading(false); }
           },
         });
         googleButtonRef.current.innerHTML = '';
@@ -125,32 +140,73 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
         window.google.accounts.id.renderButton(googleButtonRef.current, {
           theme: 'outline', size: 'large', text: 'signin_with', shape: 'pill', width, logo_alignment: 'center',
         });
-      } catch (authError) {
-        if (!cancelled) setError(authError instanceof Error ? authError.message : 'Не удалось загрузить Google вход.');
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Не удалось загрузить Google вход.');
       }
     };
-    renderGoogleButton();
+    render();
     return () => {
       cancelled = true;
       if (googleButtonRef.current) googleButtonRef.current.innerHTML = '';
     };
   }, [googleClientId, onAuthenticated]);
 
-  const submit = async (e?: FormEvent<HTMLFormElement>) => {
+  // Автофокус на поле кода при переходе на шаг OTP
+  useEffect(() => {
+    if (step === 'otp') setTimeout(() => otpRef.current?.focus(), 100);
+  }, [step]);
+
+  // Таймер повторной отправки
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
+
+  const handleSendOtp = async (e?: FormEvent) => {
     e?.preventDefault();
-    if (loading || googleLoading) return;
+    if (loading) return;
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setError('Введи корректный email');
+      return;
+    }
     setError('');
     setLoading(true);
     try {
-      const user = mode === 'register'
-        ? await registerLocalUser({ username, password, displayName })
-        : await loginLocalUser({ username, password });
+      await sendOtp(trimmed);
+      setStep('otp');
+      setResendCooldown(60);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Ошибка');
+    } finally { setLoading(false); }
+  };
+
+  const handleVerifyOtp = async (e?: FormEvent) => {
+    e?.preventDefault();
+    if (loading) return;
+    const trimmedOtp = otp.trim();
+    if (trimmedOtp.length !== 6) { setError('Код — 6 цифр'); return; }
+    setError('');
+    setLoading(true);
+    try {
+      const user = await verifyOtp(email.trim().toLowerCase(), trimmedOtp);
       onAuthenticated(user);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось выполнить вход.');
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Неверный код');
+    } finally { setLoading(false); }
+  };
+
+  const handleResend = async () => {
+    if (resendCooldown > 0 || loading) return;
+    setError('');
+    setLoading(true);
+    try {
+      await sendOtp(email.trim().toLowerCase());
+      setResendCooldown(60);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Ошибка');
+    } finally { setLoading(false); }
   };
 
   return (
@@ -166,149 +222,160 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
       >
         <MysliLogo />
 
-        <form
-          onSubmit={submit}
-          className="w-full rounded-[32px] px-4 pt-4 pb-5 flex flex-col gap-3"
-          style={{ background: 'rgba(255,255,255,0.5)', boxShadow: '0 2px 16px rgba(0,0,0,0.07)' }}
-        >
-          {/* Переключатель */}
-          <div className="flex w-full rounded-full p-1" style={{ background: 'rgba(0,0,0,0.06)' }}>
-            {(['register', 'login'] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => { setMode(m); setError(''); }}
-                className="relative flex-1 h-11 rounded-full transition-all duration-200"
-                style={{
-                  fontFamily: "'Random Grotesque', sans-serif",
-                  fontSize: '1rem',
-                  color: mode === m ? 'rgba(11,13,16,0.9)' : 'rgba(11,13,16,0.5)',
-                  background: mode === m ? '#ffffff' : 'transparent',
-                  boxShadow: mode === m ? '0 1px 6px rgba(0,0,0,0.14)' : 'none',
-                }}
-              >
-                {m === 'register' ? 'регистрация' : 'вход'}
-              </button>
-            ))}
-          </div>
+        <AnimatePresence mode="wait">
 
-          {/* Имя / логин */}
-          <div className="w-full h-14 rounded-[24px] flex items-center px-5" style={{ background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.1)' }}>
-            <input
-              value={mode === 'register' ? displayName : username}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                mode === 'register' ? setDisplayName(e.target.value) : setUsername(e.target.value)
-              }
-              placeholder={mode === 'register' ? 'Как тебя зовут?' : 'Имя пользователя'}
-              className="w-full bg-transparent outline-none"
-              style={{ fontFamily: "'Random Grotesque', sans-serif", fontSize: '1rem', color: 'rgba(11,13,16,0.8)' }}
-              autoComplete={mode === 'register' ? 'name' : 'username'}
-            />
-          </div>
-
-          {/* Username при регистрации */}
-          <AnimatePresence>
-            {mode === 'register' && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 56 }}
-                exit={{ opacity: 0, height: 0 }}
-                className="w-full rounded-[24px] flex items-center px-5 overflow-hidden"
-                style={{ background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.1)' }}
-              >
-                <input
-                  value={username}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setUsername(e.target.value)}
-                  placeholder="Имя для ИИ"
-                  className="w-full bg-transparent outline-none"
-                  style={{ fontFamily: "'Random Grotesque', sans-serif", fontSize: '1rem', color: 'rgba(11,13,16,0.8)' }}
-                  autoComplete="username"
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Пароль */}
-          <div className="w-full h-14 rounded-[24px] flex items-center px-5" style={{ background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.1)' }}>
-            <input
-              value={password}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-              placeholder="Пароль, минимум 4 символа"
-              type="password"
-              className="w-full bg-transparent outline-none"
-              style={{ fontFamily: "'Random Grotesque', sans-serif", fontSize: '1rem', color: 'rgba(11,13,16,0.8)' }}
-              autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-              required
-            />
-          </div>
-
-          {/* Ошибка */}
-          <AnimatePresence>
-            {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="rounded-2xl px-4 py-2 text-sm"
-                style={{
-                  background: 'rgba(220,38,38,0.08)',
-                  border: '1px solid rgba(220,38,38,0.3)',
-                  color: '#dc2626',
-                  fontFamily: "'Random Grotesque', sans-serif",
-                }}
-              >
-                {error}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Кнопка */}
-          <button
-            type="submit"
-            disabled={loading || googleLoading}
-            className="w-full h-14 rounded-full flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
-            style={{
-              background: '#222224',
-              fontFamily: "'Muller', sans-serif",
-              fontSize: '1rem',
-              fontWeight: 500,
-              color: '#f8f8f8',
-            }}
-          >
-            {loading && <Loader2 size={18} className="animate-spin" />}
-            {mode === 'register' ? 'Создать аккаунт' : 'Войти'}
-          </button>
-
-          {/* Google вход */}
-          {googleClientId ? (
-            <div className="w-full flex flex-col items-center gap-2">
-              <div ref={googleButtonRef} className="w-full flex items-center justify-center min-h-[56px]" />
-              {googleLoading && (
-                <div className="flex items-center gap-2 text-sm" style={{ color: 'rgba(11,13,16,0.5)', fontFamily: "'Random Grotesque', sans-serif" }}>
-                  <Loader2 size={16} className="animate-spin" />
-                  Проверяем аккаунт...
-                </div>
-              )}
-            </div>
-          ) : (
-            <button
-              type="button"
-              disabled
-              className="w-full h-14 rounded-full flex items-center justify-center gap-3 opacity-50"
-              style={{
-                background: '#ffffff',
-                border: '1.5px solid rgba(0,0,0,0.1)',
-                fontFamily: "'Muller', sans-serif",
-                fontSize: '1rem',
-                fontWeight: 500,
-                color: '#222224',
-              }}
+          {/* ── Шаг 1: Email ── */}
+          {step === 'email' && (
+            <motion.form
+              key="email-step"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.25 }}
+              onSubmit={handleSendOtp}
+              className="w-full rounded-[32px] px-4 pt-4 pb-5 flex flex-col gap-3"
+              style={{ background: 'rgba(255,255,255,0.5)', boxShadow: '0 2px 16px rgba(0,0,0,0.07)' }}
             >
-              <GoogleMark />
-              Войти с помощью Google
-            </button>
+              <div className="w-full h-14 rounded-[24px] flex items-center px-5" style={{ background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.1)' }}>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="Твой email"
+                  autoComplete="email"
+                  className="w-full bg-transparent outline-none"
+                  style={{ fontFamily: F, fontSize: '1rem', color: 'rgba(11,13,16,0.8)' }}
+                />
+              </div>
+
+              <AnimatePresence>
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    className="rounded-2xl px-4 py-2 text-sm"
+                    style={{ background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.3)', color: '#dc2626', fontFamily: F }}
+                  >
+                    {error}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <button
+                type="submit"
+                disabled={loading || googleLoading}
+                className="w-full h-14 rounded-full flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
+                style={{ background: '#222224', fontFamily: M, fontSize: '1rem', fontWeight: 500, color: '#f8f8f8' }}
+              >
+                {loading && <Loader2 size={18} className="animate-spin" />}
+                Продолжить
+              </button>
+
+              {/* Google */}
+              {googleClientId ? (
+                <div className="w-full flex flex-col items-center gap-2">
+                  <div ref={googleButtonRef} className="w-full flex items-center justify-center min-h-[56px]" />
+                  {googleLoading && (
+                    <div className="flex items-center gap-2 text-sm" style={{ color: 'rgba(11,13,16,0.5)', fontFamily: F }}>
+                      <Loader2 size={16} className="animate-spin" />
+                      Проверяем аккаунт...
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button
+                  type="button" disabled
+                  className="w-full h-14 rounded-full flex items-center justify-center gap-3 opacity-50"
+                  style={{ background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.1)', fontFamily: M, fontSize: '1rem', fontWeight: 500, color: '#222224' }}
+                >
+                  <GoogleMark />
+                  Войти с помощью Google
+                </button>
+              )}
+            </motion.form>
           )}
-        </form>
+
+          {/* ── Шаг 2: OTP ── */}
+          {step === 'otp' && (
+            <motion.form
+              key="otp-step"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.25 }}
+              onSubmit={handleVerifyOtp}
+              className="w-full rounded-[32px] px-4 pt-4 pb-5 flex flex-col gap-3"
+              style={{ background: 'rgba(255,255,255,0.5)', boxShadow: '0 2px 16px rgba(0,0,0,0.07)' }}
+            >
+              <div style={{ fontFamily: F, fontSize: '0.95rem', color: 'rgba(11,13,16,0.55)', textAlign: 'center', padding: '4px 0 8px' }}>
+                Код отправлен на <span style={{ color: '#222224', fontWeight: 500 }}>{email}</span>
+              </div>
+
+              <div className="w-full h-14 rounded-[24px] flex items-center px-5" style={{ background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.1)' }}>
+                <input
+                  ref={otpRef}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={otp}
+                  onChange={e => {
+                    const v = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    setOtp(v);
+                    if (v.length === 6) {
+                      // автосабмит при вводе 6 цифр
+                      setTimeout(() => handleVerifyOtp(), 0);
+                    }
+                  }}
+                  placeholder="6-значный код"
+                  autoComplete="one-time-code"
+                  className="w-full bg-transparent outline-none text-center tracking-[0.3em]"
+                  style={{ fontFamily: F, fontSize: '1.4rem', color: 'rgba(11,13,16,0.8)' }}
+                />
+              </div>
+
+              <AnimatePresence>
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    className="rounded-2xl px-4 py-2 text-sm"
+                    style={{ background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.3)', color: '#dc2626', fontFamily: F }}
+                  >
+                    {error}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <button
+                type="submit"
+                disabled={loading || otp.length !== 6}
+                className="w-full h-14 rounded-full flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
+                style={{ background: '#222224', fontFamily: M, fontSize: '1rem', fontWeight: 500, color: '#f8f8f8' }}
+              >
+                {loading && <Loader2 size={18} className="animate-spin" />}
+                Войти
+              </button>
+
+              <div className="flex items-center justify-between px-1">
+                <button
+                  type="button"
+                  onClick={() => { setStep('email'); setOtp(''); setError(''); }}
+                  style={{ fontFamily: F, fontSize: '0.9rem', color: 'rgba(11,13,16,0.4)', background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                  Изменить email
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resendCooldown > 0 || loading}
+                  style={{ fontFamily: F, fontSize: '0.9rem', color: resendCooldown > 0 ? 'rgba(11,13,16,0.3)' : 'rgba(11,13,16,0.6)', background: 'none', border: 'none', cursor: resendCooldown > 0 ? 'default' : 'pointer' }}
+                >
+                  {resendCooldown > 0 ? `Повторить через ${resendCooldown}с` : 'Отправить снова'}
+                </button>
+              </div>
+            </motion.form>
+          )}
+
+        </AnimatePresence>
       </motion.div>
     </div>
   );
