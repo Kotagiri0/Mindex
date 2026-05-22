@@ -17,6 +17,7 @@ import {
   collectDefaultMetrics,
 } from "prom-client";
 import { verifyGoogleIdToken } from './src/lib/google-auth.ts';
+import { Resend } from 'resend';
 
 dotenv.config();
 
@@ -444,6 +445,20 @@ const ensureAuthSchema = async () => {
     );
   `);
   await db.query(`CREATE INDEX IF NOT EXISTS user_sessions_user_id_idx ON user_sessions (user_id);`);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS email_otp_codes (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      code_hash TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await db.query(`CREATE INDEX IF NOT EXISTS email_otp_email_idx ON email_otp_codes (email);`);
+  // Rate limit: не больше 5 OTP на email за час
+  await db.query(`CREATE INDEX IF NOT EXISTS email_otp_created_idx ON email_otp_codes (email, created_at);`);
 };
 
 // Генерация одноразового кода для привязки Telegram
@@ -561,6 +576,152 @@ const createSession = async (userId: string): Promise<string> => {
   );
   return token;
 };
+
+// ─── Email OTP auth ───────────────────────────────────────────────────────────
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+function generateOtp(): string {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function hashOtp(otp: string): string {
+  return crypto.createHash('sha256').update(otp).digest('hex');
+}
+
+app.post("/api/auth/send-otp", async (req, res) => {
+  if (!db) return res.status(500).json({ error: "БД не настроена." });
+
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: "Некорректный email." });
+  }
+
+  // Rate limit: не больше 5 запросов в час
+  const { rows: recentRows } = await db.query(
+    `SELECT COUNT(*) AS cnt FROM email_otp_codes
+     WHERE email = $1 AND created_at > NOW() - INTERVAL '1 hour'`,
+    [email]
+  );
+  if (parseInt(recentRows[0].cnt) >= 5) {
+    return res.status(429).json({ error: "Слишком много попыток. Подожди час." });
+  }
+
+  const otp = generateOtp();
+  const id = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 минут
+
+  await db.query(
+    `INSERT INTO email_otp_codes (id, email, code_hash, expires_at) VALUES ($1, $2, $3, $4)`,
+    [id, email, hashOtp(otp), expiresAt]
+  );
+
+  try {
+    await resend.emails.send({
+      from: 'Мысль <hello@mysle.ru>',
+      to: email,
+      subject: `${otp} — код для входа в Мысль`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 24px; color: #222224;">
+          <div style="font-size: 32px; font-weight: 700; letter-spacing: -1px; margin-bottom: 24px;">✕</div>
+          <p style="font-size: 16px; margin-bottom: 8px;">Твой код для входа:</p>
+          <div style="font-size: 40px; font-weight: 700; letter-spacing: 8px; margin: 24px 0;">${otp}</div>
+          <p style="font-size: 14px; color: rgba(34,34,36,0.5);">Код действует 15 минут. Если ты не запрашивал вход — просто игнорируй это письмо.</p>
+        </div>
+      `,
+    });
+  } catch (e: any) {
+    console.error('[OTP] Ошибка отправки письма:', e?.message);
+    return res.status(500).json({ error: "Не удалось отправить письмо." });
+  }
+
+  return res.json({ ok: true });
+});
+
+app.post("/api/auth/verify-otp", async (req, res) => {
+  if (!db) return res.status(500).json({ error: "БД не настроена." });
+
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const otp = String(req.body?.otp || '').trim();
+
+  if (!email || !otp) return res.status(400).json({ error: "Укажи email и код." });
+
+  // Ищем валидный неиспользованный OTP
+  const { rows } = await db.query(
+    `SELECT id FROM email_otp_codes
+     WHERE email = $1 AND code_hash = $2
+       AND used = FALSE AND expires_at > NOW()
+     ORDER BY created_at DESC LIMIT 1`,
+    [email, hashOtp(otp)]
+  );
+
+  if (rows.length === 0) {
+    return res.status(401).json({ error: "Неверный или истёкший код." });
+  }
+
+  // Помечаем код использованным
+  await db.query(`UPDATE email_otp_codes SET used = TRUE WHERE id = $1`, [rows[0].id]);
+
+  // Ищем существующего пользователя по email
+  const { rows: existingUsers } = await db.query(
+    `SELECT id, username, display_name, provider, email, avatar_url, created_at
+     FROM auth_users WHERE email = $1 LIMIT 1`,
+    [email]
+  );
+
+  let user;
+  if (existingUsers.length > 0) {
+    // Пользователь существует — просто входим
+    user = existingUsers[0];
+  } else {
+    // Новый пользователь — создаём
+    const userId = crypto.randomUUID();
+    const username = email.split('@')[0].replace(/[^a-z0-9_]/gi, '').slice(0, 30) + '_' + userId.slice(0, 6);
+    const displayName = email.split('@')[0];
+    const { rows: newUser } = await db.query(
+      `INSERT INTO auth_users (id, username, display_name, password_hash, provider, email)
+       VALUES ($1, $2, $3, '', 'email', $4)
+       RETURNING id, username, display_name, provider, email, avatar_url, created_at`,
+      [userId, username, displayName, email]
+    );
+    user = newUser[0];
+    createSelfKnowledgeSkill(userId);
+  }
+
+  const token = await createSession(user.id);
+  return res.json({ user: formatAuthUser(user), token });
+});
+
+// Привязка email к существующему local-аккаунту (для старых пользователей)
+app.post("/api/auth/attach-email", requireAuth, async (req, res) => {
+  if (!db) return res.status(500).json({ error: "БД не настроена." });
+  const userId = (req as any).userId;
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const otp = String(req.body?.otp || '').trim();
+
+  if (!email || !otp) return res.status(400).json({ error: "Укажи email и код." });
+
+  const { rows } = await db.query(
+    `SELECT id FROM email_otp_codes
+     WHERE email = $1 AND code_hash = $2
+       AND used = FALSE AND expires_at > NOW()
+     ORDER BY created_at DESC LIMIT 1`,
+    [email, hashOtp(otp)]
+  );
+  if (rows.length === 0) return res.status(401).json({ error: "Неверный или истёкший код." });
+
+  // Проверяем что email не занят другим аккаунтом
+  const { rows: taken } = await db.query(
+    `SELECT id FROM auth_users WHERE email = $1 AND id != $2 LIMIT 1`,
+    [email, userId]
+  );
+  if (taken.length > 0) return res.status(409).json({ error: "Этот email уже привязан к другому аккаунту." });
+
+  await db.query(`UPDATE email_otp_codes SET used = TRUE WHERE id = $1`, [rows[0].id]);
+  await db.query(`UPDATE auth_users SET email = $1, provider = 'email' WHERE id = $2`, [email, userId]);
+
+  return res.json({ ok: true });
+});
 
 app.post("/api/auth/register", async (req, res) => {
   if (!db) {
