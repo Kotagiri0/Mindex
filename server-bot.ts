@@ -10,6 +10,13 @@ import type { Express } from 'express';
 import type { Pool } from 'pg';
 import crypto from 'crypto';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
+const execFileAsync = promisify(execFile);
 
 const proxyUrlGlobal = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
 if (proxyUrlGlobal) {
@@ -790,7 +797,13 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
   let userText = message.text?.trim() || message.caption?.trim() || '';
 
   if (message.voice) {
+    let tmpIn = '';
+    let tmpOut = '';
     try {
+      const vsegptKey = process.env.VSEGPT_API_KEY;
+      if (!vsegptKey) throw new Error('VSEGPT_API_KEY не задан');
+
+      // Скачиваем ogg от Telegram
       const fileRes = await tgApi(token, 'getFile', { file_id: message.voice.file_id });
       const filePath = fileRes?.result?.file_path;
       if (!filePath) throw new Error('file_path не получен');
@@ -800,19 +813,27 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
       if (!audioRes.ok) throw new Error(`Ошибка скачивания аудио: ${audioRes.status}`);
       const audioBuffer = await audioRes.arrayBuffer();
 
-      const formData = new FormData();
-      formData.append('file', new Blob([audioBuffer], { type: 'audio/ogg' }), 'voice.ogg');
-      formData.append('model', 'whisper-large-v3-turbo');
-      formData.append('language', 'ru');
-      formData.append('response_format', 'json');
+      // Сохраняем ogg во временный файл
+      tmpIn  = path.join(os.tmpdir(), `tg_voice_${Date.now()}.ogg`);
+      tmpOut = path.join(os.tmpdir(), `tg_voice_${Date.now()}.wav`);
+      fs.writeFileSync(tmpIn, Buffer.from(audioBuffer));
 
-      const groqKey = process.env.GROQ_API_KEY || apiKey;
-      const whisperRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+      // Конвертируем ogg → wav через ffmpeg
+      await execFileAsync('ffmpeg', ['-y', '-i', tmpIn, '-vn', '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le', '-f', 'wav', tmpOut]);
+      const wavBuffer = fs.readFileSync(tmpOut);
+
+      // Транскрибируем через VseGPT (тот же эндпоинт что и в вебе)
+      const formData = new FormData();
+      formData.append('file', new Blob([wavBuffer], { type: 'audio/wav' }), 'audio.wav');
+      formData.append('model', 'stt-openai/whisper-v3-turbo');
+      formData.append('language', 'ru');
+
+      const whisperRes = await fetch('https://api.vsegpt.ru/v1/audio/transcriptions', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${groqKey}` },
+        headers: { 'Authorization': `Bearer ${vsegptKey}` },
         body: formData,
       });
-      if (!whisperRes.ok) throw new Error(`Whisper error: ${whisperRes.status}`);
+      if (!whisperRes.ok) throw new Error(`VseGPT error: ${whisperRes.status}`);
       const whisperData: any = await whisperRes.json();
       userText = whisperData.text?.trim() || '';
       console.log(`[Bot] Транскрипция: "${userText}"`);
@@ -820,6 +841,9 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
       console.error('[Bot] Ошибка транскрипции:', e?.message);
       await tgApi(token, 'sendMessage', { chat_id: chatId, text: 'Не смог распознать голосовое, попробуй ещё раз' });
       return;
+    } finally {
+      if (tmpIn  && fs.existsSync(tmpIn))  fs.unlinkSync(tmpIn);
+      if (tmpOut && fs.existsSync(tmpOut)) fs.unlinkSync(tmpOut);
     }
   }
 
