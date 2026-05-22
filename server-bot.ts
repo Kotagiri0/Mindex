@@ -1118,12 +1118,20 @@ export function startProactiveScheduler(token: string, db: Pool): void {
   scheduleNext();
 }
 
-// Возвращает смещение таймзоны в миллисекундах для данного момента
-// Пример: для Europe/Moscow (UTC+3) вернёт -3*60*60*1000 = -10800000
-function getTimezoneOffsetMs(date: Date, tz: string): number {
-  const utcStr = date.toLocaleString('en-US', { timeZone: 'UTC' });
-  const tzStr  = date.toLocaleString('en-US', { timeZone: tz });
-  return new Date(utcStr).getTime() - new Date(tzStr).getTime();
+// Конвертирует локальное время пользователя (date + time строки) в UTC Date
+// Пример: "2026-05-22", "15:00", "Europe/Moscow" → 2026-05-22T12:00:00.000Z
+function localTimeToUtc(dateStr: string, timeStr: string, tz: string): Date {
+  // Берём произвольный момент и смотрим как en-US форматирует его в нужной TZ
+  // чтобы вычислить смещение. Используем сам момент задачи.
+  const isoStr = `${dateStr}T${timeStr}:00`;
+  // Форматируем как будто время локальное в нужной TZ → получаем UTC
+  // Trick: создаём Date из строки без Z (local), потом корректируем на offset TZ
+  const assumed = new Date(isoStr); // интерпретируется как LOCAL время сервера (UTC на сервере)
+  // Узнаём какое время показывает assumed в нужной TZ
+  const inTz = new Date(assumed.toLocaleString('en-US', { timeZone: tz }));
+  // Разница = смещение TZ от UTC сервера
+  const offset = assumed.getTime() - inTz.getTime();
+  return new Date(assumed.getTime() + offset);
 }
 
 export async function startNotificationScheduler(token: string, db: Pool): Promise<void> {
@@ -1172,9 +1180,7 @@ export async function startNotificationScheduler(token: string, db: Pool): Promi
         const dateStr = row.date; // YYYY-MM-DD
         const timeStr = row.time; // HH:MM
         if (!dateStr || !timeStr || !/^\d{2}:\d{2}$/.test(timeStr)) return false;
-        const naiveUtc = new Date(`${dateStr}T${timeStr}:00Z`);
-        const tzOffset = getTimezoneOffsetMs(naiveUtc, tz);
-        const taskUtc = new Date(naiveUtc.getTime() - tzOffset);
+        const taskUtc = localTimeToUtc(dateStr, timeStr, tz);
         console.log(`[Notif] задача "${row.name}" date=${dateStr} time=${timeStr} tz=${tz} taskUtc=${taskUtc.toISOString()} попадает=${taskUtc >= windowStart && taskUtc <= windowEnd}`);
         return taskUtc >= windowStart && taskUtc <= windowEnd;
       });
