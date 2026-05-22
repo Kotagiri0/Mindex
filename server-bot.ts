@@ -89,6 +89,11 @@ function getSystemInstruction(tz = 'Europe/Moscow'): string {
 — delete_task: когда нужно удалить задачу
 — get_notes: когда пользователь спрашивает о заметках, просит найти что-то в заметках
 — create_note: когда пользователь просит сохранить что-то как заметку
+— set_reminder: когда пользователь просит напомнить о чём-либо через X минут/часов, или в конкретное время
+
+НАПОМИНАНИЯ
+Если пользователь пишет "напомни через 20 минут", "напомни в 15:30", "поставь напоминание" — используй set_reminder.
+Если пользователь создаёт задачу со временем и НЕ упомянул напоминание — спроси один раз: "Напомнить за 15 минут?" (только если задача сегодня или завтра).
 
 Текущие дата и время: ${dateStr}, ${timeStr} (Москва)`;
 }
@@ -182,6 +187,22 @@ const botTools: any[] = [
           content: { type: 'string', description: 'Содержимое заметки.' }
         },
         required: ['title', 'content']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_reminder',
+      description: 'Установить напоминание. Используй когда пользователь просит напомнить через X минут/часов или в конкретное время, а также когда соглашается на предложение напомнить.',
+      parameters: {
+        type: 'object',
+        properties: {
+          task_id: { type: 'string', description: 'ID задачи, к которой привязать напоминание (если есть).' },
+          remind_at_iso: { type: 'string', description: 'Дата и время напоминания в ISO 8601 (например 2025-05-22T15:30:00). Вычисли из "через X минут" используя текущее время из системного промпта.' },
+          label: { type: 'string', description: 'Текст напоминания — что именно напомнить.' }
+        },
+        required: ['remind_at_iso', 'label']
       }
     }
   }
@@ -338,6 +359,35 @@ async function executeTool(name: string, args: any, db: Pool, userId: string): P
         [id, userId, title, content.slice(0, 100), content, Date.now()]
       );
       return { success: true, id, title };
+    }
+    case 'set_reminder': {
+      const remindAt = new Date(String(args.remind_at_iso));
+      if (isNaN(remindAt.getTime())) return { error: 'Некорректное время напоминания' };
+
+      // Добавляем колонку если ещё нет (идемпотентно)
+      await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS remind_at TIMESTAMPTZ`).catch(() => {});
+      await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS remind_notified_at TIMESTAMPTZ`).catch(() => {});
+
+      if (args.task_id) {
+        // Привязываем к существующей задаче
+        await db.query(
+          `UPDATE user_tasks SET remind_at = $1, remind_notified_at = NULL WHERE id = $2 AND user_id = $3`,
+          [remindAt.toISOString(), String(args.task_id), userId]
+        );
+        return { success: true, remind_at: remindAt.toISOString() };
+      } else {
+        // Создаём задачу-напоминание
+        const id = crypto.randomUUID();
+        const label = String(args.label);
+        const taskDate = remindAt.toLocaleDateString('sv-SE', { timeZone: userTz });
+        const taskTime = remindAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: userTz });
+        await db.query(
+          `INSERT INTO user_tasks (id, user_id, name, time, date, done, type, subtasks, created_at, updated_at, remind_at)
+           VALUES ($1, $2, $3, $4, $5, false, 'regular', '[]'::jsonb, NOW(), NOW(), $6)`,
+          [id, userId, label, taskTime, taskDate, remindAt.toISOString()]
+        );
+        return { success: true, id, remind_at: remindAt.toISOString() };
+      }
     }
     default:
       return { error: 'Unknown tool' };
@@ -999,13 +1049,27 @@ export function startProactiveScheduler(token: string, db: Pool): void {
 export async function startNotificationScheduler(token: string, db: Pool): Promise<void> {
   const REMIND_BEFORE_MIN = 15;
 
+  // Добавляем колонки при старте (идемпотентно)
+  await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS remind_at TIMESTAMPTZ`).catch(() => {});
+  await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS remind_notified_at TIMESTAMPTZ`).catch(() => {});
+
+  const sendNotification = async (chatId: string, text: string, taskId: string, column: 'notified_at' | 'remind_notified_at') => {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, tgFetchOptions({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text }),
+    }));
+    await db.query(`UPDATE user_tasks SET ${column} = NOW() WHERE id = $1`, [taskId]);
+  };
+
   const tick = async () => {
     try {
       const now = new Date();
       const targetTime = new Date(now.getTime() + REMIND_BEFORE_MIN * 60 * 1000);
 
+      // ── 1. Напоминания за 15 минут до задачи с временем ──────────────────────
       const { rows } = await db.query(
-        `SELECT t.id, t.name, t.user_id, p.telegram_chat_id,
+        `SELECT t.id, t.name, t.date, t.time, t.user_id, p.telegram_chat_id,
                 COALESCE(p.timezone, 'Europe/Moscow') AS timezone
          FROM user_tasks t
          JOIN user_profiles p ON p.user_id = t.user_id
@@ -1018,28 +1082,46 @@ export async function startNotificationScheduler(token: string, db: Pool): Promi
 
       const toNotify = rows.filter((row: any) => {
         const tz = row.timezone || 'Europe/Moscow';
-        const todayInTz = targetTime.toLocaleDateString('sv-SE', { timeZone: tz });
-        const timeInTz = targetTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: tz });
-        return row.date === todayInTz && row.time === timeInTz;
+        const targetDateInTz = targetTime.toLocaleDateString('sv-SE', { timeZone: tz });
+        const targetTimeInTz = targetTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: tz });
+        return row.date === targetDateInTz && row.time === targetTimeInTz;
       });
 
       for (const row of toNotify) {
         try {
-          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, tgFetchOptions({
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: row.telegram_chat_id, text: `⏰ Через ${REMIND_BEFORE_MIN} минут: ${row.name}` }),
-          }));
-          await db.query(`UPDATE user_tasks SET notified_at = NOW() WHERE id = $1`, [row.id]);
+          await sendNotification(row.telegram_chat_id, `⏰ Через ${REMIND_BEFORE_MIN} минут: ${row.name}`, row.id, 'notified_at');
         } catch (e: any) {
-          console.error('[Notif] Ошибка отправки:', e?.message);
+          console.error('[Notif] Ошибка отправки (time):', e?.message);
         }
       }
+
+      // ── 2. Плавающие напоминания через remind_at ─────────────────────────────
+      const { rows: remindRows } = await db.query(
+        `SELECT t.id, t.name, t.remind_at, t.user_id, p.telegram_chat_id
+         FROM user_tasks t
+         JOIN user_profiles p ON p.user_id = t.user_id
+         WHERE t.done = false
+           AND p.telegram_chat_id IS NOT NULL
+           AND t.remind_at IS NOT NULL
+           AND t.remind_at <= NOW()
+           AND (t.remind_notified_at IS NULL OR t.remind_notified_at < t.remind_at)`,
+        []
+      );
+
+      for (const row of remindRows) {
+        try {
+          await sendNotification(row.telegram_chat_id, `🔔 Напоминание: ${row.name}`, row.id, 'remind_notified_at');
+        } catch (e: any) {
+          console.error('[Notif] Ошибка отправки (remind_at):', e?.message);
+        }
+      }
+
     } catch (e: any) {
       console.error('[Notif] Ошибка планировщика:', e?.message);
     }
   };
 
   setInterval(tick, 60_000);
+  tick(); // первый тик сразу при старте
   console.log('[Notif] Планировщик уведомлений запущен (интервал 1 мин)');
 }
