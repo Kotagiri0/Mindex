@@ -51,13 +51,39 @@ def fetch_stats() -> dict:
                   (SELECT COUNT(*) FROM user_threads
                      WHERE created_at >= (EXTRACT(EPOCH FROM NOW() - INTERVAL '7 days') * 1000)::bigint) AS threads_7d,
                   (SELECT COUNT(DISTINCT user_id) FROM user_threads
-                     WHERE updated_at >= NOW() - INTERVAL '7 days')                              AS active_chatters_7d
+                     WHERE updated_at >= NOW() - INTERVAL '7 days')                              AS active_chatters_7d,
+
+                  -- Retention 7d: из тех кто зарегался 7+ дней назад, сколько вернулись за 7 дней
+                  (SELECT COUNT(*) FROM auth_users
+                     WHERE created_at <= NOW() - INTERVAL '7 days')                              AS cohort_7d,
+                  (SELECT COUNT(*) FROM auth_users a
+                     JOIN user_profiles p ON p.user_id = a.id
+                     WHERE a.created_at <= NOW() - INTERVAL '7 days'
+                       AND p.last_active_at >= NOW() - INTERVAL '7 days')                        AS retained_7d,
+
+                  -- Telegram-интеграция
+                  (SELECT COUNT(*) FROM user_profiles)                                           AS total_profiles,
+                  (SELECT COUNT(*) FROM user_profiles
+                     WHERE telegram_chat_id IS NOT NULL)                                         AS tg_connected,
+
+                  -- Всего сообщений Мысли
+                  (SELECT COALESCE(SUM(
+                     (SELECT COUNT(*) FROM jsonb_array_elements(messages) AS m
+                      WHERE m->>'role' = 'assistant')
+                  ), 0) FROM user_threads
+                   WHERE messages IS NOT NULL AND jsonb_array_length(messages) > 0)              AS total_assistant_messages
             """)
             return dict(cur.fetchone())
 
 
 def format_stats(s: dict) -> str:
     dau_wau = f"{round(s['dau'] / s['wau'] * 100)}%" if s['wau'] else "—"
+    cohort = s['cohort_7d'] or 0
+    retained = s['retained_7d'] or 0
+    retention_pct = f"{round(retained / cohort * 100)}%" if cohort else "недостаточно данных"
+    tg_total = s['total_profiles'] or 0
+    tg_conn = s['tg_connected'] or 0
+    tg_pct = f"{round(tg_conn / tg_total * 100)}%" if tg_total else "—"
     now_msk = datetime.now(MSK).strftime("%d.%m.%Y %H:%M МСК")
     return (
         f"📊 *Mindex — метрики продукта*\n"
@@ -71,11 +97,18 @@ def format_stats(s: dict) -> str:
         f"  WAU: `{s['wau']}`\n"
         f"  DAU/WAU: `{dau_wau}`\n"
         f"  Активных в чате за 7д: `{s['active_chatters_7d']}`\n\n"
+        f"📈 *Retention 7d*\n"
+        f"  Когорта (7д+): `{cohort}`\n"
+        f"  Вернулись: `{retained}` — `{retention_pct}`\n\n"
+        f"✉️ *Telegram-бот*\n"
+        f"  Подключили: `{tg_conn}` из `{tg_total}` — `{tg_pct}`\n\n"
+        f"💬 *Мысль говорит*\n"
+        f"  Сообщений всего: `{s['total_assistant_messages']}`\n\n"
         f"✅ *Задачи*\n"
         f"  Всего: `{s['total_tasks']}`\n"
         f"  За сутки: `+{s['tasks_1d']}`\n"
         f"  За неделю: `+{s['tasks_7d']}`\n\n"
-        f"💬 *Треды с Мыслью*\n"
+        f"🗂 *Треды с Мыслью*\n"
         f"  Всего: `{s['total_threads']}`\n"
         f"  За неделю: `+{s['threads_7d']}`"
     )
