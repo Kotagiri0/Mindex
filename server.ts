@@ -579,6 +579,7 @@ const createSession = async (userId: string): Promise<string> => {
 
 // ─── Email OTP auth ───────────────────────────────────────────────────────────
 
+console.log('[boot] RESEND_API_KEY present:', !!process.env.RESEND_API_KEY);
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 function generateOtp(): string {
