@@ -48,6 +48,7 @@ export default function EmailAttachBanner({ onDismiss }: EmailAttachBannerProps)
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const otpRef = useRef<HTMLInputElement | null>(null);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -83,9 +84,10 @@ export default function EmailAttachBanner({ onDismiss }: EmailAttachBannerProps)
   };
 
   const handleAttach = async (code = otp) => {
-    if (loading) return;
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     const trimmedOtp = code.trim();
-    if (trimmedOtp.length !== 6) { setError('Код — 6 цифр'); return; }
+    if (trimmedOtp.length !== 6) { setError('Код — 6 цифр'); submittingRef.current = false; return; }
     setError('');
     setLoading(true);
     try {
@@ -96,6 +98,7 @@ export default function EmailAttachBanner({ onDismiss }: EmailAttachBannerProps)
       setError(e instanceof Error ? e.message : 'Неверный код');
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   };
 

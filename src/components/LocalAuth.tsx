@@ -108,6 +108,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
   const [resendCooldown, setResendCooldown] = useState(0);
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
   const otpRef = useRef<HTMLInputElement | null>(null);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     if (googleClientId) return;
@@ -186,9 +187,10 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
 
   const handleVerifyOtp = async (e?: FormEvent) => {
     e?.preventDefault();
-    if (loading) return;
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     const trimmedOtp = otp.trim();
-    if (trimmedOtp.length !== 6) { setError('Код — 6 цифр'); return; }
+    if (trimmedOtp.length !== 6) { setError('Код — 6 цифр'); submittingRef.current = false; return; }
     setError('');
     setLoading(true);
     try {
@@ -196,7 +198,10 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
       onAuthenticated(user);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Неверный код');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+      submittingRef.current = false;
+    }
   };
 
   const handleResend = async () => {
