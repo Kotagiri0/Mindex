@@ -69,7 +69,7 @@ export interface LocalUser {
   username: string;
   displayName: string;
   createdAt: number;
-  provider?: 'local' | 'google';
+  provider?: 'local' | 'google' | 'email';
   email?: string;
   avatarUrl?: string;
 }

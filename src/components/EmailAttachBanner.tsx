@@ -35,6 +35,11 @@ async function attachEmail(email: string, otp: string): Promise<void> {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Неверный код');
+  // Обновляем currentUser в storage — чтобы баннер не появился снова
+  // и при следующем входе по OTP пользователь находился по email
+  if (data.user) {
+    storage.setCurrentUser(data.user);
+  }
 }
 
 export default function EmailAttachBanner({ onDismiss }: EmailAttachBannerProps) {
@@ -331,7 +336,7 @@ export default function EmailAttachBanner({ onDismiss }: EmailAttachBannerProps)
 
 /** Нужно ли показывать баннер для данного пользователя */
 export function shouldShowEmailBanner(provider?: string, email?: string): boolean {
-  if (provider === 'google') return false;
+  if (provider === 'google' || provider === 'email') return false;
   if (email) return false; // уже есть email
   try {
     if (localStorage.getItem(DISMISSED_KEY)) return false;

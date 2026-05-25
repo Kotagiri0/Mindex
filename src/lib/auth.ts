@@ -25,7 +25,7 @@ const mapApiUser = (user: any): LocalUser => ({
   username: String(user.username),
   displayName: String(user.displayName),
   createdAt: Number(user.createdAt),
-  provider: user.provider === 'google' ? 'google' : 'local',
+  provider: (user.provider === 'google' ? 'google' : user.provider === 'email' ? 'email' : 'local') as 'google' | 'local' | 'email',
   email: user.email ? String(user.email) : undefined,
   avatarUrl: user.avatarUrl ? String(user.avatarUrl) : undefined,
 });
