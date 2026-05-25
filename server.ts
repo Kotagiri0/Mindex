@@ -775,9 +775,6 @@ app.post("/api/auth/send-otp", async (req, res) => {
                       <strong>Никому не передавай этот код</strong> — Мысль никогда не попросит его по телефону или в чате.
                     </p>
 
-                    <p style="margin:28px 0 0;font-size:14px;color:#222224;">
-                      Мысль
-                    </p>
                   </td>
                 </tr>
               </table>
