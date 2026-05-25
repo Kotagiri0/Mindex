@@ -1,4 +1,13 @@
 /* ───────── Мысль · Landing ───────── */
+.header-link {
+  font-family: 'Muller', sans-serif;
+  font-size: 14px;
+  color: rgba(34, 34, 36, 0.7);
+  text-decoration: none;
+  padding: 8px 12px;
+  transition: color 0.15s;
+}
+.header-link:hover { color: #222224; }
 
 /* ── Local fonts ── */
 @font-face {
