@@ -10,7 +10,6 @@ interface EmailAttachBannerProps {
 const F = "'Random Grotesque', sans-serif";
 const M = "'Muller', sans-serif";
 
-const DISMISSED_KEY = 'email_attach_dismissed';
 
 async function sendOtp(email: string): Promise<void> {
   const token = storage.getSessionToken();
@@ -62,7 +61,6 @@ export default function EmailAttachBanner({ onDismiss }: EmailAttachBannerProps)
   }, [step]);
 
   const handleDismiss = () => {
-    localStorage.setItem(DISMISSED_KEY, '1');
     onDismiss();
   };
 
@@ -337,9 +335,6 @@ export default function EmailAttachBanner({ onDismiss }: EmailAttachBannerProps)
 /** Нужно ли показывать баннер для данного пользователя */
 export function shouldShowEmailBanner(provider?: string, email?: string): boolean {
   if (provider === 'google' || provider === 'email') return false;
-  if (email) return false; // уже есть email
-  try {
-    if (localStorage.getItem(DISMISSED_KEY)) return false;
-  } catch {}
+  if (email) return false;
   return true;
 }
