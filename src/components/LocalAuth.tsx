@@ -294,7 +294,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
   return (
     <div
       className="min-h-screen flex flex-col items-center px-6 local-auth-root"
-      style={{ backgroundColor: BG, justifyContent: 'flex-start', paddingTop: '20vh' }}
+      style={{ backgroundColor: BG, justifyContent: isMobile ? 'flex-start' : 'center', paddingTop: isMobile ? '20vh' : 0 }}
     >
       <style>{`
         .local-auth-root .input-row {
