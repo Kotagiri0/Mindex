@@ -12,7 +12,6 @@ const M = "'Muller', sans-serif";
 
 
 async function sendOtp(email: string): Promise<void> {
-  const token = storage.getSessionToken();
   const res = await fetch('/api/auth/send-otp', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
