@@ -800,7 +800,12 @@ app.post("/api/auth/attach-email", requireAuth, async (req, res) => {
   await db.query(`UPDATE email_otp_codes SET used = TRUE WHERE id = $1`, [rows[0].id]);
   await db.query(`UPDATE auth_users SET email = $1, provider = 'email' WHERE id = $2`, [email, userId]);
 
-  return res.json({ ok: true });
+  const { rows: updated } = await db.query(
+    `SELECT id, username, display_name, provider, email, avatar_url, created_at FROM auth_users WHERE id = $1`,
+    [userId]
+  );
+
+  return res.json({ ok: true, user: formatAuthUser(updated[0]) });
 });
 
 app.post("/api/auth/register", async (req, res) => {
