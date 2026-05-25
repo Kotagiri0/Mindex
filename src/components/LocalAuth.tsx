@@ -89,6 +89,18 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
   const [route, navigate] = useHashRoute('/login');
   const mode: AuthMode = route.startsWith('/signup') ? 'signup' : 'login';
 
+  // Мобильная адаптация: больше отступ заголовок→форма и нижние ссылки прижаты к низу экрана
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)').matches : false
+  );
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 768px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   const [step, setStep] = useState<Step>('choice');
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
@@ -302,7 +314,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
         </div>
 
         {/* Заголовок — меняется в зависимости от шага */}
-        <div style={{ minHeight: 28, marginBottom: 36 }}>
+        <div style={{ minHeight: 28, marginBottom: isMobile ? 96 : 36 }}>
           <AnimatePresence mode="wait">
             <motion.div
               key={step === 'choice' ? `choice-${mode}` : step}
@@ -397,39 +409,33 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                   )}
                 </AnimatePresence>
 
-                {/* Кросс-ссылка вход ⇄ регистрация */}
-                <button
-                  type="button"
-                  onClick={() => navigate(crossLinkTarget)}
-                  style={{
-                    fontFamily: M,
-                    fontSize: 13,
-                    color: 'rgba(11,13,16,0.4)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    marginTop: 4,
-                  }}
-                >
-                  {crossLinkText}
-                </button>
-
-                {/* Скрытая ссылка на legacy-вход (только на /login) */}
-                {isLogin && (
-                  <button
-                    type="button"
-                    onClick={() => { setStep('legacy'); setError(''); }}
-                    style={{
-                      fontFamily: M,
-                      fontSize: 12,
-                      color: 'rgba(11,13,16,0.3)',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    У меня старый аккаунт
-                  </button>
+                {/* На десктопе ссылки тут же под формой. На мобиле — рендерятся
+                    в отдельном блоке внизу экрана (см. ниже корневой блок). */}
+                {!isMobile && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => navigate(crossLinkTarget)}
+                      style={{
+                        fontFamily: M, fontSize: 13, color: 'rgba(11,13,16,0.4)',
+                        background: 'none', border: 'none', cursor: 'pointer', marginTop: 4,
+                      }}
+                    >
+                      {crossLinkText}
+                    </button>
+                    {isLogin && (
+                      <button
+                        type="button"
+                        onClick={() => { setStep('legacy'); setError(''); }}
+                        style={{
+                          fontFamily: M, fontSize: 12, color: 'rgba(11,13,16,0.3)',
+                          background: 'none', border: 'none', cursor: 'pointer',
+                        }}
+                      >
+                        У меня старый аккаунт
+                      </button>
+                    )}
+                  </>
                 )}
               </motion.div>
             )}
@@ -663,6 +669,46 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
           </AnimatePresence>
         </div>
       </motion.div>
+
+      {/* Мобильные ссылки — прижаты к нижнему краю экрана, только на choice-шаге */}
+      {isMobile && step === 'choice' && (
+        <div
+          style={{
+            position: 'fixed',
+            left: 0,
+            right: 0,
+            bottom: 'max(24px, env(safe-area-inset-bottom, 24px))',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 10,
+            pointerEvents: 'none',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => navigate(crossLinkTarget)}
+            style={{
+              fontFamily: M, fontSize: 13, color: 'rgba(11,13,16,0.4)',
+              background: 'none', border: 'none', cursor: 'pointer', pointerEvents: 'auto',
+            }}
+          >
+            {crossLinkText}
+          </button>
+          {isLogin && (
+            <button
+              type="button"
+              onClick={() => { setStep('legacy'); setError(''); }}
+              style={{
+                fontFamily: M, fontSize: 12, color: 'rgba(11,13,16,0.3)',
+                background: 'none', border: 'none', cursor: 'pointer', pointerEvents: 'auto',
+              }}
+            >
+              У меня старый аккаунт
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
