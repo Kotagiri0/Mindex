@@ -236,7 +236,13 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get("/metrics", async (_req, res) => {
+app.get("/metrics", async (req, res) => {
+  // Закрыт токеном — без него отдаём 404 (не 401, чтобы не палить существование эндпоинта)
+  const metricsToken = process.env.METRICS_TOKEN;
+  if (metricsToken) {
+    const provided = req.query.token || req.headers['x-metrics-token'];
+    if (provided !== metricsToken) return res.status(404).send('Not found');
+  }
   res.setHeader("Content-Type", metricsRegistry.contentType);
   res.setHeader("Cache-Control", "no-store");
   res.status(200).send(await metricsRegistry.metrics());
@@ -415,7 +421,7 @@ const formatAuthUser = (user: any) => ({
   username: String(user.username),
   displayName: String(user.display_name ?? user.displayName ?? ''),
   createdAt: new Date(user.created_at ?? user.createdAt ?? Date.now()).getTime(),
-  provider: user.provider === 'google' ? 'google' : 'local',
+  provider: user.provider === 'google' ? 'google' : user.provider === 'email' ? 'email' : 'local',
   email: user.email ? String(user.email) : undefined,
   avatarUrl: user.avatar_url ? String(user.avatar_url) : undefined,
 });
@@ -672,7 +678,8 @@ const createSession = async (userId: string): Promise<string> => {
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 function generateOtp(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  // crypto.randomInt — криптографически безопасный генератор
+  return String(crypto.randomInt(100000, 1000000));
 }
 
 function hashOtp(otp: string): string {
@@ -922,6 +929,11 @@ app.post("/api/auth/register", async (req, res) => {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
   }
 
+  // Защита legacy-эндпоинта от брутфорса
+  if (!checkCustomRateLimit(`register:${req.ip || 'unknown'}`, 5, 60 * 60 * 1000)) {
+    return res.status(429).json({ error: "Слишком много попыток. Подожди час." });
+  }
+
   const username = normalizeUsername(String(req.body?.username || ""));
   const password = String(req.body?.password || "");
   const rawDisplayName = String(req.body?.displayName || "").trim();
@@ -969,6 +981,11 @@ app.post("/api/auth/register", async (req, res) => {
 app.post("/api/auth/login", async (req, res) => {
   if (!db) {
     return res.status(500).json({ error: "База данных не настроена (DATABASE_URL)." });
+  }
+
+  // Антибрутфорс на legacy-логин: 10 попыток с IP за 15 минут
+  if (!checkCustomRateLimit(`login:${req.ip || 'unknown'}`, 10, 15 * 60 * 1000)) {
+    return res.status(429).json({ error: "Слишком много попыток. Подожди 15 минут." });
   }
 
   const username = normalizeUsername(String(req.body?.username || ""));
