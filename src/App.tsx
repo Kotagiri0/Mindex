@@ -74,7 +74,7 @@ export default function App() {
     const user = getCurrentUser();
     setCurrentUser(user);
 
-    // Тихая миграция: если пользователь есть но токена нет — получаем токен без повторного логина
+    // Тихая миграция для старых local-аккаунтов: если пользователь есть но токена нет
     if (user && !storage.getSessionToken()) {
       fetch('/api/auth/migrate-session', {
         method: 'POST',
@@ -83,6 +83,22 @@ export default function App() {
       })
         .then(r => r.json())
         .then(d => { if (d.token) storage.setSessionToken(d.token); })
+        .catch(() => {});
+    }
+
+    // Подтягиваем актуальные данные пользователя — баннер email и provider могут устареть
+    if (user && storage.getSessionToken()) {
+      fetch('/api/auth/me', {
+        headers: { 'Authorization': `Bearer ${storage.getSessionToken()}` },
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          if (d?.user) {
+            storage.setCurrentUser(d.user);
+            setCurrentUser(d.user);
+            setShowEmailBanner(shouldShowEmailBanner(d.user.provider, d.user.email));
+          }
+        })
         .catch(() => {});
     }
 

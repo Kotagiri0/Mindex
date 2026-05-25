@@ -108,6 +108,24 @@ const dataRateLimit = (req: express.Request, res: express.Response, next: expres
   return next();
 };
 
+// Универсальный лимит по ключу (IP+email/IP+path) с настраиваемым окном
+const customRateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+const checkCustomRateLimit = (key: string, max: number, windowMs: number): boolean => {
+  const now = Date.now();
+  if (customRateLimitBuckets.size > 5000) {
+    for (const [k, v] of customRateLimitBuckets) {
+      if (v.resetAt <= now) customRateLimitBuckets.delete(k);
+    }
+  }
+  const bucket = customRateLimitBuckets.get(key);
+  if (!bucket || bucket.resetAt <= now) {
+    customRateLimitBuckets.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  bucket.count += 1;
+  return bucket.count <= max;
+};
+
 const getRouteLabel = (req: express.Request) => {
   if (req.route?.path) {
     const routePath = typeof req.route.path === "string" ? req.route.path : req.path;
@@ -466,7 +484,7 @@ app.post("/api/telegram/link-code", requireAuth, async (req, res) => {
   if (!db) return res.status(500).json({ error: "БД не настроена." });
   const userId = (req as any).userId;
 
-  const code = `MNDX-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  const code = `MNDX-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 минут
 
   await db.query(
@@ -579,7 +597,6 @@ const createSession = async (userId: string): Promise<string> => {
 
 // ─── Email OTP auth ───────────────────────────────────────────────────────────
 
-console.log('[boot] RESEND_API_KEY present:', !!process.env.RESEND_API_KEY);
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 function generateOtp(): string {
@@ -598,14 +615,19 @@ app.post("/api/auth/send-otp", async (req, res) => {
     return res.status(400).json({ error: "Некорректный email." });
   }
 
-  // Rate limit: не больше 5 запросов в час
+  // Защита от перебора: 10 запросов с одного IP в час (отсекает массовый enumeration)
+  if (!checkCustomRateLimit(`send-otp-ip:${req.ip || 'unknown'}`, 10, 60 * 60 * 1000)) {
+    return res.status(429).json({ error: "Слишком много попыток. Подожди час." });
+  }
+  // Лимит per-email: 5 в час. Возвращаем "успех" наружу, чтобы не палить существующий email,
+  // но реально письмо не отправляем.
   const { rows: recentRows } = await db.query(
     `SELECT COUNT(*) AS cnt FROM email_otp_codes
      WHERE email = $1 AND created_at > NOW() - INTERVAL '1 hour'`,
     [email]
   );
   if (parseInt(recentRows[0].cnt) >= 5) {
-    return res.status(429).json({ error: "Слишком много попыток. Подожди час." });
+    return res.json({ ok: true });
   }
 
   const otp = generateOtp();
@@ -618,7 +640,7 @@ app.post("/api/auth/send-otp", async (req, res) => {
   );
 
   if (!resend) {
-    console.error('[OTP] RESEND_API_KEY не задан — письмо не отправлено, код:', otp);
+    console.error('[OTP] RESEND_API_KEY не задан — письмо не отправлено');
     return res.status(500).json({ error: "Email-сервис не настроен. Обратитесь к администратору." });
   }
 
@@ -722,13 +744,24 @@ app.post("/api/auth/verify-otp", async (req, res) => {
   const otp = String(req.body?.otp || '').trim();
 
   if (!email || !otp) return res.status(400).json({ error: "Укажи email и код." });
+  if (!/^\d{6}$/.test(otp)) return res.status(400).json({ error: "Код — 6 цифр." });
 
-  // Ищем валидный неиспользованный OTP
+  // Антибрутфорс: 10 попыток на (IP+email) за 15 минут
+  if (!checkCustomRateLimit(`verify-otp:${req.ip || 'unknown'}:${email}`, 10, 15 * 60 * 1000)) {
+    return res.status(429).json({ error: "Слишком много попыток. Запроси новый код позже." });
+  }
+
+  // Атомарно помечаем код used=TRUE — закрывает race между SELECT и UPDATE,
+  // и одновременно проверяет валидность кода.
   const { rows } = await db.query(
-    `SELECT id FROM email_otp_codes
-     WHERE email = $1 AND code_hash = $2
-       AND used = FALSE AND expires_at > NOW()
-     ORDER BY created_at DESC LIMIT 1`,
+    `UPDATE email_otp_codes
+     SET used = TRUE
+     WHERE id = (
+       SELECT id FROM email_otp_codes
+       WHERE email = $1 AND code_hash = $2 AND used = FALSE AND expires_at > NOW()
+       ORDER BY created_at DESC LIMIT 1
+     )
+     RETURNING id`,
     [email, hashOtp(otp)]
   );
 
@@ -736,17 +769,12 @@ app.post("/api/auth/verify-otp", async (req, res) => {
     return res.status(401).json({ error: "Неверный или истёкший код." });
   }
 
-  // Помечаем код использованным
-  await db.query(`UPDATE email_otp_codes SET used = TRUE WHERE id = $1`, [rows[0].id]);
-
   // Ищем существующего пользователя по email
   const { rows: existingUsers } = await db.query(
     `SELECT id, username, display_name, provider, email, avatar_url, created_at
      FROM auth_users WHERE email = $1 LIMIT 1`,
     [email]
   );
-
-  console.log(`[verify-otp] email=${email} found=${existingUsers.length > 0} id=${existingUsers[0]?.id ?? 'none'}`);
 
   let user;
   if (existingUsers.length > 0) {
@@ -757,7 +785,6 @@ app.post("/api/auth/verify-otp", async (req, res) => {
     const userId = crypto.randomUUID();
     const username = email.split('@')[0].replace(/[^a-z0-9_]/gi, '').slice(0, 30) + '_' + userId.slice(0, 6);
     const displayName = email.split('@')[0];
-    console.log(`[verify-otp] creating new user for email=${email} id=${userId}`);
     const { rows: newUser } = await db.query(
       `INSERT INTO auth_users (id, username, display_name, password_hash, provider, email)
        VALUES ($1, $2, $3, '', 'email', $4)
@@ -780,24 +807,34 @@ app.post("/api/auth/attach-email", requireAuth, async (req, res) => {
   const otp = String(req.body?.otp || '').trim();
 
   if (!email || !otp) return res.status(400).json({ error: "Укажи email и код." });
+  if (!/^\d{6}$/.test(otp)) return res.status(400).json({ error: "Код — 6 цифр." });
 
-  const { rows } = await db.query(
-    `SELECT id FROM email_otp_codes
-     WHERE email = $1 AND code_hash = $2
-       AND used = FALSE AND expires_at > NOW()
-     ORDER BY created_at DESC LIMIT 1`,
-    [email, hashOtp(otp)]
-  );
-  if (rows.length === 0) return res.status(401).json({ error: "Неверный или истёкший код." });
+  // Антибрутфорс
+  if (!checkCustomRateLimit(`attach-email:${userId}`, 10, 15 * 60 * 1000)) {
+    return res.status(429).json({ error: "Слишком много попыток. Запроси новый код позже." });
+  }
 
-  // Проверяем что email не занят другим аккаунтом
+  // Проверяем что email не занят другим аккаунтом — до использования кода
   const { rows: taken } = await db.query(
     `SELECT id FROM auth_users WHERE email = $1 AND id != $2 LIMIT 1`,
     [email, userId]
   );
   if (taken.length > 0) return res.status(409).json({ error: "Этот email уже привязан к другому аккаунту." });
 
-  await db.query(`UPDATE email_otp_codes SET used = TRUE WHERE id = $1`, [rows[0].id]);
+  // Атомарно используем код
+  const { rows } = await db.query(
+    `UPDATE email_otp_codes
+     SET used = TRUE
+     WHERE id = (
+       SELECT id FROM email_otp_codes
+       WHERE email = $1 AND code_hash = $2 AND used = FALSE AND expires_at > NOW()
+       ORDER BY created_at DESC LIMIT 1
+     )
+     RETURNING id`,
+    [email, hashOtp(otp)]
+  );
+  if (rows.length === 0) return res.status(401).json({ error: "Неверный или истёкший код." });
+
   await db.query(`UPDATE auth_users SET email = $1, provider = 'email' WHERE id = $2`, [email, userId]);
 
   const { rows: updated } = await db.query(
@@ -901,13 +938,50 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
+// Свежие данные текущего пользователя — клиент проверяет state баннера, email и т.п.
+app.get('/api/auth/me', requireAuth, async (req, res) => {
+  if (!db) return res.status(500).json({ error: "БД не настроена." });
+  const userId = (req as any).userId;
+  const { rows } = await db.query(
+    `SELECT id, username, display_name, provider, email, avatar_url, created_at
+     FROM auth_users WHERE id = $1 LIMIT 1`,
+    [userId]
+  );
+  if (rows.length === 0) return res.status(404).json({ error: "Пользователь не найден." });
+  return res.json({ user: formatAuthUser(rows[0]) });
+});
+
 app.post('/api/auth/migrate-session', async (req, res) => {
   if (!db) return res.status(500).json({ error: "БД не настроена." });
   const userId = String(req.body?.userId || '').trim();
   if (!userId) return res.status(400).json({ error: "userId обязателен." });
 
-  const exists = await db.query(`SELECT id FROM auth_users WHERE id = $1 LIMIT 1`, [userId]).catch(() => null);
-  if (!exists?.rows?.length) return res.status(404).json({ error: "Пользователь не найден." });
+  // Жёсткий rate-limit: 3 миграции с одного IP в час
+  if (!checkCustomRateLimit(`migrate:${req.ip || 'unknown'}`, 3, 60 * 60 * 1000)) {
+    return res.status(429).json({ error: "Слишком много попыток. Подожди час." });
+  }
+
+  // Миграция допускается ТОЛЬКО для старых local-пользователей с password_hash.
+  // Это предотвращает захват аккаунтов с email/google авторизацией — у них уже есть нормальный путь входа.
+  const result = await db.query(
+    `SELECT id, provider, password_hash FROM auth_users WHERE id = $1 LIMIT 1`,
+    [userId]
+  ).catch(() => null);
+  if (!result?.rows?.length) return res.status(404).json({ error: "Пользователь не найден." });
+
+  const user = result.rows[0];
+  if (user.provider !== 'local' || !user.password_hash) {
+    return res.status(403).json({ error: "Миграция недоступна. Войди через email." });
+  }
+
+  // Если у пользователя уже есть активная сессия — не плодим новые
+  const existing = await db.query(
+    `SELECT token FROM user_sessions WHERE user_id = $1 AND expires_at > NOW() ORDER BY expires_at DESC LIMIT 1`,
+    [userId]
+  ).catch(() => null);
+  if (existing?.rows?.length) {
+    return res.status(200).json({ token: existing.rows[0].token });
+  }
 
   const token = await createSession(userId);
   return res.status(200).json({ token });
@@ -944,18 +1018,35 @@ app.post('/api/auth/google', async (req, res) => {
       }
     }
 
-    const existing = await db.query(
-      `
-        SELECT id, username, display_name, provider, email, avatar_url, created_at
-        FROM auth_users
-        WHERE google_sub = $1 OR ($2 <> '' AND email = $2)
-        LIMIT 1
-      `,
-      [payload.sub, email]
+    // Сначала ищем по google_sub — это самый надёжный ключ от Google.
+    // По email привязываем ТОЛЬКО если у того аккаунта нет другого google_sub
+    // (иначе можно угнать чужой Google-аккаунт, зарегав local с его email).
+    // Google email считается подтверждённым OAuth-провайдером — это безопасно.
+    let existingRow = null;
+    const bySub = await db.query(
+      `SELECT id, username, display_name, provider, email, avatar_url, created_at, google_sub
+       FROM auth_users WHERE google_sub = $1 LIMIT 1`,
+      [payload.sub]
     );
+    if (bySub.rows.length > 0) {
+      existingRow = bySub.rows[0];
+    } else if (email && payload.email_verified !== false) {
+      const byEmail = await db.query(
+        `SELECT id, username, display_name, provider, email, avatar_url, created_at, google_sub
+         FROM auth_users WHERE email = $1 LIMIT 1`,
+        [email]
+      );
+      // Связываем по email только если нет конфликта с другим google_sub
+      if (byEmail.rows.length > 0 && !byEmail.rows[0].google_sub) {
+        existingRow = byEmail.rows[0];
+      } else if (byEmail.rows.length > 0 && byEmail.rows[0].google_sub !== payload.sub) {
+        // Email принадлежит другому Google-аккаунту — отказываем
+        return res.status(409).json({ error: 'Этот email уже привязан к другому Google-аккаунту.' });
+      }
+    }
 
-    if (existing.rows.length > 0) {
-      const row = existing.rows[0];
+    if (existingRow) {
+      const row = existingRow;
 
       await db.query(
         `
@@ -1449,7 +1540,7 @@ app.get("/api/search", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/voice/transcribe", upload.single('audio'), async (req, res) => {
+app.post("/api/voice/transcribe", requireAuth, upload.single('audio'), async (req, res) => {
   let tmpIn = "";
   let tmpOut = "";
 
