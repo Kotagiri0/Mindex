@@ -32,6 +32,9 @@ const db = DATABASE_URL ? new Pool({
   ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
 }) : null;
 
+// Кэш для троттлинга обновления last_active_at — раз в 60 сек на юзера, чтоб не молотить БД
+const lastActiveTouchCache = new Map<string, number>();
+
 const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (!db) return res.status(500).json({ error: "БД не настроена." });
   const authHeader = req.headers['authorization'];
@@ -44,7 +47,28 @@ const requireAuth = async (req: express.Request, res: express.Response, next: ex
   ).catch(() => null);
 
   if (!result?.rows?.length) return res.status(401).json({ error: "Сессия истекла или недействительна." });
-  (req as any).userId = result.rows[0].user_id;
+  const userId = result.rows[0].user_id;
+  (req as any).userId = userId;
+
+  // Обновляем last_active_at не чаще раза в минуту на юзера.
+  // Это даёт честный DAU — любой аутентифицированный запрос считается активностью.
+  const now = Date.now();
+  const lastTouch = lastActiveTouchCache.get(userId) || 0;
+  if (now - lastTouch > 60_000) {
+    lastActiveTouchCache.set(userId, now);
+    if (lastActiveTouchCache.size > 5000) {
+      for (const [k, v] of lastActiveTouchCache) {
+        if (now - v > 60_000) lastActiveTouchCache.delete(k);
+      }
+    }
+    db.query(
+      `INSERT INTO user_profiles (user_id, last_active_at, settings, onboarding_complete)
+       VALUES ($1, NOW(), '{}'::jsonb, FALSE)
+       ON CONFLICT (user_id) DO UPDATE SET last_active_at = NOW()`,
+      [userId]
+    ).catch(() => {});
+  }
+
   next();
 };
 let vectorEnabled = false;

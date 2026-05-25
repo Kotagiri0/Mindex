@@ -40,20 +40,27 @@ def fetch_stats() -> dict:
                   (SELECT COUNT(*) FROM auth_users)                                              AS total_users,
                   (SELECT COUNT(*) FROM auth_users WHERE created_at >= NOW() - INTERVAL '1 day') AS new_users_1d,
                   (SELECT COUNT(*) FROM auth_users WHERE created_at >= NOW() - INTERVAL '7 days') AS new_users_7d,
-                  (SELECT COUNT(DISTINCT user_id) FROM user_tasks
-                     WHERE created_at >= NOW() - INTERVAL '1 day')                               AS dau,
-                  (SELECT COUNT(DISTINCT user_id) FROM user_tasks
-                     WHERE created_at >= NOW() - INTERVAL '7 days')                              AS wau,
+
+                  -- DAU/WAU: любой аутентифицированный запрос обновляет last_active_at в requireAuth.
+                  -- Это даёт честный счёт всех заходов в приложение, а не только создания задач.
+                  (SELECT COUNT(*) FROM user_profiles
+                     WHERE last_active_at >= NOW() - INTERVAL '1 day')                           AS dau,
+                  (SELECT COUNT(*) FROM user_profiles
+                     WHERE last_active_at >= NOW() - INTERVAL '7 days')                          AS wau,
+
                   (SELECT COUNT(*) FROM user_tasks)                                              AS total_tasks,
                   (SELECT COUNT(*) FROM user_tasks WHERE created_at >= NOW() - INTERVAL '1 day') AS tasks_1d,
                   (SELECT COUNT(*) FROM user_tasks WHERE created_at >= NOW() - INTERVAL '7 days') AS tasks_7d,
+
                   (SELECT COUNT(*) FROM user_threads)                                            AS total_threads,
+                  -- user_threads.created_at — BIGINT (миллисекунды Unix), отсюда конвертация
                   (SELECT COUNT(*) FROM user_threads
-                     WHERE created_at >= (EXTRACT(EPOCH FROM NOW() - INTERVAL '7 days') * 1000)::bigint) AS threads_7d,
+                     WHERE to_timestamp(created_at / 1000.0) >= NOW() - INTERVAL '7 days')        AS threads_7d,
+                  -- Кто писал Мысли за неделю (updated_at у треда — TIMESTAMPTZ)
                   (SELECT COUNT(DISTINCT user_id) FROM user_threads
                      WHERE updated_at >= NOW() - INTERVAL '7 days')                              AS active_chatters_7d,
 
-                  -- Retention 7d: из тех кто зарегался 7+ дней назад, сколько вернулись за 7 дней
+                  -- Retention 7d: из тех, кто зарегался 7+ дней назад, сколько вернулись за последние 7 дней
                   (SELECT COUNT(*) FROM auth_users
                      WHERE created_at <= NOW() - INTERVAL '7 days')                              AS cohort_7d,
                   (SELECT COUNT(*) FROM auth_users a
@@ -66,12 +73,16 @@ def fetch_stats() -> dict:
                   (SELECT COUNT(*) FROM user_profiles
                      WHERE telegram_chat_id IS NOT NULL)                                         AS tg_connected,
 
-                  -- Всего сообщений Мысли
+                  -- Всего сообщений Мысли (assistant messages во всех тредах)
                   (SELECT COALESCE(SUM(
                      (SELECT COUNT(*) FROM jsonb_array_elements(messages) AS m
                       WHERE m->>'role' = 'assistant')
                   ), 0) FROM user_threads
-                   WHERE messages IS NOT NULL AND jsonb_array_length(messages) > 0)              AS total_assistant_messages
+                   WHERE messages IS NOT NULL AND jsonb_array_length(messages) > 0)              AS total_assistant_messages,
+
+                  -- Сколько юзеров создали хотя бы одну задачу за сутки (старая метрика — оставлена как дополнительная)
+                  (SELECT COUNT(DISTINCT user_id) FROM user_tasks
+                     WHERE created_at >= NOW() - INTERVAL '1 day')                               AS task_creators_1d
             """)
             return dict(cur.fetchone())
 
@@ -93,10 +104,11 @@ def format_stats(s: dict) -> str:
         f"  За сутки: `+{s['new_users_1d']}`\n"
         f"  За неделю: `+{s['new_users_7d']}`\n\n"
         f"🔥 *Активность*\n"
-        f"  DAU: `{s['dau']}`\n"
+        f"  DAU: `{s['dau']}` _(заходили сегодня)_\n"
         f"  WAU: `{s['wau']}`\n"
         f"  DAU/WAU: `{dau_wau}`\n"
-        f"  Активных в чате за 7д: `{s['active_chatters_7d']}`\n\n"
+        f"  Писали Мысли за 7д: `{s['active_chatters_7d']}`\n"
+        f"  Создавали задачи сегодня: `{s['task_creators_1d']}`\n\n"
         f"📈 *Retention 7d*\n"
         f"  Когорта (7д+): `{cohort}`\n"
         f"  Вернулись: `{retained}` — `{retention_pct}`\n\n"
