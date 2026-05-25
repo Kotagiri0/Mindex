@@ -121,15 +121,15 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
     }).catch(() => {});
   }, [googleClientId]);
 
-  // Рендерим Google-кнопку всякий раз когда возвращаемся на choice
+  // Инициализируем Google Identity заранее (на маунте), чтобы кастомная кнопка по клику
+  // вызывала готовый prompt() без задержки и без iframe-рендера.
   useEffect(() => {
-    if (step !== 'choice') return;
-    if (!googleClientId || !googleButtonRef.current) return;
+    if (!googleClientId) return;
     let cancelled = false;
-    const render = async () => {
+    (async () => {
       try {
         await loadGoogleIdentityScript();
-        if (cancelled || !googleButtonRef.current || !window.google?.accounts?.id) return;
+        if (cancelled || !window.google?.accounts?.id) return;
         window.google.accounts.id.initialize({
           client_id: googleClientId,
           callback: async ({ credential }) => {
@@ -144,18 +144,31 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
             } finally { setGoogleLoading(false); }
           },
         });
-        googleButtonRef.current.innerHTML = '';
-        const width = Math.min(Math.max(googleButtonRef.current.getBoundingClientRect().width || 320, 280), 360);
-        window.google.accounts.id.renderButton(googleButtonRef.current, {
-          theme: 'filled_black', size: 'large', text: mode === 'signup' ? 'signup_with' : 'signin_with', shape: 'pill', width, logo_alignment: 'center',
-        });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Не удалось загрузить Google вход.');
       }
-    };
-    render();
-    return () => { cancelled = true; if (googleButtonRef.current) googleButtonRef.current.innerHTML = ''; };
-  }, [googleClientId, onAuthenticated, step, mode]);
+    })();
+    return () => { cancelled = true; };
+  }, [googleClientId, onAuthenticated]);
+
+  const handleGoogleClick = () => {
+    if (!googleClientId) { setError('Google вход не настроен.'); return; }
+    if (!window.google?.accounts?.id) { setError('Google ещё не загрузился, попробуй через секунду.'); return; }
+    setError('');
+    // Скрытый button-рендер через невидимый контейнер — единственный способ запустить
+    // настоящий OAuth-консент в один клик без FedCM-предупреждений
+    if (googleButtonRef.current) {
+      googleButtonRef.current.innerHTML = '';
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: 'filled_black', size: 'large', shape: 'pill', width: 320,
+      });
+      // Эмулируем клик по только что вырендеренной кнопке Google
+      setTimeout(() => {
+        const btn = googleButtonRef.current?.querySelector('div[role="button"]') as HTMLElement | null;
+        btn?.click();
+      }, 50);
+    }
+  };
 
   // Автофокус на полях
   useEffect(() => {
@@ -279,9 +292,9 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
         style={{ gap: 0 }}
       >
         {/* Маскот — единственный, не перемонтируется при смене шагов */}
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: 18 }}>
           <PrimeMascot
-            size={84}
+            size={64}
             eyes={eyes}
             decor={decor}
             wakeUp={wakeUp}
@@ -289,7 +302,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
         </div>
 
         {/* Заголовок — меняется в зависимости от шага */}
-        <div style={{ minHeight: 32, marginBottom: 80 }}>
+        <div style={{ minHeight: 28, marginBottom: 96 }}>
           <AnimatePresence mode="wait">
             <motion.div
               key={step === 'choice' ? `choice-${mode}` : step}
@@ -299,13 +312,13 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
               transition={{ duration: 0.25 }}
               style={{
                 fontFamily: M,
-                fontSize: 22,
+                fontSize: 20,
                 fontWeight: 500,
                 color: FG,
                 textAlign: 'center',
               }}
             >
-              {step === 'email' ? emailTitle : step === 'code' ? codeTitle : step === 'legacy' ? 'Старый аккаунт' : choiceTitle}
+              {step === 'email' ? emailTitle : step === 'code' ? codeTitle : step === 'legacy' ? 'старый аккаунт' : choiceTitle}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -325,36 +338,48 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                 className="w-full flex flex-col items-center gap-4"
               >
                 <div
-                  className="w-full rounded-[32px] px-3 pt-3 pb-3 flex flex-col gap-2"
-                  style={{ background: 'rgba(255,255,255,0.5)', boxShadow: '0 2px 16px rgba(0,0,0,0.07)' }}
+                  className="w-full rounded-[28px] px-2.5 pt-2.5 pb-2.5 flex flex-col gap-2"
+                  style={{
+                    background: 'rgba(255,255,255,0.5)',
+                    border: '1px solid rgba(0,0,0,0.06)',
+                    boxShadow: '0 2px 16px rgba(0,0,0,0.05)',
+                  }}
                 >
-                  {/* Google */}
-                  {googleClientId ? (
-                    <div className="w-full flex flex-col items-center">
-                      <div ref={googleButtonRef} className="w-full flex items-center justify-center min-h-[52px]" />
-                      {googleLoading && (
-                        <div className="flex items-center gap-2 text-sm mt-1" style={{ color: 'rgba(11,13,16,0.5)', fontFamily: F }}>
-                          <Loader2 size={14} className="animate-spin" />
-                          Проверяем аккаунт...
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <button
-                      type="button" disabled
-                      className="w-full h-[52px] rounded-full flex items-center justify-center gap-2 opacity-50"
-                      style={{ background: FG, fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: '#f8f8f8' }}
-                    >
-                      {isLogin ? 'Войти через Google' : 'С помощью Google'}
-                    </button>
-                  )}
+                  {/* Скрытый контейнер для Google iframe-кнопки (рендерится по клику) */}
+                  <div
+                    ref={googleButtonRef}
+                    style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0, overflow: 'hidden' }}
+                  />
+
+                  {/* Google — кастомная кнопка */}
+                  <button
+                    type="button"
+                    onClick={handleGoogleClick}
+                    disabled={googleLoading || !googleClientId}
+                    className="w-full h-[52px] rounded-full flex items-center justify-center transition-opacity disabled:opacity-60"
+                    style={{ background: FG, fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: '#f8f8f8', border: 'none', cursor: googleLoading ? 'default' : 'pointer', position: 'relative' }}
+                  >
+                    {googleLoading ? (
+                      <Loader2 size={18} className="animate-spin" />
+                    ) : (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                        <svg width="18" height="18" viewBox="0 0 72 73" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                          <path d="M71.2941 37.1865C71.2941 34.1958 71.0515 32.0133 70.5262 29.75H36.3745V43.2489H56.4208C56.0168 46.6035 53.8343 51.6556 48.9843 55.0503L48.9163 55.5023L59.7144 63.8675L60.4626 63.9421C67.3332 57.5967 71.2941 48.2605 71.2941 37.1865Z" fill="#ffffff"/>
+                          <path d="M36.3746 72.7508C46.1956 72.7508 54.4405 69.5174 60.4627 63.9401L48.9844 55.0483C45.9128 57.1904 41.7903 58.6858 36.3746 58.6858C26.7556 58.6858 18.5916 52.3406 15.6814 43.5703L15.2548 43.6065L4.02672 52.296L3.87988 52.7042C9.86143 64.5865 22.148 72.7508 36.3746 72.7508Z" fill="#ffffff"/>
+                          <path d="M15.6813 43.5666C14.9135 41.3033 14.469 38.8781 14.469 36.3724C14.469 33.8665 14.9135 31.4416 15.6409 29.1783L15.6206 28.6963L4.25183 19.8672L3.87987 20.0441C1.41458 24.975 0 30.5121 0 36.3724C0 42.2328 1.41458 47.7696 3.87987 52.7005L15.6813 43.5666Z" fill="#ffffff"/>
+                          <path d="M36.3746 14.0648C43.2049 14.0648 47.8122 17.0151 50.4394 19.4807L60.7051 9.4574C54.4003 3.59706 46.1956 0 36.3746 0C22.148 0 9.86142 8.16402 3.87988 20.0463L15.641 29.1805C18.5916 20.4102 26.7556 14.0648 36.3746 14.0648Z" fill="#ffffff"/>
+                        </svg>
+                        {isLogin ? 'Войти через Google' : 'С помощью Google'}
+                      </span>
+                    )}
+                  </button>
 
                   {/* Email */}
                   <button
                     type="button"
                     onClick={() => { setStep('email'); setError(''); }}
                     className="w-full h-[52px] rounded-full flex items-center justify-center transition-opacity"
-                    style={{ background: '#ffffff', fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: FG }}
+                    style={{ background: '#ffffff', fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: FG, border: '1px solid rgba(0,0,0,0.1)', cursor: 'pointer' }}
                   >
                     {isLogin ? 'Получить письмо с кодом' : 'По электронной почте'}
                   </button>
@@ -421,10 +446,14 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                 className="w-full flex flex-col items-center gap-4"
               >
                 <div
-                  className="w-full rounded-[32px] px-3 pt-3 pb-3 flex flex-col gap-2"
-                  style={{ background: 'rgba(255,255,255,0.5)', boxShadow: '0 2px 16px rgba(0,0,0,0.07)' }}
+                  className="w-full rounded-[28px] px-2.5 pt-2.5 pb-2.5 flex flex-col gap-2"
+                  style={{
+                    background: 'rgba(255,255,255,0.5)',
+                    border: '1px solid rgba(0,0,0,0.06)',
+                    boxShadow: '0 2px 16px rgba(0,0,0,0.05)',
+                  }}
                 >
-                  <div className="w-full h-[52px] rounded-full flex items-center px-6" style={{ background: '#f0f0f0' }}>
+                  <div className="w-full h-[52px] rounded-full flex items-center px-6" style={{ background: '#f5f5f5', border: '1px solid rgba(0,0,0,0.06)' }}>
                     <input
                       ref={emailRef}
                       type="email"
@@ -441,7 +470,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                     type="submit"
                     disabled={loading}
                     className="w-full h-[52px] rounded-full flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
-                    style={{ background: '#ffffff', fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: FG }}
+                    style={{ background: '#ffffff', fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: FG, border: '1px solid rgba(0,0,0,0.1)' }}
                   >
                     {loading && <Loader2 size={16} className="animate-spin" />}
                     Получить письмо с кодом
@@ -482,10 +511,14 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                 className="w-full flex flex-col items-center gap-4"
               >
                 <div
-                  className="w-full rounded-[32px] px-3 pt-3 pb-3 flex flex-col gap-2"
-                  style={{ background: 'rgba(255,255,255,0.5)', boxShadow: '0 2px 16px rgba(0,0,0,0.07)' }}
+                  className="w-full rounded-[28px] px-2.5 pt-2.5 pb-2.5 flex flex-col gap-2"
+                  style={{
+                    background: 'rgba(255,255,255,0.5)',
+                    border: '1px solid rgba(0,0,0,0.06)',
+                    boxShadow: '0 2px 16px rgba(0,0,0,0.05)',
+                  }}
                 >
-                  <div className="w-full h-[52px] rounded-full flex items-center px-6" style={{ background: '#f0f0f0' }}>
+                  <div className="w-full h-[52px] rounded-full flex items-center px-6" style={{ background: '#f5f5f5', border: '1px solid rgba(0,0,0,0.06)' }}>
                     <input
                       ref={otpRef}
                       type="text"
@@ -511,7 +544,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                     type="submit"
                     disabled={loading || otp.length !== 6}
                     className="w-full h-[52px] rounded-full flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
-                    style={{ background: '#ffffff', fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: FG }}
+                    style={{ background: '#ffffff', fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: FG, border: '1px solid rgba(0,0,0,0.1)' }}
                   >
                     {loading && <Loader2 size={16} className="animate-spin" />}
                     Подтвердить
@@ -562,13 +595,17 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                 className="w-full flex flex-col items-center gap-4"
               >
                 <div
-                  className="w-full rounded-[32px] px-3 pt-3 pb-3 flex flex-col gap-2"
-                  style={{ background: 'rgba(255,255,255,0.5)', boxShadow: '0 2px 16px rgba(0,0,0,0.07)' }}
+                  className="w-full rounded-[28px] px-2.5 pt-2.5 pb-2.5 flex flex-col gap-2"
+                  style={{
+                    background: 'rgba(255,255,255,0.5)',
+                    border: '1px solid rgba(0,0,0,0.06)',
+                    boxShadow: '0 2px 16px rgba(0,0,0,0.05)',
+                  }}
                 >
                   <div style={{ fontFamily: F, fontSize: 13, color: 'rgba(11,13,16,0.55)', textAlign: 'center', padding: '4px 8px 2px' }}>
                     Для старых аккаунтов. После входа привяжи email.
                   </div>
-                  <div className="w-full h-[52px] rounded-full flex items-center px-6" style={{ background: '#f0f0f0' }}>
+                  <div className="w-full h-[52px] rounded-full flex items-center px-6" style={{ background: '#f5f5f5', border: '1px solid rgba(0,0,0,0.06)' }}>
                     <input
                       type="text"
                       value={legacyUsername}
@@ -579,7 +616,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                       style={{ fontFamily: M, fontSize: '0.95rem', color: FG }}
                     />
                   </div>
-                  <div className="w-full h-[52px] rounded-full flex items-center px-6" style={{ background: '#f0f0f0' }}>
+                  <div className="w-full h-[52px] rounded-full flex items-center px-6" style={{ background: '#f5f5f5', border: '1px solid rgba(0,0,0,0.06)' }}>
                     <input
                       type="password"
                       value={legacyPassword}
@@ -594,7 +631,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                     type="submit"
                     disabled={loading}
                     className="w-full h-[52px] rounded-full flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
-                    style={{ background: '#ffffff', fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: FG }}
+                    style={{ background: '#ffffff', fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: FG, border: '1px solid rgba(0,0,0,0.1)' }}
                   >
                     {loading && <Loader2 size={16} className="animate-spin" />}
                     Войти
