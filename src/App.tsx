@@ -288,6 +288,14 @@ export default function App() {
   }
 
   if (isDesktopViewport) {
+    // Онбординг для новых юзеров показываем и на десктопе — иначе сразу пустой дашборд
+    if (screen === 'ob' && !onboardingComplete) {
+      return (
+        <div className="w-full bg-bg" style={{ height: '100dvh' }}>
+          <Onboarding onComplete={handleOnboardingComplete} />
+        </div>
+      );
+    }
     return (
       <div className="relative">
         <DesktopApp
