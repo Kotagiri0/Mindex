@@ -92,6 +92,8 @@ async function verifyOtp(email: string, otp: string): Promise<LocalUser> {
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Неверный код');
   storage.setSessionToken(data.token);
+  storage.setCurrentUser(data.user);
+  storage.setSessionUserId(data.user.id);
   return data.user;
 }
 
