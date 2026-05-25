@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2 } from 'lucide-react';
 import { LocalUser } from '../types';
-import { loginGoogleUser } from '../lib/auth';
+import { loginGoogleUser, loginLocalUser } from '../lib/auth';
 import { storage } from '../lib/storage';
 
 interface LocalAuthProps {
@@ -98,9 +98,11 @@ async function verifyOtp(email: string, otp: string): Promise<LocalUser> {
 }
 
 export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
-  const [step, setStep] = useState<'email' | 'otp'>('email');
+  const [step, setStep] = useState<'email' | 'otp' | 'legacy'>('email');
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
+  const [legacyUsername, setLegacyUsername] = useState('');
+  const [legacyPassword, setLegacyPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -216,6 +218,29 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
     } finally { setLoading(false); }
   };
 
+  const handleLegacyLogin = async (e?: FormEvent) => {
+    e?.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    const username = legacyUsername.trim();
+    if (!username || !legacyPassword) {
+      setError('Введи имя пользователя и пароль');
+      submittingRef.current = false;
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      const user = await loginLocalUser({ username, password: legacyPassword });
+      onAuthenticated(user);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось войти');
+    } finally {
+      setLoading(false);
+      submittingRef.current = false;
+    }
+  };
+
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-6 py-10"
@@ -298,6 +323,87 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                   Войти с помощью Google
                 </button>
               )}
+
+              {/* Скрытый вход для legacy-юзеров (до перехода на email-OTP) */}
+              <button
+                type="button"
+                onClick={() => { setStep('legacy'); setError(''); }}
+                style={{ fontFamily: F, fontSize: '0.82rem', color: 'rgba(11,13,16,0.4)', background: 'none', border: 'none', cursor: 'pointer', marginTop: 4, alignSelf: 'center' }}
+              >
+                У меня старый аккаунт
+              </button>
+            </motion.form>
+          )}
+
+          {/* ── Шаг: Legacy (логин + пароль для старых аккаунтов) ── */}
+          {step === 'legacy' && (
+            <motion.form
+              key="legacy-step"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.25 }}
+              onSubmit={handleLegacyLogin}
+              className="w-full rounded-[32px] px-4 pt-4 pb-5 flex flex-col gap-3"
+              style={{ background: 'rgba(255,255,255,0.5)', boxShadow: '0 2px 16px rgba(0,0,0,0.07)' }}
+            >
+              <div style={{ fontFamily: F, fontSize: '0.9rem', color: 'rgba(11,13,16,0.55)', textAlign: 'center', padding: '4px 0 4px' }}>
+                Вход для старых аккаунтов. После входа привяжи email, чтобы не потерять доступ.
+              </div>
+
+              <div className="w-full h-14 rounded-[24px] flex items-center px-5" style={{ background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.1)' }}>
+                <input
+                  type="text"
+                  value={legacyUsername}
+                  onChange={e => setLegacyUsername(e.target.value)}
+                  placeholder="Имя пользователя"
+                  autoComplete="username"
+                  className="w-full bg-transparent outline-none"
+                  style={{ fontFamily: F, fontSize: '1rem', color: 'rgba(11,13,16,0.8)' }}
+                />
+              </div>
+
+              <div className="w-full h-14 rounded-[24px] flex items-center px-5" style={{ background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.1)' }}>
+                <input
+                  type="password"
+                  value={legacyPassword}
+                  onChange={e => setLegacyPassword(e.target.value)}
+                  placeholder="Пароль"
+                  autoComplete="current-password"
+                  className="w-full bg-transparent outline-none"
+                  style={{ fontFamily: F, fontSize: '1rem', color: 'rgba(11,13,16,0.8)' }}
+                />
+              </div>
+
+              <AnimatePresence>
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    className="rounded-2xl px-4 py-2 text-sm"
+                    style={{ background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.3)', color: '#dc2626', fontFamily: F }}
+                  >
+                    {error}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full h-14 rounded-full flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
+                style={{ background: '#222224', fontFamily: M, fontSize: '1rem', fontWeight: 500, color: '#f8f8f8' }}
+              >
+                {loading && <Loader2 size={18} className="animate-spin" />}
+                Войти
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setStep('email'); setLegacyUsername(''); setLegacyPassword(''); setError(''); }}
+                style={{ fontFamily: F, fontSize: '0.85rem', color: 'rgba(11,13,16,0.4)', background: 'none', border: 'none', cursor: 'pointer', marginTop: 2 }}
+              >
+                Назад
+              </button>
             </motion.form>
           )}
 
