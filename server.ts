@@ -126,6 +126,69 @@ const checkCustomRateLimit = (key: string, max: number, windowMs: number): boole
   return bucket.count <= max;
 };
 
+// ─── Глобальная защита от ботов / флуда ──────────────────────────────────────
+// Реальный активный пользователь делает 30-100 запросов/мин на пике.
+// Всё что выше 600/мин с одного IP — почти точно бот.
+// 1500+/мин = явная атака, банится на час.
+const ipRequestCounts = new Map<string, { count: number; resetAt: number }>();
+const bannedIPs = new Map<string, number>(); // IP → когда заканчивается бан
+const GLOBAL_LIMIT_PER_MINUTE = 600;
+const AUTO_BAN_THRESHOLD = 1500;
+const AUTO_BAN_DURATION_MS = 60 * 60 * 1000; // 1 час
+
+const globalGuard = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const ip = req.ip || 'unknown';
+  const now = Date.now();
+
+  // Проверка бана
+  const bannedUntil = bannedIPs.get(ip);
+  if (bannedUntil && bannedUntil > now) {
+    return res.status(429).json({ error: "IP временно заблокирован за подозрительную активность." });
+  }
+  if (bannedUntil && bannedUntil <= now) {
+    bannedIPs.delete(ip);
+  }
+
+  // Чистим устаревшие записи
+  if (ipRequestCounts.size > 10000) {
+    for (const [k, v] of ipRequestCounts) {
+      if (v.resetAt <= now) ipRequestCounts.delete(k);
+    }
+  }
+
+  const bucket = ipRequestCounts.get(ip);
+  if (!bucket || bucket.resetAt <= now) {
+    ipRequestCounts.set(ip, { count: 1, resetAt: now + 60_000 });
+    return next();
+  }
+
+  bucket.count += 1;
+
+  // Auto-ban на час за явный флуд
+  if (bucket.count >= AUTO_BAN_THRESHOLD) {
+    bannedIPs.set(ip, now + AUTO_BAN_DURATION_MS);
+    console.warn(`[SECURITY] IP ${ip} заблокирован на час за флуд (${bucket.count} req/мин)`);
+    return res.status(429).json({ error: "IP временно заблокирован за подозрительную активность." });
+  }
+
+  if (bucket.count > GLOBAL_LIMIT_PER_MINUTE) {
+    return res.status(429).json({ error: "Слишком много запросов. Подожди минуту." });
+  }
+
+  return next();
+};
+
+// Лимит для дорогих AI-эндпоинтов (chat, summarize, voice).
+// Живой активный пользователь делает 10-20/мин. 40 — потолок с запасом.
+const aiRateLimit = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const userId = (req as any).userId;
+  const key = userId ? `ai:${userId}` : `ai:ip:${req.ip || 'unknown'}`;
+  if (!checkCustomRateLimit(key, 40, 60_000)) {
+    return res.status(429).json({ error: "Слишком много AI-запросов. Подожди минуту." });
+  }
+  next();
+};
+
 const getRouteLabel = (req: express.Request) => {
   if (req.route?.path) {
     const routePath = typeof req.route.path === "string" ? req.route.path : req.path;
@@ -178,6 +241,9 @@ app.get("/metrics", async (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
   res.status(200).send(await metricsRegistry.metrics());
 });
+
+// Глобальная защита от флуда — стоит ДО логгирования, чтобы не засирать логи ботами
+app.use("/api/*", globalGuard);
 
 // Logging middleware for API requests
 app.use("/api/*", (req, res, next) => {
@@ -1540,7 +1606,7 @@ app.get("/api/search", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/voice/transcribe", requireAuth, upload.single('audio'), async (req, res) => {
+app.post("/api/voice/transcribe", requireAuth, aiRateLimit, upload.single('audio'), async (req, res) => {
   let tmpIn = "";
   let tmpOut = "";
 
@@ -1655,7 +1721,7 @@ async function callRouterAI(apiKey: string, body: object, attempt = 0): Promise<
   }
 }
 
-app.post("/api/summarize", requireAuth, async (req, res) => {
+app.post("/api/summarize", requireAuth, aiRateLimit, async (req, res) => {
   const userId = (req as any).userId;
   const { messages, threadId, raw, rawSummary } = req.body || {};
   // raw=true: заметка создана вручную — не нужен LLM, только DB write
@@ -1779,7 +1845,7 @@ is_meaningful = false если диалог: короткий small-talk, тех
   }
 });
 
-app.post("/api/chat", requireAuth, async (req, res) => {
+app.post("/api/chat", requireAuth, aiRateLimit, async (req, res) => {
   try {
     const userId = (req as any).userId;
     const { messages, no_tools } = req.body;
