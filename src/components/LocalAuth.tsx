@@ -312,75 +312,58 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
         className="w-full max-w-[440px] flex flex-col items-center"
         style={{ gap: 0 }}
       >
-        {/* Маскот (login) / Логотип с анимацией (signup) */}
-        <AnimatePresence mode="wait">
-          {isLogin ? (
-            <motion.div
-              key="mascot"
-              initial={{ opacity: 0, scale: 0.85 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.85 }}
-              transition={{ duration: 0.35, ease: 'easeOut' }}
-              style={{ marginBottom: 18 }}
-            >
-              <PrimeMascot
-                size={64}
-                eyes={eyes}
-                decor={decor}
-                wakeUp={wakeUp}
+        {/* Маскот (login) / Логотип (signup) — crossfade через opacity, оба в DOM */}
+        <div style={{ position: 'relative', width: 64, height: 64, marginBottom: 18 }}>
+          {/* Маскот */}
+          <motion.div
+            animate={{ opacity: isLogin ? 1 : 0 }}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
+            style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: isLogin ? 'auto' : 'none' }}
+          >
+            <PrimeMascot size={64} eyes={eyes} decor={decor} wakeUp={wakeUp} />
+          </motion.div>
+
+          {/* Логотип с анимацией сборки при первом появлении */}
+          <motion.div
+            animate={{ opacity: isLogin ? 0 : 1 }}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
+            style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: isLogin ? 'none' : 'auto' }}
+          >
+            <svg width="56" height="56" viewBox="0 0 1681 1681" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <motion.rect
+                x="58.8315" y="58.8315" width="1563.24" height="1563.24" rx="781.619"
+                stroke={FG} strokeWidth="117.663"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: isLogin ? 0 : 1 }}
+                transition={{ duration: 0.5, delay: isLogin ? 0 : 0.25, ease: 'easeOut' }}
               />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="logo"
-              initial={{ opacity: 0, scale: 0.85 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.85 }}
-              transition={{ duration: 0.35, ease: 'easeOut' }}
-              style={{ marginBottom: 18 }}
-            >
-              <svg width="56" height="56" viewBox="0 0 1681 1681" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <motion.rect
-                  x="58.8315" y="58.8315"
-                  width="1563.24" height="1563.24"
-                  rx="781.619"
-                  stroke={FG} strokeWidth="117.663"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.5, delay: 0.25, ease: 'easeOut' }}
-                />
-                <motion.path
-                  d="M1344.73 840.43H336.186"
-                  stroke={FG} strokeWidth="117.663"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.4, delay: 0.05, ease: 'easeOut' }}
-                />
-                <motion.path
-                  d="M840.469 1344.71L840.469 336.167"
-                  stroke={FG} strokeWidth="117.663"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.4, delay: 0.1, ease: 'easeOut' }}
-                />
-                <motion.path
-                  d="M1078.16 602.734L602.734 1078.16"
-                  stroke={FG} strokeWidth="117.663"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.45, delay: 0.15, ease: 'easeOut' }}
-                />
-                <motion.path
-                  d="M1078.16 1078.16L602.734 602.734"
-                  stroke={FG} strokeWidth="117.663"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.45, delay: 0.2, ease: 'easeOut' }}
-                />
-              </svg>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              <motion.path
+                d="M1344.73 840.43H336.186" stroke={FG} strokeWidth="117.663"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: isLogin ? 0 : 1 }}
+                transition={{ duration: 0.4, delay: isLogin ? 0 : 0.05, ease: 'easeOut' }}
+              />
+              <motion.path
+                d="M840.469 1344.71L840.469 336.167" stroke={FG} strokeWidth="117.663"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: isLogin ? 0 : 1 }}
+                transition={{ duration: 0.4, delay: isLogin ? 0 : 0.1, ease: 'easeOut' }}
+              />
+              <motion.path
+                d="M1078.16 602.734L602.734 1078.16" stroke={FG} strokeWidth="117.663"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: isLogin ? 0 : 1 }}
+                transition={{ duration: 0.45, delay: isLogin ? 0 : 0.15, ease: 'easeOut' }}
+              />
+              <motion.path
+                d="M1078.16 1078.16L602.734 602.734" stroke={FG} strokeWidth="117.663"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: isLogin ? 0 : 1 }}
+                transition={{ duration: 0.45, delay: isLogin ? 0 : 0.2, ease: 'easeOut' }}
+              />
+            </svg>
+          </motion.div>
+        </div>
 
         {/* Заголовок — меняется в зависимости от шага */}
         <div style={{ minHeight: 28, marginBottom: 36 }}>
