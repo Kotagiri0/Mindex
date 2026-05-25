@@ -293,9 +293,18 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center px-6"
+      className="min-h-screen flex flex-col items-center px-6 local-auth-root"
       style={{ backgroundColor: BG, justifyContent: 'flex-start', paddingTop: '20vh' }}
     >
+      <style>{`
+        .local-auth-root .input-row {
+          transition: border-color 0.2s ease, background-color 0.2s ease;
+        }
+        .local-auth-root .input-row:focus-within {
+          border-color: rgba(0,0,0,0.25);
+          background-color: #ffffff;
+        }
+      `}</style>
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -364,11 +373,14 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                   />
 
                   {/* Google — кастомная кнопка */}
-                  <button
+                  <motion.button
                     type="button"
                     onClick={handleGoogleClick}
                     disabled={googleLoading || !googleClientId}
-                    className="w-full h-[52px] rounded-full flex items-center justify-center transition-opacity disabled:opacity-60"
+                    whileHover={!isMobile && !googleLoading ? { scale: 1.01, boxShadow: '0 4px 14px rgba(0,0,0,0.15)' } : undefined}
+                    whileTap={!googleLoading ? { scale: 0.97 } : undefined}
+                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                    className="w-full h-[52px] rounded-full flex items-center justify-center disabled:opacity-60"
                     style={{ background: FG, fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: '#f8f8f8', border: 'none', cursor: googleLoading ? 'default' : 'pointer', position: 'relative' }}
                   >
                     {googleLoading ? (
@@ -384,17 +396,20 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                         {isLogin ? 'Войти через Google' : 'С помощью Google'}
                       </span>
                     )}
-                  </button>
+                  </motion.button>
 
                   {/* Email */}
-                  <button
+                  <motion.button
                     type="button"
                     onClick={() => { setStep('email'); setError(''); }}
-                    className="w-full h-[52px] rounded-full flex items-center justify-center transition-opacity"
+                    whileHover={!isMobile ? { scale: 1.01, boxShadow: '0 4px 14px rgba(0,0,0,0.08)' } : undefined}
+                    whileTap={{ scale: 0.97 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                    className="w-full h-[52px] rounded-full flex items-center justify-center"
                     style={{ background: '#ffffff', fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: FG, border: '1px solid rgba(0,0,0,0.1)', cursor: 'pointer' }}
                   >
                     {isLogin ? 'Получить письмо с кодом' : 'По электронной почте'}
-                  </button>
+                  </motion.button>
                 </div>
 
                 <AnimatePresence>
@@ -413,27 +428,33 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                     в отдельном блоке внизу экрана (см. ниже корневой блок). */}
                 {!isMobile && (
                   <>
-                    <button
+                    <motion.button
                       type="button"
                       onClick={() => navigate(crossLinkTarget)}
+                      whileHover={{ color: FG }}
+                      whileTap={{ scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
                       style={{
                         fontFamily: M, fontSize: 13, color: 'rgba(11,13,16,0.4)',
                         background: 'none', border: 'none', cursor: 'pointer', marginTop: 4,
                       }}
                     >
                       {crossLinkText}
-                    </button>
+                    </motion.button>
                     {isLogin && (
-                      <button
+                      <motion.button
                         type="button"
                         onClick={() => { setStep('legacy'); setError(''); }}
+                        whileHover={{ color: FG }}
+                        whileTap={{ scale: 0.95 }}
+                        transition={{ duration: 0.15 }}
                         style={{
                           fontFamily: M, fontSize: 12, color: 'rgba(11,13,16,0.3)',
                           background: 'none', border: 'none', cursor: 'pointer',
                         }}
                       >
                         У меня старый аккаунт
-                      </button>
+                      </motion.button>
                     )}
                   </>
                 )}
@@ -459,7 +480,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                     boxShadow: '0 2px 16px rgba(0,0,0,0.05)',
                   }}
                 >
-                  <div className="w-full h-[52px] rounded-full flex items-center px-6" style={{ background: '#f5f5f5', border: '1px solid rgba(0,0,0,0.06)' }}>
+                  <div className="w-full h-[52px] rounded-full flex items-center px-6 input-row" style={{ background: '#f5f5f5', border: '1px solid rgba(0,0,0,0.06)' }}>
                     <input
                       ref={emailRef}
                       type="email"
@@ -472,15 +493,18 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                     />
                   </div>
 
-                  <button
+                  <motion.button
                     type="submit"
                     disabled={loading}
-                    className="w-full h-[52px] rounded-full flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
-                    style={{ background: '#ffffff', fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: FG, border: '1px solid rgba(0,0,0,0.1)' }}
+                    whileHover={!isMobile && !loading ? { scale: 1.01, boxShadow: '0 4px 14px rgba(0,0,0,0.08)' } : undefined}
+                    whileTap={!loading ? { scale: 0.97 } : undefined}
+                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                    className="w-full h-[52px] rounded-full flex items-center justify-center gap-2 disabled:opacity-60"
+                    style={{ background: '#ffffff', fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: FG, border: '1px solid rgba(0,0,0,0.1)', cursor: loading ? 'default' : 'pointer' }}
                   >
                     {loading && <Loader2 size={16} className="animate-spin" />}
                     Получить письмо с кодом
-                  </button>
+                  </motion.button>
                 </div>
 
                 <AnimatePresence>
@@ -495,13 +519,16 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                   )}
                 </AnimatePresence>
 
-                <button
+                <motion.button
                   type="button"
                   onClick={() => { setStep('choice'); setError(''); }}
+                  whileHover={!isMobile ? { color: FG } : undefined}
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
                   style={{ fontFamily: M, fontSize: 13, color: 'rgba(11,13,16,0.4)', background: 'none', border: 'none', cursor: 'pointer', marginTop: 4 }}
                 >
                   Вернуться назад
-                </button>
+                </motion.button>
               </motion.form>
             )}
 
@@ -524,7 +551,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                     boxShadow: '0 2px 16px rgba(0,0,0,0.05)',
                   }}
                 >
-                  <div className="w-full h-[52px] rounded-full flex items-center px-6" style={{ background: '#f5f5f5', border: '1px solid rgba(0,0,0,0.06)' }}>
+                  <div className="w-full h-[52px] rounded-full flex items-center px-6 input-row" style={{ background: '#f5f5f5', border: '1px solid rgba(0,0,0,0.06)' }}>
                     <input
                       ref={otpRef}
                       type="text"
@@ -546,15 +573,18 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                     />
                   </div>
 
-                  <button
+                  <motion.button
                     type="submit"
                     disabled={loading || otp.length !== 6}
-                    className="w-full h-[52px] rounded-full flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
-                    style={{ background: '#ffffff', fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: FG, border: '1px solid rgba(0,0,0,0.1)' }}
+                    whileHover={!isMobile && !loading && otp.length === 6 ? { scale: 1.01, boxShadow: '0 4px 14px rgba(0,0,0,0.08)' } : undefined}
+                    whileTap={!loading && otp.length === 6 ? { scale: 0.97 } : undefined}
+                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                    className="w-full h-[52px] rounded-full flex items-center justify-center gap-2 disabled:opacity-60"
+                    style={{ background: '#ffffff', fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: FG, border: '1px solid rgba(0,0,0,0.1)', cursor: loading || otp.length !== 6 ? 'default' : 'pointer' }}
                   >
                     {loading && <Loader2 size={16} className="animate-spin" />}
                     Подтвердить
-                  </button>
+                  </motion.button>
                 </div>
 
                 <AnimatePresence>
@@ -570,21 +600,27 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                 </AnimatePresence>
 
                 <div className="flex items-center gap-4 mt-1">
-                  <button
+                  <motion.button
                     type="button"
                     onClick={() => { setStep('email'); setOtp(''); setError(''); }}
+                    whileHover={!isMobile ? { color: FG } : undefined}
+                    whileTap={{ scale: 0.95 }}
+                    transition={{ duration: 0.15 }}
                     style={{ fontFamily: M, fontSize: 13, color: 'rgba(11,13,16,0.4)', background: 'none', border: 'none', cursor: 'pointer' }}
                   >
                     Вернуться назад
-                  </button>
-                  <button
+                  </motion.button>
+                  <motion.button
                     type="button"
                     onClick={handleResend}
                     disabled={resendCooldown > 0 || loading}
+                    whileHover={!isMobile && resendCooldown === 0 && !loading ? { color: FG } : undefined}
+                    whileTap={resendCooldown === 0 && !loading ? { scale: 0.95 } : undefined}
+                    transition={{ duration: 0.15 }}
                     style={{ fontFamily: M, fontSize: 13, color: resendCooldown > 0 ? 'rgba(11,13,16,0.25)' : 'rgba(11,13,16,0.5)', background: 'none', border: 'none', cursor: resendCooldown > 0 ? 'default' : 'pointer' }}
                   >
                     {resendCooldown > 0 ? `Повторить через ${resendCooldown}с` : 'Отправить снова'}
-                  </button>
+                  </motion.button>
                 </div>
               </motion.form>
             )}
@@ -611,7 +647,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                   <div style={{ fontFamily: F, fontSize: 13, color: 'rgba(11,13,16,0.55)', textAlign: 'center', padding: '4px 8px 2px' }}>
                     Для старых аккаунтов. После входа привяжи email.
                   </div>
-                  <div className="w-full h-[52px] rounded-full flex items-center px-6" style={{ background: '#f5f5f5', border: '1px solid rgba(0,0,0,0.06)' }}>
+                  <div className="w-full h-[52px] rounded-full flex items-center px-6 input-row" style={{ background: '#f5f5f5', border: '1px solid rgba(0,0,0,0.06)' }}>
                     <input
                       type="text"
                       value={legacyUsername}
@@ -622,7 +658,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                       style={{ fontFamily: M, fontSize: '0.95rem', color: FG }}
                     />
                   </div>
-                  <div className="w-full h-[52px] rounded-full flex items-center px-6" style={{ background: '#f5f5f5', border: '1px solid rgba(0,0,0,0.06)' }}>
+                  <div className="w-full h-[52px] rounded-full flex items-center px-6 input-row" style={{ background: '#f5f5f5', border: '1px solid rgba(0,0,0,0.06)' }}>
                     <input
                       type="password"
                       value={legacyPassword}
@@ -633,15 +669,18 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                       style={{ fontFamily: M, fontSize: '0.95rem', color: FG }}
                     />
                   </div>
-                  <button
+                  <motion.button
                     type="submit"
                     disabled={loading}
-                    className="w-full h-[52px] rounded-full flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
-                    style={{ background: '#ffffff', fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: FG, border: '1px solid rgba(0,0,0,0.1)' }}
+                    whileHover={!isMobile && !loading ? { scale: 1.01, boxShadow: '0 4px 14px rgba(0,0,0,0.08)' } : undefined}
+                    whileTap={!loading ? { scale: 0.97 } : undefined}
+                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                    className="w-full h-[52px] rounded-full flex items-center justify-center gap-2 disabled:opacity-60"
+                    style={{ background: '#ffffff', fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: FG, border: '1px solid rgba(0,0,0,0.1)', cursor: loading ? 'default' : 'pointer' }}
                   >
                     {loading && <Loader2 size={16} className="animate-spin" />}
                     Войти
-                  </button>
+                  </motion.button>
                 </div>
 
                 <AnimatePresence>
@@ -656,13 +695,16 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                   )}
                 </AnimatePresence>
 
-                <button
+                <motion.button
                   type="button"
                   onClick={() => { setStep('choice'); setLegacyUsername(''); setLegacyPassword(''); setError(''); }}
+                  whileHover={!isMobile ? { color: FG } : undefined}
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
                   style={{ fontFamily: M, fontSize: 13, color: 'rgba(11,13,16,0.4)', background: 'none', border: 'none', cursor: 'pointer' }}
                 >
                   Вернуться назад
-                </button>
+                </motion.button>
               </motion.form>
             )}
 
@@ -685,27 +727,31 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
             pointerEvents: 'none',
           }}
         >
-          <button
+          <motion.button
             type="button"
             onClick={() => navigate(crossLinkTarget)}
+            whileTap={{ scale: 0.95 }}
+            transition={{ duration: 0.15 }}
             style={{
               fontFamily: M, fontSize: 13, color: 'rgba(11,13,16,0.4)',
               background: 'none', border: 'none', cursor: 'pointer', pointerEvents: 'auto',
             }}
           >
             {crossLinkText}
-          </button>
+          </motion.button>
           {isLogin && (
-            <button
+            <motion.button
               type="button"
               onClick={() => { setStep('legacy'); setError(''); }}
+              whileTap={{ scale: 0.95 }}
+              transition={{ duration: 0.15 }}
               style={{
                 fontFamily: M, fontSize: 12, color: 'rgba(11,13,16,0.3)',
                 background: 'none', border: 'none', cursor: 'pointer', pointerEvents: 'auto',
               }}
             >
               У меня старый аккаунт
-            </button>
+            </motion.button>
           )}
         </div>
       )}
