@@ -746,6 +746,8 @@ app.post("/api/auth/verify-otp", async (req, res) => {
     [email]
   );
 
+  console.log(`[verify-otp] email=${email} found=${existingUsers.length > 0} id=${existingUsers[0]?.id ?? 'none'}`);
+
   let user;
   if (existingUsers.length > 0) {
     // Пользователь существует — просто входим
@@ -755,6 +757,7 @@ app.post("/api/auth/verify-otp", async (req, res) => {
     const userId = crypto.randomUUID();
     const username = email.split('@')[0].replace(/[^a-z0-9_]/gi, '').slice(0, 30) + '_' + userId.slice(0, 6);
     const displayName = email.split('@')[0];
+    console.log(`[verify-otp] creating new user for email=${email} id=${userId}`);
     const { rows: newUser } = await db.query(
       `INSERT INTO auth_users (id, username, display_name, password_hash, provider, email)
        VALUES ($1, $2, $3, '', 'email', $4)
