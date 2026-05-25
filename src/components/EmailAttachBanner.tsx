@@ -142,10 +142,10 @@ export default function EmailAttachBanner({ onDismiss }: EmailAttachBannerProps)
                 </div>
                 <div>
                   <div style={{ fontFamily: M, fontSize: '0.95rem', fontWeight: 600, color: '#222224' }}>
-                    Мы убрали пароли
+                    Новая система входа
                   </div>
                   <div style={{ fontFamily: F, fontSize: '0.82rem', color: 'rgba(11,13,16,0.5)', marginTop: 2 }}>
-                    Добавь email — иначе не сможешь войти после выхода
+                    Добавь email, чтобы не потерять доступ к аккаунту
                   </div>
                 </div>
               </div>
