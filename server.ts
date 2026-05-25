@@ -744,7 +744,7 @@ app.post("/api/auth/send-otp", async (req, res) => {
           <!-- Логотип -->
           <tr>
             <td align="center" style="padding-bottom:28px;">
-              <img src="https://i.ibb.co/Ng3nj1yJ/thelogooo.png" width="64" height="64" alt="Мысль" style="display:block;border:0;" />
+              <img src="https://mysle.ru/thelogooo.png" width="64" height="64" alt="Мысль" style="display:block;border:0;" />
             </td>
           </tr>
 
