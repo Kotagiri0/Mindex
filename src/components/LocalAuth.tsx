@@ -302,7 +302,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
         </div>
 
         {/* Заголовок — меняется в зависимости от шага */}
-        <div style={{ minHeight: 28, marginBottom: 96 }}>
+        <div style={{ minHeight: 28, marginBottom: 36 }}>
           <AnimatePresence mode="wait">
             <motion.div
               key={step === 'choice' ? `choice-${mode}` : step}
