@@ -305,10 +305,13 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
           background-color: #ffffff;
         }
       `}</style>
+      <AnimatePresence mode="wait" initial={false}>
       <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: 'easeOut' }}
+        key={mode}
+        initial={{ opacity: 0, x: isLogin ? -24 : 24 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: isLogin ? 24 : -24 }}
+        transition={{ duration: 0.3, ease: 'easeInOut' }}
         className="w-full max-w-[440px] flex flex-col items-center"
         style={{ gap: 0 }}
       >
@@ -745,6 +748,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
           </AnimatePresence>
         </div>
       </motion.div>
+      </AnimatePresence>
 
       {/* Мобиль: все шаги — прижаты к низу экрана */}
       {isMobile && (
