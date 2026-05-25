@@ -2052,7 +2052,9 @@ export default function DesktopApp({
   const [calActive, setCalActive] = useState(false);
   const [noteMode, setNoteMode] = useState(false);
   useEffect(() => {
-    if (screen === 'ob' || screen === 'today') setScreen('dash');
+    // Онбординг ('ob') обрабатывается на уровне App.tsx и до DesktopApp не доходит.
+    // Мобильный 'today' на десктопе схлопываем в дашборд.
+    if (screen === 'today') setScreen('dash');
   }, [screen]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
