@@ -119,12 +119,13 @@ test('syncs calendar task by creating event', async () => {
     assert.ok(url.includes('conferenceDataVersion=1'));
     const payload = JSON.parse(options.body);
     assert.equal(payload.conferenceData.createRequest.conferenceSolutionKey.type, 'hangoutsMeet');
-    return jsonResponse({ id: 'event-1' });
+    return jsonResponse({ id: 'event-1', hangoutLink: 'https://meet.google.com/abc-defg-hij' });
   };
 
   const task: Task = { id: 't1', name: 'Task', date: '2026-05-18', time: '10:00', done: false };
   const result = await syncGoogleCalendarTask(task);
   assert.equal(result?.calendarEventId, 'event-1');
+  assert.equal(result?.description, 'Google Meet: https://meet.google.com/abc-defg-hij');
 });
 
 test('does not create meet conference for all-day event', async () => {
@@ -146,6 +147,24 @@ test('does not create meet conference for all-day event', async () => {
   assert.equal(result?.calendarEventId, 'event-1');
 });
 
+test('updates existing event and appends meet link to description', async () => {
+  seedToken();
+  setGoogleMeetEnabled(true);
+  (globalThis as any).fetch = async (url: string, options: any) => {
+    if (url === '/api/config') {
+      return jsonResponse({ googleClientId: 'client' });
+    }
+    assert.equal(options.method, 'PATCH');
+    assert.ok(url.includes('conferenceDataVersion=1'));
+    return jsonResponse({ id: 'event-3', hangoutLink: 'https://meet.google.com/patch-link' });
+  };
+
+  const task: Task = { id: 't3', name: 'Task', date: '2026-05-18', time: '11:30', done: false, calendarEventId: 'event-3' };
+  const result = await syncGoogleCalendarTask(task);
+  assert.equal(result?.calendarEventId, 'event-3');
+  assert.equal(result?.description, 'Google Meet: https://meet.google.com/patch-link');
+});
+
 test('updates calendar task with time and recreates missing event', async () => {
   seedToken();
   let created = false;
@@ -158,14 +177,16 @@ test('updates calendar task with time and recreates missing event', async () => 
     }
     if (options.method === 'POST') {
       created = true;
-      return jsonResponse({ id: 'event-2' });
+      return jsonResponse({ id: 'event-2', hangoutLink: 'https://meet.google.com/new-link' });
     }
     return new Response('', { status: 200 });
   };
 
-  const task: Task = { id: 't2', name: 'Task', date: '2026-05-18', time: '09:30', done: false, calendarEventId: 'old' };
+  setGoogleMeetEnabled(true);
+  const task: Task = { id: 't2', name: 'Task', date: '2026-05-18', time: '09:30', done: false, calendarEventId: 'old', description: 'План на созвон' };
   const result = await syncGoogleCalendarTask(task);
   assert.equal(result?.calendarEventId, 'event-2');
+  assert.equal(result?.description, 'План на созвон\n\nGoogle Meet: https://meet.google.com/new-link');
   assert.equal(created, true);
 });
 

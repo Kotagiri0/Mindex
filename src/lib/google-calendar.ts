@@ -366,7 +366,25 @@ const calendarRequest = async (path: string, method: string, accessToken: string
   return response;
 };
 
-const createCalendarEvent = async (accessToken: string, payload: object, options?: { includeMeet?: boolean }) => {
+const extractMeetLink = (event: { hangoutLink?: string; conferenceData?: { entryPoints?: { entryPointType?: string; uri?: string }[] } } | null) => {
+  if (!event) return undefined;
+  if (event.hangoutLink) return event.hangoutLink;
+  const entry = event.conferenceData?.entryPoints?.find((item) => item.entryPointType === 'video' && item.uri);
+  return entry?.uri;
+};
+
+const appendMeetLinkToDescription = (description: string | undefined, meetLink?: string) => {
+  if (!meetLink) return description;
+  if (description?.includes(meetLink)) return description;
+  const base = description?.trim();
+  return base ? `${base}\n\nGoogle Meet: ${meetLink}` : `Google Meet: ${meetLink}`;
+};
+
+const createCalendarEvent = async (
+  accessToken: string,
+  payload: object,
+  options?: { includeMeet?: boolean },
+): Promise<{ eventId: string; meetLink?: string } | null> => {
   const calendarId = getSelectedCalendarId();
   const query = options?.includeMeet ? '?conferenceDataVersion=1' : '';
   const response = await calendarRequest(`/calendars/${encodeURIComponent(calendarId)}/events${query}`, 'POST', accessToken, payload);
@@ -380,12 +398,16 @@ const createCalendarEvent = async (accessToken: string, payload: object, options
     console.warn(`[GCAL] Ошибка создания события: ${response.status} ${text}`);
     return null;
   }
-  const data = await response.json().catch(() => null) as { id?: string } | null;
+  const data = await response.json().catch(() => null) as {
+    id?: string;
+    hangoutLink?: string;
+    conferenceData?: { entryPoints?: { entryPointType?: string; uri?: string }[] };
+  } | null;
   if (!data?.id) {
     console.warn('[GCAL] Ответ создания события без id.');
     return null;
   }
-  return data.id;
+  return { eventId: data.id, meetLink: extractMeetLink(data) };
 };
 
 export const syncGoogleCalendarTask = async (task: Task): Promise<Task | null> => {
@@ -395,21 +417,28 @@ export const syncGoogleCalendarTask = async (task: Task): Promise<Task | null> =
   const includeMeet = isGoogleMeetEnabled() && Boolean(task.time);
   const payload = buildEventPayload(task, { includeMeet });
   if (!payload) return null;
+  const withMeetDescription = (baseTask: Task, meetLink?: string): Task => {
+    if (!includeMeet || !meetLink) return baseTask;
+    const nextDescription = appendMeetLinkToDescription(baseTask.description, meetLink);
+    if (nextDescription === baseTask.description) return baseTask;
+    return { ...baseTask, description: nextDescription };
+  };
 
   const calendarId = getSelectedCalendarId();
 
   if (task.calendarEventId) {
+    const patchQuery = includeMeet ? '?conferenceDataVersion=1' : '';
     const response = await calendarRequest(
-      `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(task.calendarEventId)}`,
+      `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(task.calendarEventId)}${patchQuery}`,
       'PATCH',
       accessToken,
       payload,
     );
 
     if (response.status === 404) {
-      const eventId = await createCalendarEvent(accessToken, payload, { includeMeet });
-      if (!eventId) return null;
-      return { ...task, calendarEventId: eventId };
+      const created = await createCalendarEvent(accessToken, payload, { includeMeet });
+      if (!created) return null;
+      return withMeetDescription({ ...task, calendarEventId: created.eventId }, created.meetLink);
     }
 
     if (response.status === 401 || response.status === 403) {
@@ -418,15 +447,19 @@ export const syncGoogleCalendarTask = async (task: Task): Promise<Task | null> =
     }
 
     if (response.ok) {
-      return task;
+      const data = await response.json().catch(() => null) as {
+        hangoutLink?: string;
+        conferenceData?: { entryPoints?: { entryPointType?: string; uri?: string }[] };
+      } | null;
+      return withMeetDescription(task, extractMeetLink(data));
     }
 
     return null;
   }
 
-  const eventId = await createCalendarEvent(accessToken, payload, { includeMeet });
-  if (!eventId) return null;
-  return { ...task, calendarEventId: eventId };
+  const created = await createCalendarEvent(accessToken, payload, { includeMeet });
+  if (!created) return null;
+  return withMeetDescription({ ...task, calendarEventId: created.eventId }, created.meetLink);
 };
 
 export const deleteGoogleCalendarEvent = async (eventId: string) => {
