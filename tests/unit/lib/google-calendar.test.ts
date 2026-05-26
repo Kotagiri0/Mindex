@@ -5,7 +5,9 @@ import {
   disconnectGoogleCalendar,
   fetchCalendarList,
   getSelectedCalendarId,
+  isGoogleMeetEnabled,
   isGoogleCalendarConnected,
+  setGoogleMeetEnabled,
   setSelectedCalendarId,
   syncGoogleCalendarTask,
   deleteGoogleCalendarEvent,
@@ -67,15 +69,23 @@ test('connects calendar using token client', async () => {
 test('disconnect clears stored calendar data', () => {
   seedToken();
   localStorage.setItem('mx_google_calendar_id_user-1', 'cal-1');
+  localStorage.setItem('mx_google_meet_enabled_user-1', 'true');
   disconnectGoogleCalendar();
   assert.equal(localStorage.getItem('mx_google_calendar_token_user-1'), null);
   assert.equal(localStorage.getItem('mx_google_calendar_id_user-1'), null);
+  assert.equal(localStorage.getItem('mx_google_meet_enabled_user-1'), null);
 });
 
 test('gets and sets selected calendar id', () => {
   assert.equal(getSelectedCalendarId(), 'primary');
   setSelectedCalendarId('cal-1');
   assert.equal(getSelectedCalendarId(), 'cal-1');
+});
+
+test('gets and sets google meet toggle', () => {
+  assert.equal(isGoogleMeetEnabled(), false);
+  setGoogleMeetEnabled(true);
+  assert.equal(isGoogleMeetEnabled(), true);
 });
 
 test('returns empty calendar list without token', async () => {
@@ -99,12 +109,35 @@ test('fetches calendar list when token exists', async () => {
 
 test('syncs calendar task by creating event', async () => {
   seedToken();
+  setGoogleMeetEnabled(true);
   (globalThis as any).fetch = async (url: string, options: any) => {
     if (url === '/api/config') {
       return jsonResponse({ googleClientId: 'client' });
     }
     assert.equal(options.method, 'POST');
     assert.ok(url.includes('/events'));
+    assert.ok(url.includes('conferenceDataVersion=1'));
+    const payload = JSON.parse(options.body);
+    assert.equal(payload.conferenceData.createRequest.conferenceSolutionKey.type, 'hangoutsMeet');
+    return jsonResponse({ id: 'event-1' });
+  };
+
+  const task: Task = { id: 't1', name: 'Task', date: '2026-05-18', time: '10:00', done: false };
+  const result = await syncGoogleCalendarTask(task);
+  assert.equal(result?.calendarEventId, 'event-1');
+});
+
+test('does not create meet conference for all-day event', async () => {
+  seedToken();
+  setGoogleMeetEnabled(true);
+  (globalThis as any).fetch = async (url: string, options: any) => {
+    if (url === '/api/config') {
+      return jsonResponse({ googleClientId: 'client' });
+    }
+    assert.equal(options.method, 'POST');
+    assert.ok(!url.includes('conferenceDataVersion=1'));
+    const payload = JSON.parse(options.body);
+    assert.equal(payload.conferenceData, undefined);
     return jsonResponse({ id: 'event-1' });
   };
 

@@ -35,6 +35,7 @@ const TOKEN_TTL_BUFFER_MS = 60_000;
 const DEFAULT_EVENT_DURATION_MINUTES = 60;
 const TOKEN_STORAGE_PREFIX = 'mx_google_calendar_token_';
 const CALENDAR_ID_STORAGE_PREFIX = 'mx_google_calendar_id_';
+const MEET_ENABLED_STORAGE_PREFIX = 'mx_google_meet_enabled_';
 
 let googleScriptPromise: Promise<void> | null = null;
 let tokenClient: TokenClient | null = null;
@@ -193,6 +194,7 @@ export const disconnectGoogleCalendar = () => {
   if (!userId) return;
   clearToken(userId);
   localStorage.removeItem(`${CALENDAR_ID_STORAGE_PREFIX}${userId}`);
+  localStorage.removeItem(`${MEET_ENABLED_STORAGE_PREFIX}${userId}`);
   // Reset cached token client so next connect uses updated scopes
   tokenClient = null;
 };
@@ -207,6 +209,18 @@ export const setSelectedCalendarId = (calendarId: string) => {
   const userId = getCurrentUser()?.id;
   if (!userId) return;
   localStorage.setItem(`${CALENDAR_ID_STORAGE_PREFIX}${userId}`, calendarId);
+};
+
+export const isGoogleMeetEnabled = () => {
+  const userId = getCurrentUser()?.id;
+  if (!userId) return false;
+  return localStorage.getItem(`${MEET_ENABLED_STORAGE_PREFIX}${userId}`) === 'true';
+};
+
+export const setGoogleMeetEnabled = (enabled: boolean) => {
+  const userId = getCurrentUser()?.id;
+  if (!userId) return;
+  localStorage.setItem(`${MEET_ENABLED_STORAGE_PREFIX}${userId}`, enabled ? 'true' : 'false');
 };
 
 export const fetchCalendarList = async (): Promise<GoogleCalendarItem[]> => {
@@ -268,7 +282,7 @@ const buildDateTime = (date: string, time: string) => {
   return `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}T${pad(local.getHours())}:${pad(local.getMinutes())}:00${tz}`;
 };
 
-const buildEventPayload = (task: Task) => {
+const buildEventPayload = (task: Task, options?: { includeMeet?: boolean }) => {
   if (!task.date) return null;
 
   if (!task.time) {
@@ -301,12 +315,26 @@ const buildEventPayload = (task: Task) => {
     `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`,
   );
 
+  const shouldIncludeMeet = Boolean(options?.includeMeet);
+  const requestId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
   return {
     summary: task.name,
     description: task.description || undefined,
     location: task.location || undefined,
     start: { dateTime: start },
     end: { dateTime: end },
+    conferenceData: shouldIncludeMeet
+      ? {
+        createRequest: {
+          requestId,
+          conferenceSolutionKey: { type: 'hangoutsMeet' },
+        },
+      }
+      : undefined,
     extendedProperties: {
       private: { mindexTaskId: task.id },
     },
@@ -325,9 +353,10 @@ const calendarRequest = async (path: string, method: string, accessToken: string
   return response;
 };
 
-const createCalendarEvent = async (accessToken: string, payload: object) => {
+const createCalendarEvent = async (accessToken: string, payload: object, options?: { includeMeet?: boolean }) => {
   const calendarId = getSelectedCalendarId();
-  const response = await calendarRequest(`/calendars/${encodeURIComponent(calendarId)}/events`, 'POST', accessToken, payload);
+  const query = options?.includeMeet ? '?conferenceDataVersion=1' : '';
+  const response = await calendarRequest(`/calendars/${encodeURIComponent(calendarId)}/events${query}`, 'POST', accessToken, payload);
   if (response.status === 401 || response.status === 403) {
     const userId = getCurrentUser()?.id;
     if (userId) clearToken(userId);
@@ -350,7 +379,8 @@ export const syncGoogleCalendarTask = async (task: Task): Promise<Task | null> =
   const accessToken = await ensureGoogleCalendarToken({ allowPrompt: false });
   if (!accessToken) return null;
 
-  const payload = buildEventPayload(task);
+  const includeMeet = isGoogleMeetEnabled() && Boolean(task.time);
+  const payload = buildEventPayload(task, { includeMeet });
   if (!payload) return null;
 
   const calendarId = getSelectedCalendarId();
@@ -364,7 +394,7 @@ export const syncGoogleCalendarTask = async (task: Task): Promise<Task | null> =
     );
 
     if (response.status === 404) {
-      const eventId = await createCalendarEvent(accessToken, payload);
+      const eventId = await createCalendarEvent(accessToken, payload, { includeMeet });
       if (!eventId) return null;
       return { ...task, calendarEventId: eventId };
     }
@@ -381,7 +411,7 @@ export const syncGoogleCalendarTask = async (task: Task): Promise<Task | null> =
     return null;
   }
 
-  const eventId = await createCalendarEvent(accessToken, payload);
+  const eventId = await createCalendarEvent(accessToken, payload, { includeMeet });
   if (!eventId) return null;
   return { ...task, calendarEventId: eventId };
 };
