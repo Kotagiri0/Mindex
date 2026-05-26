@@ -40,6 +40,7 @@ const MEET_ENABLED_STORAGE_PREFIX = 'mx_google_meet_enabled_';
 let googleScriptPromise: Promise<void> | null = null;
 let tokenClient: TokenClient | null = null;
 let cachedClientId: string | null = null;
+let meetRequestCounter = 0;
 
 const loadGoogleScript = async () => {
   const accounts = (window as any).google?.accounts;
@@ -293,7 +294,8 @@ const generateMeetRequestId = () => {
       return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
     }
   }
-  return `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  meetRequestCounter = (meetRequestCounter + 1) % Number.MAX_SAFE_INTEGER;
+  return `${Date.now()}_${meetRequestCounter}_${Math.random().toString(36).slice(2, 16)}`;
 };
 
 const buildEventPayload = (task: Task, options?: { includeMeet?: boolean }) => {

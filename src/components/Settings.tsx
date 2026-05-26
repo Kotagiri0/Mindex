@@ -242,7 +242,7 @@ function GoogleCalendarRow() {
               Google Календарь + Meet
             </div>
             <div style={{ fontFamily: M, fontSize: 13, color: connected ? '#22c55e' : 'var(--text-muted)' }}>
-              {connected ? 'Аккаунт подключён' : 'Синхронизация событий и задач с возможностью создания Meet-ссылок'}
+              {connected ? 'Аккаунт подключён' : 'Синхронизация событий и задач'}
             </div>
           </div>
           {connected ? (
@@ -274,6 +274,9 @@ function GoogleCalendarRow() {
                   {meetEnabled ? 'Вкл' : 'Выкл'}
                 </span>
               </button>
+              <div style={{ marginTop: 6, fontFamily: M, fontSize: 12, color: 'var(--text-muted)' }}>
+                Meet-ссылка добавляется только к задачам с указанным временем.
+              </div>
             </div>
             <div style={{ fontFamily: M, fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>
               Активный календарь
