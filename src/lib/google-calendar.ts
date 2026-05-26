@@ -375,9 +375,10 @@ const extractMeetLink = (event: { hangoutLink?: string; conferenceData?: { entry
 
 const appendMeetLinkToDescription = (description: string | undefined, meetLink?: string) => {
   if (!meetLink) return description;
-  if (description?.includes(meetLink)) return description;
+  const formattedMeetLine = `Google Meet: ${meetLink}`;
+  if (description?.includes(formattedMeetLine)) return description;
   const base = description?.trim();
-  return base ? `${base}\n\nGoogle Meet: ${meetLink}` : `Google Meet: ${meetLink}`;
+  return base ? `${base}\n\n${formattedMeetLine}` : formattedMeetLine;
 };
 
 const createCalendarEvent = async (
