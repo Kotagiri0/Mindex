@@ -305,6 +305,12 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
           background-color: #ffffff;
         }
       `}</style>
+      {/* Скрытый контейнер для Google iframe — должен быть вне display:none блоков */}
+      <div
+        ref={googleButtonRef}
+        style={{ position: 'fixed', opacity: 0, pointerEvents: 'none', width: 0, height: 0, overflow: 'hidden', top: 0, left: 0 }}
+      />
+
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -407,12 +413,6 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                 transition={{ duration: 0.25 }}
                 className="w-full flex flex-col items-center gap-4"
               >
-                {/* Скрытый контейнер для Google iframe-кнопки (рендерится по клику) */}
-                <div
-                  ref={googleButtonRef}
-                  style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0, overflow: 'hidden' }}
-                />
-
                 {/* На десктопе — карточка прямо здесь */}
                 {!isMobile && (
                   <>
