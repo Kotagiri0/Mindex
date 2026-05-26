@@ -42,11 +42,11 @@ def fetch_stats() -> dict:
                   (SELECT COUNT(*) FROM auth_users WHERE created_at >= NOW() - INTERVAL '7 days') AS new_users_7d,
 
                   -- DAU/WAU: любой аутентифицированный запрос обновляет last_active_at в requireAuth.
-                  -- Это даёт честный счёт всех заходов в приложение, а не только создания задач.
+                  -- DAU считается по календарному дню МСК (стандарт индустрии), WAU — скользящие 7 дней МСК.
                   (SELECT COUNT(*) FROM user_profiles
-                     WHERE last_active_at >= NOW() - INTERVAL '1 day')                           AS dau,
+                     WHERE last_active_at >= (CURRENT_DATE AT TIME ZONE 'Europe/Moscow'))        AS dau,
                   (SELECT COUNT(*) FROM user_profiles
-                     WHERE last_active_at >= NOW() - INTERVAL '7 days')                          AS wau,
+                     WHERE last_active_at >= (CURRENT_DATE AT TIME ZONE 'Europe/Moscow') - INTERVAL '7 days') AS wau,
 
                   (SELECT COUNT(*) FROM user_tasks)                                              AS total_tasks,
                   (SELECT COUNT(*) FROM user_tasks WHERE created_at >= NOW() - INTERVAL '1 day') AS tasks_1d,
