@@ -295,7 +295,10 @@ const generateMeetRequestId = () => {
     }
   }
   meetRequestCounter = (meetRequestCounter + 1) % Number.MAX_SAFE_INTEGER;
-  return `${Date.now()}_${meetRequestCounter}_${Math.random().toString(36).slice(2, 16)}`;
+  const monotonicPart = typeof performance !== 'undefined'
+    ? Math.floor(performance.now() * 1000)
+    : 0;
+  return `${Date.now()}_${meetRequestCounter}_${monotonicPart}`;
 };
 
 const buildEventPayload = (task: Task, options?: { includeMeet?: boolean }) => {
