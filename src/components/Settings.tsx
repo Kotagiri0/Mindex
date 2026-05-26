@@ -239,10 +239,10 @@ function GoogleCalendarRow() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <div style={{ fontFamily: M, fontSize: 15, color: 'var(--text-primary)', marginBottom: 3 }}>
-              Google Calendar + Meet
+              Google Календарь + Meet
             </div>
             <div style={{ fontFamily: M, fontSize: 13, color: connected ? '#22c55e' : 'var(--text-muted)' }}>
-              {connected ? 'Аккаунт подключён' : 'Подключи аккаунт Google для календаря и Meet'}
+              {connected ? 'Аккаунт подключён' : 'Синхронизация событий и задач с возможностью создания Meet-ссылок'}
             </div>
           </div>
           {connected ? (

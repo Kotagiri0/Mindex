@@ -282,6 +282,20 @@ const buildDateTime = (date: string, time: string) => {
   return `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}T${pad(local.getHours())}:${pad(local.getMinutes())}:00${tz}`;
 };
 
+const generateMeetRequestId = () => {
+  if (typeof crypto !== 'undefined') {
+    if (typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    if (typeof crypto.getRandomValues === 'function') {
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+    }
+  }
+  return `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+};
+
 const buildEventPayload = (task: Task, options?: { includeMeet?: boolean }) => {
   if (!task.date) return null;
 
@@ -316,10 +330,7 @@ const buildEventPayload = (task: Task, options?: { includeMeet?: boolean }) => {
   );
 
   const shouldIncludeMeet = Boolean(options?.includeMeet);
-  const requestId =
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const requestId = generateMeetRequestId();
 
   return {
     summary: task.name,
