@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - VITE_TELEGRAM_BOT_USERNAME=${VITE_TELEGRAM_BOT_USERNAME}
+        - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
     container_name: mindex-app
     ports:
       - "3000:3000"
@@ -11,7 +14,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - DATABASE_URL=${DATABASE_URL:-postgresql://mindex:mindex@postgres:5432/mindex}
+      - DATABASE_URL=postgresql://mindex:mindex@postgres:5432/mindex
     depends_on:
       postgres:
         condition: service_healthy
@@ -31,15 +34,45 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  mindex-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+    container_name: mindex-bot
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://mindex:mindex@postgres:5432/mindex
+      - HTTPS_PROXY=http://user409503:9cm1p3@151.243.152.51:3096
+      - HTTP_PROXY=http://user409503:9cm1p3@151.243.152.51:3096
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  statsbot:
+    build:
+      context: ./statsbot
+      dockerfile: Dockerfile
+    container_name: mindex-statsbot
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://mindex:mindex@postgres:5432/mindex
+      - HTTPS_PROXY=http://user409503:9cm1p3@151.243.152.51:3096
+      - HTTP_PROXY=http://user409503:9cm1p3@151.243.152.51:3096
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: mindex-db
     environment:
       - POSTGRES_USER=mindex
       - POSTGRES_PASSWORD=mindex
       - POSTGRES_DB=mindex
-    ports:
-      - "5432:5432"
     volumes:
       - mindex_pgdata:/var/lib/postgresql/data
     healthcheck:

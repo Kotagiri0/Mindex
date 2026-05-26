@@ -1,224 +1,637 @@
-import type { ChangeEvent, ReactNode } from 'react';
-import { useState } from 'react';
-import { X, User, Camera, AlertCircle, LogOut, Trash2, Moon, Sun } from 'lucide-react';
-import { motion } from 'motion/react';
+import { useState, useEffect } from 'react';
+import { Pencil, ArrowLeft, ChevronDown, Check } from 'lucide-react';
 import { Settings } from '../types';
-import { getCurrentUser } from '../lib/auth';
+import { getCurrentUser, apiFetch } from '../lib/auth';
 import { storage } from '../lib/storage';
-import { useTheme } from '../lib/theme';
+import {
+  isGoogleCalendarConnected,
+  connectGoogleCalendar,
+  disconnectGoogleCalendar,
+  fetchCalendarList,
+  getSelectedCalendarId,
+  setSelectedCalendarId,
+  type GoogleCalendarItem,
+} from '../lib/google-calendar';
+
+const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const F = "'Random Grotesque', sans-serif";
 
 interface SettingsProps {
   settings: Settings;
   setSettings: (settings: Settings) => void;
   onBack: () => void;
   onLogout: () => void;
+  isDesktop?: boolean;
 }
 
-export default function SettingsScreen({ settings, setSettings, onBack, onLogout }: SettingsProps) {
-  const [isConfirmingClear, setIsConfirmingClear] = useState(false);
-  const { theme, toggleTheme } = useTheme();
-
-  const handleToggle = (key: keyof Settings) => {
-    setSettings({ ...settings, [key]: !settings[key] });
-  };
-
-  const handleAvatar = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const data = ev.target?.result as string;
-      setSettings({ ...settings, avatar: data });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const editName = () => {
-    const nextName = prompt('Как тебя зовут?', settings.name || '');
-    if (nextName !== null) {
-      setSettings({ ...settings, name: nextName });
-    }
-  };
-
-  const clearMemory = async () => {
-    const user = getCurrentUser();
-    if (user) {
-      storage.clearUserData(user.id);
-    }
-    window.location.reload();
-  };
-
-  const currentUser = getCurrentUser();
-
+function PillButton({ label, onClick, danger }: { label: string; onClick: () => void; danger?: boolean }) {
   return (
-    <div className="flex flex-col h-full bg-bg transition-theme">
-      <div className="safe-top flex-shrink-0" />
+    <button
+      onClick={onClick}
+      style={{
+        fontFamily: M,
+        fontSize: 11,
+        letterSpacing: '0.08em',
+        textTransform: 'uppercase' as const,
+        padding: '7px 16px',
+        borderRadius: 40,
+        border: `1px solid ${danger ? 'rgba(220,60,60,0.3)' : 'rgba(0,0,0,0.15)'}`,
+        background: 'transparent',
+        color: danger ? '#c0392b' : 'var(--text-primary)',
+        cursor: 'pointer',
+        whiteSpace: 'nowrap' as const,
+        flexShrink: 0,
+      }}
+    >
+      {label}
+    </button>
+  );
+}
 
-      <div className="p-4 flex items-center gap-3.5 flex-shrink-0">
-        <button onClick={onBack} className="w-9 h-9 rounded-full bg-surface2 flex items-center justify-center text-text-secondary active:bg-border transition-colors">
-          <X size={18} />
-        </button>
-        <span className="text-[20px] font-extrabold text-text-primary">Настройки</span>
+function SectionDivider() {
+  return <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', margin: '16px 0 0' }} />;
+}
+
+function IntegrationRow({ name, desc }: { name: string; desc: string }) {
+  return (
+    <div>
+      <div style={{ height: 1, background: 'rgba(0,0,0,0.06)' }} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 0' }}>
+        <div>
+          <div style={{ fontFamily: M, fontSize: 15, color: 'var(--text-primary)', marginBottom: 3 }}>{name}</div>
+          <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)' }}>{desc}</div>
+        </div>
+        <PillButton label="Подключить" onClick={() => alert('Скоро')} />
       </div>
-
-      <div className="flex-1 overflow-y-auto scrollbar-hide">
-        <div className="mx-[14px] mb-3.5 bg-surface rounded-[14px] p-4 flex items-center gap-3.5 transition-colors border border-transparent hover:border-border">
-          <div
-            onClick={() => document.getElementById('av-inp')?.click()}
-            className="w-[54px] h-[54px] rounded-full bg-surface2 flex-shrink-0 overflow-hidden cursor-pointer relative flex items-center justify-center group transition-colors"
-          >
-            {settings.avatar || currentUser?.avatarUrl ? (
-              <img src={settings.avatar || currentUser?.avatarUrl} className="absolute inset-0 w-full h-full object-cover rounded-full" />
-            ) : (
-              <div className="w-full h-full bg-surface2 flex items-center justify-center">
-                <User size={22} className="text-text-tertiary" />
-              </div>
-            )}
-            <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <Camera size={16} color="white" />
-            </div>
-          </div>
-          <input type="file" id="av-inp" className="hidden" accept="image/*" onChange={handleAvatar} />
-
-          <div className="flex-1 min-w-0">
-            <div className="text-[17px] font-bold text-text-primary truncate">
-              {settings.name || 'Имя'}
-            </div>
-            <div className="text-[13px] text-text-tertiary truncate">
-              {currentUser?.email || currentUser?.username || 'Локальный аккаунт'}
-            </div>
-          </div>
-          <button onClick={editName} className="w-8 h-8 rounded-full bg-surface2 flex items-center justify-center text-[13px] hover:bg-border transition-colors">
-            ✏️
-          </button>
-        </div>
-
-        <div className="mx-[14px] mb-3 bg-surface rounded-[14px] overflow-hidden border border-border">
-          <SettingRow
-            title="Агентный режим"
-            desc="Насколько ИИ действует сам: от советов до автоматической организации"
-            isOn={settings.agent}
-            onToggle={() => handleToggle('agent')}
-          />
-          <SettingRow
-            title="Подтверждать действия ИИ"
-            desc="Если включено, изменения попадут в список только после твоего подтверждения"
-            isOn={settings.confirm}
-            onToggle={() => handleToggle('confirm')}
-          />
-          <SettingRow
-            title="Уведомления"
-            desc="«Мысль» напомнит о задачах согласно планам и целям"
-            isOn={settings.notifs}
-            onToggle={() => handleToggle('notifs')}
-          />
-        </div>
-
-        <div className="mx-[14px] mb-3 bg-surface rounded-[14px] overflow-hidden border border-border">
-          <button 
-            onClick={toggleTheme}
-            className="w-full p-[14px_16px] flex items-center gap-3 border-b border-border last:border-none text-left active:opacity-70 transition-opacity"
-          >
-            <motion.div 
-              initial={false}
-              animate={{ rotate: theme === 'dark' ? 180 : 0 }}
-              transition={{ duration: 0.3 }}
-              className="w-9 h-9 rounded-full bg-surface2 flex items-center justify-center text-text-secondary"
-            >
-              {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
-            </motion.div>
-            <div className="flex-1">
-              <div className="text-[15px] font-bold text-text-primary">Тема оформления</div>
-              <div className="text-[12px] text-text-tertiary">
-                {theme === 'light' ? 'Светлая' : 'Тёмная'}
-              </div>
-            </div>
-            <span className="text-[13px] font-semibold text-text-secondary">
-              {theme === 'light' ? '☀️' : '🌙'}
-            </span>
-          </button>
-        </div>
-
-        <div className="mx-[14px] mb-3 bg-surface rounded-[14px] overflow-hidden border border-border">
-          <ActionRow title="Очистить локальные данные" icon={<Trash2 size={18} />} onClick={() => setIsConfirmingClear(true)} />
-          <ActionRow title="Выйти из аккаунта" icon={<LogOut size={18} />} onClick={onLogout} />
-        </div>
-
-        <div className="mx-[14px] mb-6 p-4 bg-surface rounded-[14px] border border-border transition-colors">
-          <div className="flex items-center gap-2 mb-2 text-[15px] font-bold text-text-primary">
-            <AlertCircle size={18} className="text-accent" />
-            Локальный режим
-          </div>
-          <div className="text-[12px] text-text-tertiary leading-relaxed space-y-2">
-            <p>Все задачи, диалоги и настройки хранятся только в этом браузере.</p>
-            <p>Если очистить данные браузера, приложение начнёт с нуля.</p>
-          </div>
-        </div>
-
-        <div className="h-10" />
-      </div>
-
-      {isConfirmingClear && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-surface rounded-[24px] w-full max-w-[320px] p-6 flex flex-col gap-4 border border-border"
-          >
-            <div className="text-[19px] font-bold text-text-primary text-center">Очистить память?</div>
-            <div className="text-[15px] text-text-tertiary text-center leading-relaxed">
-              Это удалит все локальные задачи, переписки и настройки без возможности восстановления.
-            </div>
-            <div className="flex flex-col gap-2 mt-2">
-              <button
-                onClick={clearMemory}
-                className="h-12 bg-red-500 text-white rounded-full font-bold text-[15px] active:scale-95 transition-transform"
-              >
-                Удалить всё
-              </button>
-              <button
-                onClick={() => setIsConfirmingClear(false)}
-                className="h-12 bg-surface2 text-text-primary rounded-full font-bold text-[15px] active:scale-95 transition-transform border border-border"
-              >
-                Отмена
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
     </div>
   );
 }
 
-function SettingRow({ title, desc, isOn, onToggle }: { title: string; desc: string; isOn: boolean; onToggle: () => void }) {
+function TelegramRow() {
+  const [step, setStep] = useState<'idle' | 'code' | 'done'>('idle');
+  const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || 'MindexBot';
+
+  useEffect(() => {
+    const user = getCurrentUser();
+    if (!user) return;
+    apiFetch(`/api/telegram/link-status`)
+      .then(r => r.json())
+      .then(d => { if (d.linked) setStep('done'); })
+      .catch(() => {});
+  }, []);
+
+  const handleConnect = async () => {
+    const user = getCurrentUser();
+    if (!user) return;
+    setLoading(true);
+    try {
+      const res = await apiFetch('/api/telegram/link-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      setCode(data.code);
+      setStep('code');
+
+      // Polling — проверяем каждые 3 секунды, подключился ли пользователь
+      const interval = setInterval(async () => {
+        const r = await apiFetch(`/api/telegram/link-status`);
+        const d = await r.json();
+        if (d.linked) {
+          clearInterval(interval);
+          setStep('done');
+        }
+      }, 3000);
+      setTimeout(() => clearInterval(interval), 10 * 60 * 1000); // стоп через 10 мин
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <button onClick={onToggle} className="w-full p-[14px_16px] flex items-start gap-3 border-b border-border last:border-none text-left active:opacity-70 transition-opacity">
-      <div className="flex-1">
-        <div className="text-[15px] font-bold text-text-primary mb-1">{title}</div>
-        <div className="text-[12px] text-text-tertiary leading-relaxed">{desc}</div>
+    <div>
+      <div style={{ height: 1, background: 'rgba(0,0,0,0.06)' }} />
+      <div style={{ padding: '18px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                <span style={{ fontFamily: M, fontSize: 15, color: 'var(--text-primary)' }}>Telegram</span>
+                <span style={{ fontFamily: M, fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: 'rgba(120,120,120,0.9)', background: 'rgba(120,120,120,0.12)', padding: '2px 7px', borderRadius: 20 }}>бета</span>
+              </div>
+            <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)' }}>
+              {step === 'done' ? '✅ Подключён — уведомления активны' : 'Уведомления о задачах прямо в Telegram'}
+            </div>
+          </div>
+          {step === 'idle' && <PillButton label={loading ? '...' : 'Подключить'} onClick={handleConnect} />}
+          {step === 'done' && <span style={{ fontFamily: M, fontSize: 12, color: '#4caf50' }}>Подключён</span>}
+        </div>
+        {step === 'code' && (
+          <div style={{ marginTop: 14, padding: '14px 16px', background: 'rgba(0,0,0,0.04)', borderRadius: 12 }}>
+            <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>
+              1. Открой бота в Telegram
+            </div>
+            <a
+              href={`https://t.me/${botUsername}?start=${code}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontFamily: M, fontSize: 14, color: '#5B6CF8', textDecoration: 'none', fontWeight: 500 }}
+            >
+              @{botUsername} →
+            </a>
+            <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)', marginTop: 10, marginBottom: 6 }}>
+              2. Или введи код вручную командой:
+            </div>
+            <div style={{
+              fontFamily: 'monospace', fontSize: 16, fontWeight: 700,
+              letterSpacing: '0.12em', color: 'var(--text-primary)',
+              background: 'rgba(0,0,0,0.06)', borderRadius: 8,
+              padding: '8px 12px', display: 'inline-block'
+            }}>
+              /start {code}
+            </div>
+            <div style={{ fontFamily: M, fontSize: 12, color: 'var(--text-muted)', marginTop: 10 }}>
+              Ожидаю подключения...
+            </div>
+            <div style={{ fontFamily: M, fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
+              Код вводится один раз. После этого бот готов к работе.
+            </div>
+          </div>
+        )}
       </div>
-      <motion.div 
-        animate={{ backgroundColor: isOn ? 'var(--accent)' : 'var(--border)' }}
-        className="w-11 h-7 rounded-full p-1 transition-all"
-      >
-        <motion.div 
-          animate={{ x: isOn ? 16 : 0 }}
-          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-          className="w-5 h-5 rounded-full bg-white shadow-sm dark:bg-gray-300"
-        />
-      </motion.div>
-    </button>
+    </div>
   );
 }
 
-function ActionRow({ title, icon, onClick }: { title: string; icon: ReactNode; onClick: () => void }) {
+function GoogleCalendarRow() {
+  const [connected, setConnected] = useState(() => isGoogleCalendarConnected());
+  const [loading, setLoading] = useState(false);
+  const [calendars, setCalendars] = useState<GoogleCalendarItem[]>([]);
+  const [selectedId, setSelectedId] = useState(() => getSelectedCalendarId());
+  const [showPicker, setShowPicker] = useState(false);
+  const [loadingCalendars, setLoadingCalendars] = useState(false);
+
+  const loadCalendars = async () => {
+    setLoadingCalendars(true);
+    try {
+      const list = await fetchCalendarList();
+      setCalendars(list);
+    } finally {
+      setLoadingCalendars(false);
+    }
+  };
+
+  // Load calendar list on mount if already connected
+  useEffect(() => {
+    if (connected) {
+      loadCalendars();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleConnect = async () => {
+    setLoading(true);
+    try {
+      const ok = await connectGoogleCalendar();
+      if (ok) {
+        setConnected(true);
+        await loadCalendars();
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDisconnect = () => {
+    disconnectGoogleCalendar();
+    setConnected(false);
+    setCalendars([]);
+    setSelectedId('primary');
+    setShowPicker(false);
+  };
+
+  const handleSelectCalendar = (id: string) => {
+    setSelectedCalendarId(id);
+    setSelectedId(id);
+    setShowPicker(false);
+  };
+
+  const selectedCalendar = calendars.find(c => c.id === selectedId);
+  const displayName = loadingCalendars
+    ? 'Загружаем...'
+    : selectedCalendar?.summary || (selectedId === 'primary' ? 'Основной' : selectedId);
+
   return (
-    <button onClick={onClick} className="w-full p-[14px_16px] flex items-center gap-3 border-b border-border last:border-none text-left active:opacity-70 transition-opacity">
-      <div className="w-9 h-9 rounded-full bg-surface2 flex items-center justify-center text-text-secondary transition-colors">
-        {icon}
+    <div>
+      <div style={{ height: 1, background: 'rgba(0,0,0,0.06)' }} />
+      <div style={{ padding: '18px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontFamily: M, fontSize: 15, color: 'var(--text-primary)', marginBottom: 3 }}>
+              Google Календарь
+            </div>
+            <div style={{ fontFamily: M, fontSize: 13, color: connected ? '#22c55e' : 'var(--text-muted)' }}>
+              {connected ? 'Подключён' : 'Синхронизация твоих событий и задач'}
+            </div>
+          </div>
+          {connected ? (
+            <PillButton label="Отключить" onClick={handleDisconnect} danger />
+          ) : (
+            <PillButton label={loading ? '...' : 'Подключить'} onClick={handleConnect} />
+          )}
+        </div>
+
+        {connected && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontFamily: M, fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>
+              Активный календарь
+            </div>
+            <button
+              onClick={() => setShowPicker(v => !v)}
+              style={{
+                width: '100%', padding: '10px 14px', borderRadius: 12,
+                border: '1px solid rgba(0,0,0,0.1)',
+                background: 'var(--surface2, rgba(0,0,0,0.03))',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                cursor: 'pointer', fontFamily: M, fontSize: 14, color: 'var(--text-primary)',
+                boxSizing: 'border-box' as const,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {selectedCalendar?.backgroundColor && (
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: selectedCalendar.backgroundColor, flexShrink: 0 }} />
+                )}
+                <span>{displayName}</span>
+              </div>
+              <ChevronDown
+                size={15}
+                style={{ transform: showPicker ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}
+              />
+            </button>
+
+            {showPicker && calendars.length > 0 && (
+              <div style={{
+                marginTop: 4, borderRadius: 12, overflow: 'hidden',
+                border: '1px solid rgba(0,0,0,0.08)',
+                background: 'var(--surface)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+              }}>
+                {calendars.map((cal, idx) => (
+                  <button
+                    key={cal.id}
+                    onClick={() => handleSelectCalendar(cal.id)}
+                    style={{
+                      width: '100%', padding: '11px 14px',
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      background: cal.id === selectedId ? 'rgba(99,102,241,0.06)' : 'transparent',
+                      border: 'none',
+                      borderBottom: idx < calendars.length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none',
+                      cursor: 'pointer', textAlign: 'left' as const,
+                    }}
+                  >
+                    <div style={{
+                      width: 10, height: 10, borderRadius: '50%',
+                      background: cal.backgroundColor || '#4285f4', flexShrink: 0,
+                    }} />
+                    <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-primary)', flex: 1 }}>
+                      {cal.summary}
+                    </span>
+                    {cal.primary && (
+                      <span style={{
+                        fontFamily: M, fontSize: 11, color: 'var(--text-muted)',
+                        background: 'rgba(0,0,0,0.06)', padding: '2px 8px', borderRadius: 20,
+                      }}>
+                        Основной
+                      </span>
+                    )}
+                    {cal.id === selectedId && (
+                      <Check size={14} color="var(--accent, #6366f1)" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
-      <div className="flex-1 text-[15px] font-bold text-text-primary">{title}</div>
-    </button>
+    </div>
+  );
+}
+
+function SettingRow({ label, desc, value, onChange }: { label: string; desc?: string; value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div>
+      <div style={{ height: 1, background: 'rgba(0,0,0,0.06)' }} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0' }}>
+        <div>
+          <div style={{ fontFamily: M, fontSize: 15, color: 'var(--text-primary)', marginBottom: desc ? 2 : 0 }}>{label}</div>
+          {desc && <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)' }}>{desc}</div>}
+        </div>
+        <button
+          onClick={() => onChange(!value)}
+          style={{
+            width: 44, height: 24, borderRadius: 40, border: 'none',
+            background: value ? 'var(--accent)' : 'rgba(0,0,0,0.12)',
+            cursor: 'pointer', position: 'relative', transition: 'background 0.2s',
+            flexShrink: 0,
+          }}
+        >
+          <div style={{
+            width: 18, height: 18, borderRadius: '50%', background: '#fff',
+            position: 'absolute', top: 3, left: value ? 23 : 3,
+            transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+          }} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AccountRow({ label, action, onAction, danger }: { label: string; action: string; onAction: () => void; danger?: boolean }) {
+  return (
+    <div>
+      <div style={{ height: 1, background: 'rgba(0,0,0,0.06)' }} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 0' }}>
+        <span style={{ fontFamily: M, fontSize: 15, color: 'var(--text-primary)' }}>{label}</span>
+        <PillButton label={action} onClick={onAction} danger={danger} />
+      </div>
+    </div>
+  );
+}
+
+export default function SettingsScreen({ settings, setSettings, onBack, onLogout, isDesktop = false }: SettingsProps) {
+  const [confirmClear, setConfirmClear] = useState(false);
+  const currentUser = getCurrentUser();
+
+  const displayName = settings.name || currentUser?.displayName || 'Пользователь';
+  const email = settings.email || currentUser?.email || currentUser?.username || '';
+
+  const getInitials = (name: string) =>
+    name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+
+  const editName = () => {
+    const next = prompt('Как тебя зовут?', displayName);
+    if (next !== null) setSettings({ ...settings, name: next });
+  };
+
+  const clearMemory = () => {
+    const user = getCurrentUser();
+    if (user) storage.clearUserData(user.id);
+    window.location.reload();
+  };
+
+  if (isDesktop) {
+    return (
+      <div style={{ height: '100%', overflowY: 'auto', background: 'var(--bg)', padding: '48px 56px 60px', boxSizing: 'border-box' }}>
+        <div style={{ fontFamily: F, fontSize: 32, color: 'var(--text-80)', marginBottom: 8 }}>настройки</div>
+        <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', marginBottom: 40 }} />
+
+        <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 48, alignItems: 'start' }}>
+          {/* Левая колонка */}
+          <div>
+            {/* Profile */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
+              <div style={{ width: 52, height: 52, borderRadius: '50%', background: settings.avatar ? 'var(--text-primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {settings.avatar ? (
+                  <img src={settings.avatar} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                ) : (
+                  <svg width="52" height="52" viewBox="0 0 125 125" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="62.5" cy="62.5" r="62.5" fill="#222224"/>
+                    <rect x="29.45" y="30.45" width="65.1" height="65.1" rx="32.55" stroke="#FEFEFE" strokeWidth="4.9"/>
+                    <path d="M77 68L77 51" stroke="#FEFEFE" strokeWidth="4.9"/>
+                    <path d="M65 68L65 51" stroke="#FEFEFE" strokeWidth="4.9"/>
+                  </svg>
+                )}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: M, fontSize: 16, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 2 }}>{displayName}</div>
+                {email && <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)' }}>{email}</div>}
+              </div>
+              <button onClick={editName} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-40)' }}>
+                <Pencil size={16} strokeWidth={1.5} />
+              </button>
+            </div>
+
+            <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', marginBottom: 24 }} />
+
+            {/* Account */}
+            <div style={{ fontFamily: M, fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Аккаунт</div>
+            <AccountRow label="Выйти из аккаунта" action="Выйти" onAction={onLogout} />
+            <AccountRow
+              label="Память модели"
+              action="Очистить"
+              onAction={() => setConfirmClear(true)}
+              danger
+            />
+          </div>
+
+          {/* Правая колонка */}
+          <div>
+            {/* Instructions */}
+            <div style={{ fontFamily: M, fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Инструкции</div>
+            <textarea
+              value={settings.instructions || ''}
+              onChange={e => setSettings({ ...settings, instructions: e.target.value })}
+              placeholder="Опиши, как ты хочешь, чтобы ии с тобой общался"
+              style={{
+                width: '100%', minHeight: 120, borderRadius: 16,
+                border: '1px solid rgba(0,0,0,0.08)', padding: '14px 16px',
+                fontFamily: M, fontSize: 14, color: 'var(--text-primary)',
+                background: 'var(--surface)', resize: 'vertical' as const,
+                outline: 'none', lineHeight: 1.6, boxSizing: 'border-box' as const,
+                marginBottom: 32,
+              }}
+            />
+
+            {/* Integrations */}
+            <div style={{ fontFamily: M, fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Интеграции</div>
+            <TelegramRow />
+            <GoogleCalendarRow />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      height: '100%',
+      overflowY: 'auto',
+      background: 'var(--bg)',
+      padding: 'env(safe-area-inset-top, 0px) 0 60px',
+      boxSizing: 'border-box',
+    }}>
+      <div style={{ maxWidth: 680, margin: '0 auto', padding: '0 20px' }}>
+        {/* Header */}
+        <>
+            <div style={{ display: 'flex', alignItems: 'center', paddingTop: 16, paddingBottom: 8, marginBottom: 8 }}>
+              <button
+                onClick={onBack}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  padding: '8px 8px 8px 0', display: 'flex', alignItems: 'center',
+                  color: 'var(--text-primary)', flexShrink: 0,
+                }}
+              >
+                <ArrowLeft size={22} strokeWidth={1.75} />
+              </button>
+              <div style={{ flex: 1, fontFamily: F, fontSize: 22, color: 'var(--text-80)', textAlign: 'center' }}>
+                настройки
+              </div>
+              <div style={{ width: 30 }} />
+            </div>
+            <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', marginBottom: 24 }} />
+          </>
+
+        {/* Profile */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+          {/* Avatar */}
+          <div style={{
+            width: 48, height: 48, borderRadius: '50%',
+            background: settings.avatar ? 'var(--text-primary)' : 'transparent',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            {settings.avatar ? (
+              <img src={settings.avatar} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+            ) : (
+              <svg width="48" height="48" viewBox="0 0 125 125" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="62.5" cy="62.5" r="62.5" fill="#222224"/>
+                <rect x="29.45" y="30.45" width="65.1" height="65.1" rx="32.55" stroke="#FEFEFE" strokeWidth="4.9"/>
+                <path d="M77 68L77 51" stroke="#FEFEFE" strokeWidth="4.9"/>
+                <path d="M65 68L65 51" stroke="#FEFEFE" strokeWidth="4.9"/>
+              </svg>
+            )}
+          </div>
+
+          {/* Name + email */}
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: M, fontSize: 16, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 2 }}>
+              {displayName}
+            </div>
+            {email && (
+              <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)' }}>
+                {email}
+              </div>
+            )}
+          </div>
+
+          {/* Edit */}
+          <button
+            onClick={editName}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', color: 'var(--text-40)' }}
+          >
+            <Pencil size={16} strokeWidth={1.5} />
+          </button>
+        </div>
+
+        {/* Instructions */}
+        <SectionDivider />
+        <div style={{ paddingTop: 16, marginBottom: 20 }}>
+          <div style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 12 }}>
+            Инструкции
+          </div>
+          <textarea
+            value={settings.instructions || ''}
+            onChange={e => setSettings({ ...settings, instructions: e.target.value })}
+            placeholder="Опиши, как ты хочешь, чтобы ии с тобой общался"
+            style={{
+              width: '100%',
+              minHeight: 100,
+              borderRadius: 16,
+              border: '1px solid rgba(0,0,0,0.08)',
+              padding: '14px 16px',
+              fontFamily: M,
+              fontSize: 14,
+              color: 'var(--text-primary)',
+              background: 'var(--surface)',
+              resize: 'vertical' as const,
+              outline: 'none',
+              lineHeight: 1.6,
+              boxSizing: 'border-box' as const,
+            }}
+          />
+        </div>
+
+        {/* Integrations */}
+        <SectionDivider />
+        <div style={{ paddingTop: 16, marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <div style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>
+              Интеграции
+            </div>
+          </div>
+          <TelegramRow />
+          <GoogleCalendarRow />
+        </div>
+
+        {/* Account */}
+        <SectionDivider />
+        <div style={{ paddingTop: 16 }}>
+          <div style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 4 }}>
+            Данные и аккаунт
+          </div>
+          <AccountRow label="Выйти из аккаунта" action="Выйти" onAction={onLogout} />
+          <AccountRow
+            label="Память модели"
+            action="Очистить"
+            onAction={() => setConfirmClear(true)}
+            danger
+          />
+        </div>
+      </div>
+
+      {/* Confirm clear modal */}
+      {confirmClear && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 100, padding: 24,
+        }}>
+          <div style={{
+            background: 'var(--surface)',
+            borderRadius: 20,
+            padding: 32,
+            maxWidth: 340,
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+          }}>
+            <div style={{ fontFamily: M, fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', textAlign: 'center' }}>
+              Очистить память?
+            </div>
+            <div style={{ fontFamily: M, fontSize: 14, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.6 }}>
+              Это удалит все локальные задачи, переписки и настройки без возможности восстановления.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button
+                onClick={clearMemory}
+                style={{
+                  height: 44, borderRadius: 40, background: '#c0392b',
+                  border: 'none', color: '#fff', cursor: 'pointer',
+                  fontFamily: M, fontSize: 14, fontWeight: 500,
+                }}
+              >
+                Удалить всё
+              </button>
+              <button
+                onClick={() => setConfirmClear(false)}
+                style={{
+                  height: 44, borderRadius: 40, background: 'transparent',
+                  border: '1px solid var(--border-input)', color: 'var(--text-primary)',
+                  cursor: 'pointer', fontFamily: M, fontSize: 14,
+                }}
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

@@ -1,10 +1,33 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Settings, Send, Check, Trash2, ChevronDown, ChevronRight, Star, Plus, Edit2 } from 'lucide-react';
+import { ChevronLeft, Settings, Star, ArrowUp, MessageCircle, StickyNote, Mic, Loader, Copy, MoreHorizontal, X, BookOpen } from 'lucide-react';
+import { MysliThinking } from './MysliThinking';
+import NoteView from './NoteView';
+import TelegramConnectBlock from './TelegramConnectBlock';
 import { Thread, Screen, Message, Task, SubTask } from '../types';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
+import { apiFetch } from '../lib/auth';
 import { motion, AnimatePresence } from 'motion/react';
+import { useVoiceInput, isMobileDevice } from '../lib/useVoiceInput';
+
+const THINKING_PHRASES = ['Думаю...', 'Анализирую...', 'Ищу в архиве...', 'Формулирую...', 'Пишу ответ...'];
+
+function ThinkingPhrase() {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    const iv = setInterval(() => setIdx((p: number) => (p + 1) % THINKING_PHRASES.length), 1800);
+    return () => clearInterval(iv);
+  }, []);
+  return (
+    <span style={{
+      fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+      fontSize: 14, color: 'rgba(34,34,36,0.4)', fontStyle: 'italic',
+    }}>
+      {THINKING_PHRASES[idx]}
+    </span>
+  );
+}
 
 interface AIChatProps {
   threadId: string | null;
@@ -14,16 +37,101 @@ interface AIChatProps {
   setTasks: (tasks: Task[] | ((prev: Task[]) => Task[])) => void;
   onClose: () => void;
   onNavigate: (screen: Screen) => void;
+  onOpenThread?: (id: string) => void;
+  autoSend?: string;
+  onAutoSentClear?: () => void;
+  isOnboarding?: boolean;
 }
 
-export default function AIChat({ threadId, threads, setThreads, tasks, setTasks, onClose, onNavigate }: AIChatProps) {
+function checkTaskConflicts(allTasks: Task[], task: { id: string; name: string; time?: string; date?: string }): string[] {
+  const warnings: string[] = [];
+
+  if (task.time && task.date) {
+    const [h, m] = task.time.split(':').map(Number);
+    if (!isNaN(h) && !isNaN(m)) {
+      const taskMinutes = h * 60 + m;
+      for (const t of allTasks) {
+        if (t.id === task.id || t.done || t.date !== task.date || !t.time) continue;
+        const [th, tm] = t.time.split(':').map(Number);
+        if (isNaN(th) || isNaN(tm)) continue;
+        if (Math.abs(taskMinutes - (th * 60 + tm)) <= 30) {
+          warnings.push(`конфликт по времени: "${t.name}" в ${t.time} — пересечение ±30 минут`);
+        }
+      }
+    }
+  }
+
+  if (task.date && task.name) {
+    const keywords = task.name.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+    if (keywords.length > 0) {
+      const taskDate = new Date(task.date);
+      for (const t of allTasks) {
+        if (t.id === task.id || t.done || !t.date) continue;
+        const tDate = new Date(t.date);
+        const dayDiff = (tDate.getTime() - taskDate.getTime()) / 86400000;
+        if (dayDiff < 0 || dayDiff > 3) continue;
+        const tWords = t.name.toLowerCase().split(/\s+/);
+        const overlap = keywords.filter(k => tWords.some(w => w.includes(k) || k.includes(w)));
+        if (overlap.length >= 2) {
+          const when = t.date === task.date ? 'сегодня' : t.date;
+          const timeStr = t.time ? ` в ${t.time}` : '';
+          warnings.push(`связанная задача: "${t.name}"${timeStr} (${when})`);
+        }
+      }
+    }
+  }
+
+  return warnings;
+}
+
+export default function AIChat({ threadId, threads, setThreads, tasks, setTasks, onClose, onNavigate, onOpenThread, autoSend, onAutoSentClear, isOnboarding }: AIChatProps) {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [noteMode, setNoteMode] = useState(false);
+  const [animatingContent, setAnimatingContent] = useState<string | null>(null);
+  const [replyQuote, setReplyQuote] = useState<string | null>(null);
+  const [openMsgMenuIdx, setOpenMsgMenuIdx] = useState<number | null>(null);
+  const [hoveredMsgIdx, setHoveredMsgIdx] = useState<number | null>(null);
+  const [openSourcesIdx, setOpenSourcesIdx] = useState<number | null>(null);
+  const [isTouchDevice] = useState(() => typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const autoSentRef = useRef(false);
+  const animIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevIsTypingRef = useRef(false);
+
+
+  useEffect(() => {
+    if (prevIsTypingRef.current && !isTyping) {
+      const visibleMsgs = (thread?.messages || []).filter(m => m.role !== 'tool' && !m.tool_calls);
+      const last = visibleMsgs[visibleMsgs.length - 1];
+      if (last?.role === 'assistant' && last.content) {
+        const fullText = last.content;
+        let i = 0;
+        setAnimatingContent('');
+        if (animIntervalRef.current) clearInterval(animIntervalRef.current);
+        animIntervalRef.current = setInterval(() => {
+          i += 6;
+          if (i >= fullText.length) {
+            clearInterval(animIntervalRef.current!);
+            setAnimatingContent(null);
+          } else {
+            setAnimatingContent(fullText.slice(0, i));
+          }
+        }, 10);
+      }
+    }
+    prevIsTypingRef.current = isTyping;
+  }, [isTyping]);
+
+  const { state: voiceState, startRecording, stopRecording, toggleRecording } = useVoiceInput(
+    (text) => {
+      setInput(prev => prev + (prev ? ' ' : '') + text);
+    }
+  );
+  const isMobile = isMobileDevice();
 
   const thread = threads.find(t => t.id === threadId);
-
-  if (!thread) return null;
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -36,14 +144,66 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     return n.getHours().toString().padStart(2, '0') + ':' + n.getMinutes().toString().padStart(2, '0');
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || !threadId) return;
-    
-    const text = input.trim();
-    setInput('');
-    
+  const REMIND_KEYWORDS = /напомн|remind|уведом|пришли|пинг|ping/i;
+
+  const sendHidden = async (hiddenPrompt: string) => {
+    if (!threadId) return;
+    setIsTyping(true);
+    try {
+      const response = await generateResponse([{ role: 'user', content: hiddenPrompt, time: ft() }]);
+      const assistantMsg: Message = { role: 'assistant', content: response.content || '', time: ft() };
+      setThreads(prev => prev.map(t => {
+        if (t.id !== threadId) return t;
+        const updated = { ...t, messages: [assistantMsg] };
+        db.saveThread(updated);
+        return updated;
+      }));
+    } catch {
+      // silent
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const sendText = async (text: string) => {
+    if (!text || !threadId) return;
+
+    // Умный ответ: если просят напоминание — проверяем Telegram
+    if (REMIND_KEYWORDS.test(text)) {
+      const userId = db.getUserId();
+      if (userId) {
+        try {
+          const res = await apiFetch(`/api/data/bootstrap`);
+          const data = await res.json();
+          const hasTelegram = Boolean(data?.profile?.telegram_chat_id);
+          if (!hasTelegram) {
+            const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || 'MindexBot';
+            const botUrl = `https://t.me/${botUsername}`;
+            const userMsg: Message = { role: 'user', content: text, time: ft() };
+            const assistantMsg: Message = {
+              role: 'assistant',
+              content: `Хотела бы напомнить — но в браузере я не могу отправлять уведомления.\n\nЕсли подключишь меня в Telegram, буду писать тебе прямо перед задачей. Это займёт 10 секунд: просто нажми /start в боте.\n\n👉 ${botUrl}`,
+              time: ft()
+            };
+            setThreads(prev => prev.map(t => {
+              if (t.id === threadId) {
+                const updated = { ...t, messages: [...t.messages, userMsg, assistantMsg] };
+                db.saveThread(updated);
+                return updated;
+              }
+              return t;
+            }));
+            return;
+          }
+        } catch {
+          // Если не удалось проверить — пропускаем перехват, идём в AI как обычно
+        }
+      }
+    }
+
     const userMsg: Message = { role: 'user', content: text, time: ft() };
-    
+    const isFirstMessage = (thread?.messages.length ?? 0) === 0;
+
     let updatedThread: Thread | undefined;
 
     setThreads(prev => prev.map(t => {
@@ -57,29 +217,25 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       }
       return t;
     }));
-    
+
     if (updatedThread) {
       db.saveThread(updatedThread);
     }
-    
+
     setIsTyping(true);
 
     try {
-      // Get latest messages for the thread
       const currentThread = threads.find(t => t.id === threadId);
       if (!currentThread) return;
-      
-      // Build conversation history
-      let conversationHistory: Message[] = [...currentThread.messages, userMsg];
 
+      let conversationHistory: Message[] = [...currentThread.messages, userMsg];
       const turnMessages: Message[] = [];
 
       let response = await generateResponse(conversationHistory);
-      
-      // Handle function calls
+
       while (response.tool_calls) {
         const toolResults: Message[] = [];
-        
+
         const assistantToolCallMsg: Message = {
           role: 'assistant',
           content: response.content || '',
@@ -93,24 +249,32 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           const args = JSON.parse(call.function.arguments);
           const id = call.id;
           let result;
-          
-          if (name === 'get_tasks') {
+
+          if (name === 'get_notes') {
+            const notes = threads.filter((t: Thread) => t.source === 'заметка');
+            result = notes.length > 0
+              ? notes.map((t: Thread) => ({ id: t.id, title: t.title, preview: t.preview }))
+              : 'Заметок нет.';
+          } else if (name === 'get_tasks') {
             const date = args.date;
             const filtered = date ? tasks.filter(t => t.date === date) : tasks;
-            result = filtered.length > 0 ? filtered : "Задач не найдено.";
+            result = filtered.length > 0 ? filtered : 'Задач не найдено.';
           } else if (name === 'add_task') {
-            const { name: taskName, time, date } = args;
+            const { name: taskName, time, date, description, location } = args;
             const newTask: Task = {
               id: uuid(),
               name: taskName,
               time: time || '',
               date: date || new Date().toISOString().split('T')[0],
               done: false,
-              threadId: threadId || undefined
+              threadId: threadId || undefined,
+              description: description || undefined,
+              location: location || undefined,
             };
             setTasks(prev => [...prev, newTask]);
             db.saveTask(newTask);
-            result = { status: "success", task: newTask };
+            const addWarnings = checkTaskConflicts([...tasks, newTask], newTask);
+            result = { status: 'success', task: newTask, ...(addWarnings.length > 0 ? { warnings: addWarnings } : {}) };
           } else if (name === 'start_planning') {
             const { questions } = args;
             const planningMsg: Message = {
@@ -131,66 +295,100 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
               return t;
             }));
             setIsTyping(false);
-            return; // Stop the standard flow, wait for user input
+            return;
           } else if (name === 'update_task') {
-            const { id: taskId, done, name: taskName, time, date } = args;
+            const { id: taskId, done, name: taskName, time, date, description, location } = args;
             setTasks(prev => prev.map(t => {
               if (t.id === taskId) {
-                const updated = { 
-                  ...t, 
-                  done: done !== undefined ? done : t.done, 
+                const updated = {
+                  ...t,
+                  done: done !== undefined ? done : t.done,
                   name: taskName || t.name,
                   time: time !== undefined ? time : t.time,
-                  date: date !== undefined ? date : t.date
+                  date: date !== undefined ? date : t.date,
+                  description: description !== undefined ? description : t.description,
+                  location: location !== undefined ? location : t.location,
                 };
                 db.saveTask(updated);
                 return updated;
               }
               return t;
             }));
-            result = { status: "success" };
+            const updatedTask = tasks.find(t => t.id === taskId);
+            if (updatedTask && (time !== undefined || date !== undefined)) {
+              const merged = { ...updatedTask, ...(taskName ? { name: taskName } : {}), ...(time !== undefined ? { time } : {}), ...(date !== undefined ? { date } : {}) };
+              const updWarnings = checkTaskConflicts(tasks, merged);
+              result = { status: 'success', ...(updWarnings.length > 0 ? { warnings: updWarnings } : {}) };
+            } else {
+              result = { status: 'success' };
+            }
           } else if (name === 'delete_task') {
             const { id: taskId } = args;
             setTasks(prev => prev.filter(t => t.id !== taskId));
             db.deleteTask(taskId);
-            result = { status: "success" };
+            result = { status: 'success' };
+          } else if (name === 'delete_note') {
+            const { id: noteId } = args;
+            setThreads((prev: Thread[]) => prev.filter(t => t.id !== noteId));
+            db.deleteThread(noteId);
+            result = { status: 'success' };
+          } else if (name === 'save_as_note') {
+            const { content, title } = args;
+            const noteId = uuid();
+            const savedNote: Thread = {
+              id: noteId,
+              title: (title || content.trim().slice(0, 40)) || 'Заметка',
+              preview: content.trim().slice(0, 100),
+              messages: [],
+              createdAt: Date.now(),
+              source: 'заметка' as const,
+              is_meaningful: true,
+              summary: content.trim(),
+            };
+            db.saveThread(savedNote);
+            setThreads((prev: Thread[]) => [savedNote, ...(Array.isArray(prev) ? prev : [])]);
+            apiFetch('/api/summarize', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId }),
+            }).catch(() => {});
+            result = { status: 'success', noteId };
           }
-          
+
           toolResults.push({
-            role: "tool",
+            role: 'tool',
             tool_call_id: id,
             content: JSON.stringify(result),
             time: ft()
           });
         }
-        
+
         turnMessages.push(...toolResults);
 
-        // Add the assistant message with tool calls and the tool results to history
         conversationHistory = [
           ...conversationHistory,
           assistantToolCallMsg,
           ...toolResults
         ];
 
-        // Get next response from model
         response = await generateResponse(conversationHistory);
       }
 
-      const assistantMsg: Message = { role: 'assistant', content: response.content || 'Готово!', time: ft() };
-      
+      const assistantMsg: Message = { role: 'assistant', content: response.content || 'Готово!', time: ft(), sources: response.sources };
+      if (isFirstMessage) generateTitle(text, assistantMsg.content);
+
       setThreads(prev => prev.map(t => {
         if (t.id === threadId) {
-          // Ensure user message is in history (fix for race conditions in some environments)
           const hasUserMsg = t.messages.some(
             m => m.role === 'user' && m.content === userMsg.content && m.time === userMsg.time
           );
           const baseMessages = hasUserMsg ? t.messages : [...t.messages, userMsg];
-          
+
           const updated = {
             ...t,
             messages: [...baseMessages, ...turnMessages, assistantMsg],
-            preview: assistantMsg.content.slice(0, 60) + '…'
+            preview: assistantMsg.content.slice(0, 60) + '…',
+            updatedAt: Date.now(),
           };
           db.saveThread(updated);
           return updated;
@@ -199,13 +397,13 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       }));
     } catch (err: any) {
       console.error('AI Error:', err);
-      const errorMsg: Message = { 
-        role: 'assistant', 
-        content: `Ошибка: ${err.message || 'Не удалось связаться с ИИ. Проверь интернет или настройки.'}`, 
-        time: ft() 
+      const errorMsg: Message = {
+        role: 'assistant',
+        content: `Ошибка: ${err.message || 'Не удалось связаться с ИИ. Проверь интернет или настройки.'}`,
+        time: ft()
       };
       if (err.name === 'TypeError' && err.message === 'Failed to fetch') {
-        errorMsg.content = "Ошибка сети: Не удалось отправить запрос (возможно, заблокировано WebView или нет интернета).";
+        errorMsg.content = 'Ошибка сети: Не удалось отправить запрос (возможно, заблокировано WebView или нет интернета).';
       }
       setThreads(prev => prev.map(t => {
         if (t.id === threadId) {
@@ -213,7 +411,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             m => m.role === 'user' && m.content === userMsg.content && m.time === userMsg.time
           );
           const baseMessages = hasUserMsg ? t.messages : [...t.messages, userMsg];
-          
+
           const updated = { ...t, messages: [...baseMessages, errorMsg] };
           db.saveThread(updated);
           return updated;
@@ -225,9 +423,39 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     }
   };
 
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  }, [input]);
+
+  const handleSend = () => {
+    const text = input.trim();
+    if (!text) return;
+    const finalText = replyQuote
+      ? `[Ответ на: "${replyQuote.length > 100 ? replyQuote.slice(0, 100) + '...' : replyQuote}"]\n${text}`
+      : text;
+    setInput('');
+    setReplyQuote(null);
+    sendText(finalText);
+  };
+
+  useEffect(() => {
+    if (autoSend && !autoSentRef.current && threadId) {
+      autoSentRef.current = true;
+      onAutoSentClear?.();
+      if (autoSend === '__onboarding_skip__') {
+        sendHidden('Представься пользователю — коротко, в своём стиле. Скажи кто ты, что умеешь и предложи начать. Без приветственных клише, без "Привет!", сразу по делу.');
+      } else {
+        sendText(autoSend);
+      }
+    }
+  }, [threadId]);
+
   const handleAnswer = async (msgIndex: number, questionId: string, answer: string) => {
     if (!threadId) return;
-    
+
     setThreads(prev => prev.map(t => {
       if (t.id === threadId) {
         const newMessages = [...t.messages];
@@ -237,15 +465,14 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             ...msg.planning_data,
             answers: { ...msg.planning_data.answers, [questionId]: answer }
           };
-          
-          // If all questions are answered, move to plan generation
-          const allAnswered = msg.planning_data.questions.every(q => 
-            msg.planning_data?.answers?.[q.id] || q.id === questionId
+
+          const updatedAnswers = msg.planning_data.answers;
+          const allAnswered = msg.planning_data.questions.every(q =>
+            updatedAnswers?.[q.id] !== undefined
           );
-          
+
           if (allAnswered) {
             msg.planning_data.status = 'plan_generated';
-            // Trigger AI to generate plan based on answers
             setTimeout(() => generatePlanFromAnswers(t, msg.planning_data!), 100);
           }
         }
@@ -267,23 +494,17 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           return `Вопрос: ${q?.question}\nОтвет: ${ans}`;
         }).join('\n\n');
 
-      const prompt = `Пользователь ответил на уточняющие вопросы:\n\n${answersText}\n\nНа основе этих ответов составь пошаговый план действий (to-do list).
-Отвечай СТРОГО в формате JSON:
-{
-  "title": "Название плана",
-  "steps": ["шаг 1", "шаг 2", ...]
-}`;
+      const prompt = `Пользователь ответил на уточняющие вопросы:\n\n${answersText}\n\nНа основе этих ответов составь пошаговый план действий (to-do list).\nОтвечай СТРОГО в формате JSON:\n{\n  "title": "Название плана",\n  "steps": ["шаг 1", "шаг 2", ...]\n}`;
 
       const response = await generateResponse([
         ...t.messages,
         { role: 'user', content: prompt, time: ft() }
-      ], { tool_choice: 'none' });
+      ], { no_tools: true });
 
       if (!response || !response.content) {
         throw new Error('AI вернул пустой ответ при генерации плана.');
       }
 
-      // Extract JSON from response content (in case it's wrapped in markdown)
       let jsonContent = response.content.trim();
       if (jsonContent.includes('```json')) {
         jsonContent = jsonContent.split('```json')[1].split('```')[0].trim();
@@ -292,7 +513,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       }
 
       const plan = JSON.parse(jsonContent);
-      
+
       setThreads(prev => prev.map(th => {
         if (th.id === threadId) {
           const newMessages = [...th.messages];
@@ -324,7 +545,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     if (!msg.planning_data?.plan) return;
 
     const { title, steps } = msg.planning_data.plan;
-    const subtasks: SubTask[] = steps.map(s => ({
+    const subtasks: SubTask[] = steps.map((s: string) => ({
       id: uuid(),
       name: s,
       done: false
@@ -352,11 +573,14 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           m.planning_data.status = 'accepted';
         }
         newMessages[msgIndex] = m;
-        const updated = { ...t, messages: [...newMessages, { 
-          role: 'assistant' as const, 
-          content: 'Отлично! План добавлен в календарь. Ты найдешь его в списке задач со звездочкой.', 
-          time: ft() 
-        }] };
+        const updated = {
+          ...t,
+          messages: [...newMessages, {
+            role: 'assistant' as const,
+            content: 'Отлично! План добавлен в календарь. Ты найдешь его в списке задач со звездочкой.',
+            time: ft()
+          }]
+        };
         db.saveThread(updated);
         return updated;
       }
@@ -373,15 +597,87 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           m.planning_data.status = 'rejected';
         }
         newMessages[msgIndex] = m;
-        const updated = { ...t, messages: [...newMessages, { 
-          role: 'assistant' as const, 
-          content: 'Хорошо, давай попробуем по-другому или просто продолжим общение.', 
-          time: ft() 
-        }] };
+        const updated = {
+          ...t,
+          messages: [...newMessages, {
+            role: 'assistant' as const,
+            content: 'Хорошо, давай попробуем по-другому или просто продолжим общение.',
+            time: ft()
+          }]
+        };
         db.saveThread(updated);
         return updated;
       }
       return t;
+    }));
+  };
+
+  const generateTitle = async (userText: string, assistantText: string) => {
+    try {
+      const resp = await generateResponse(
+        [{ role: 'user', content: `Придумай короткое название (3-5 слов, без кавычек) для чата, где пользователь написал:\n«${userText}»\nИИ ответил:\n«${assistantText.slice(0, 200)}»\nТолько название, без пояснений`, time: '' }],
+        { no_tools: true }
+      );
+      const title = resp?.content?.trim().replace(/^["«]|["»]$/g, '').slice(0, 60);
+      if (!title || !threadId) return;
+      setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
+        if (t.id !== threadId) return t;
+        const u = { ...t, title };
+        db.saveThread(u);
+        return u;
+      }));
+    } catch { /* не критично */ }
+  };
+
+  const handleClose = () => {
+    if (thread && !thread.summary) {
+      const userMsgs = thread.messages.filter(m => m.role === 'user');
+      if (userMsgs.length >= 2) {
+        apiFetch('/api/summarize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: thread.messages, threadId: thread.id }),
+        }).then(r => r.json()).then(({ summary }) => {
+          if (summary) {
+            setThreads((prev: Thread[]) => prev.map(t =>
+              t.id === thread.id ? { ...t, summary, is_meaningful: true } : t
+            ));
+          }
+        }).catch(() => {});
+      }
+    }
+    onClose();
+  };
+
+  const saveMessageAsNote = (content: string) => {
+    const noteId = uuid();
+    const note: Thread = {
+      id: noteId,
+      title: content.trim().slice(0, 40) || 'Заметка',
+      preview: content.trim().slice(0, 100),
+      messages: [],
+      createdAt: Date.now(),
+      source: 'заметка' as const,
+      is_meaningful: true,
+      summary: content.trim(),
+    };
+    db.saveThread(note);
+    setThreads((prev: Thread[]) => [note, ...(Array.isArray(prev) ? prev : [])]);
+    apiFetch('/api/summarize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId, raw: true, rawSummary: content.trim() }),
+    }).catch(() => {});
+  };
+
+  const deleteMessage = (msg: Message) => {
+    if (!threadId) return;
+    setThreads((prev: Thread[]) => prev.map(t => {
+      if (t.id !== threadId) return t;
+      const newMessages = t.messages.filter(m => m !== msg);
+      const updated = { ...t, messages: newMessages };
+      db.saveThread(updated);
+      return updated;
     }));
   };
 
@@ -404,38 +700,176 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     }));
   };
 
-  return (
-    <div className="flex flex-col h-full bg-surface">
-      <div className="p-[12px_16px] flex items-center justify-between border-b border-border flex-shrink-0 pt-[max(12px,env(safe-area-inset-top,12px))]">
-        <button onClick={onClose} className="w-9 h-9 rounded-full bg-surface2 flex items-center justify-center text-text-secondary active:bg-border transition-colors">
-          <X size={18} />
-        </button>
-        <span className="text-[20px] font-extrabold text-accent">
-          {thread.title === 'Новая мысль' ? 'Мысль' : thread.title}
-        </span>
-        <button onClick={() => onNavigate('settings')} className="w-9 h-9 rounded-full bg-surface2 flex items-center justify-center text-text-secondary active:bg-border transition-colors">
-          <Settings size={18} />
+  const parseInline = (line: string, key: number): React.ReactNode => {
+    const parts: React.ReactNode[] = [];
+    const re = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
+    let last = 0, match: RegExpExecArray | null;
+    while ((match = re.exec(line)) !== null) {
+      if (match.index > last) parts.push(line.slice(last, match.index));
+      if (match[2]) parts.push(<strong key={match.index}>{match[2]}</strong>);
+      else if (match[3]) parts.push(<em key={match.index}>{match[3]}</em>);
+      else if (match[4]) parts.push(<code key={match.index} style={{ fontFamily: 'monospace', background: 'rgba(0,0,0,0.07)', borderRadius: 4, padding: '1px 5px', fontSize: '0.9em' }}>{match[4]}</code>);
+      last = match.index + match[0].length;
+    }
+    if (last < line.length) parts.push(line.slice(last));
+    return <React.Fragment key={key}>{parts}</React.Fragment>;
+  };
+
+  const renderMarkdown = (text: string) => {
+    const lines = text.split('\n');
+    const nodes: React.ReactNode[] = [];
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      const numMatch = line.match(/^(\d+)\.\s+(.*)$/);
+      const bulletMatch = line.match(/^[-•]\s+(.*)$/);
+      if (numMatch || bulletMatch) {
+        const items: React.ReactNode[] = [];
+        while (i < lines.length) {
+          const l = lines[i];
+          const nm = l.match(/^(\d+)\.\s+(.*)$/);
+          const bm = l.match(/^[-•]\s+(.*)$/);
+          if (nm) { items.push(<li key={i}>{parseInline(nm[2], i)}</li>); i++; }
+          else if (bm) { items.push(<li key={i}>{parseInline(bm[1], i)}</li>); i++; }
+          else break;
+        }
+        nodes.push(numMatch
+          ? <ol key={`ol-${i}`} style={{ paddingLeft: 20, margin: '6px 0', display: 'flex', flexDirection: 'column', gap: 3 }}>{items}</ol>
+          : <ul key={`ul-${i}`} style={{ paddingLeft: 20, margin: '6px 0', listStyleType: 'disc', display: 'flex', flexDirection: 'column', gap: 3 }}>{items}</ul>
+        );
+      } else if (line === '') {
+        nodes.push(<br key={i} />);
+        i++;
+      } else {
+        nodes.push(<span key={i} style={{ display: 'block' }}>{parseInline(line, i)}</span>);
+        i++;
+      }
+    }
+    return <div>{nodes}</div>;
+  };
+
+  if (!thread) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center" style={{ background: '#f0f0f0' }}>
+        <button
+          onClick={onClose}
+          className="w-11 h-11 flex items-center justify-center absolute top-4 left-4"
+          style={{ paddingTop: 'max(0px, env(safe-area-inset-top, 0px))' }}
+        >
+          <ChevronLeft size={24} strokeWidth={1.75} color="#222224" />
         </button>
       </div>
+    );
+  }
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-[20px_16px_8px] flex flex-col gap-3 scrollbar-hide min-h-0">
-        {thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls).length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-2">
-            <div className="text-[28px] font-extrabold text-text-primary text-center leading-[1.25]">
-              Привет!<br />Есть мысли?
+  return (
+    <div className="flex flex-col h-full" style={{ background: '#f0f0f0' }}>
+      <div
+        className="flex items-center justify-between px-5 flex-shrink-0"
+        style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 16px))', paddingBottom: '12px' }}
+      >
+        <motion.button
+          whileTap={{ scale: 0.88 }}
+          onClick={handleClose}
+          className="w-11 h-11 flex items-center justify-center"
+        >
+          <ChevronLeft size={24} strokeWidth={1.75} color="#222224" />
+        </motion.button>
+
+        <div className="flex items-center gap-0.5 rounded-full p-1" style={{ background: '#ffffff', position: 'relative' }}>
+          <motion.div
+            layoutId="aichat-tab-pill"
+            style={{
+              position: 'absolute',
+              top: 4,
+              width: 40, height: 40,
+              borderRadius: '50%',
+              background: 'rgba(34,34,36,0.08)',
+              left: !noteMode ? 4 : 46,
+              zIndex: 0,
+            }}
+            transition={{ type: 'spring', stiffness: 420, damping: 36 }}
+          />
+          <button
+            className="w-10 h-10 rounded-full flex items-center justify-center"
+            onClick={() => setNoteMode(false)}
+            style={{ position: 'relative', zIndex: 1, background: 'transparent' }}
+          >
+            <MessageCircle size={20} strokeWidth={1.75} color={!noteMode ? '#222224' : 'rgba(34,34,36,0.3)'} />
+          </button>
+          <button
+            className="w-10 h-10 rounded-full flex items-center justify-center"
+            onClick={() => setNoteMode(true)}
+            style={{ position: 'relative', zIndex: 1, background: 'transparent' }}
+          >
+            <StickyNote size={20} strokeWidth={1.75} color={noteMode ? '#222224' : 'rgba(34,34,36,0.3)'} />
+          </button>
+        </div>
+
+        <motion.button
+          whileTap={{ scale: 0.88 }}
+          onClick={() => onNavigate('settings')}
+          className="w-11 h-11 flex items-center justify-center"
+        >
+          <Settings size={22} strokeWidth={1.75} color="rgba(34,34,36,0.5)" />
+        </motion.button>
+      </div>
+
+      {noteMode && threadId ? (
+        <div className="flex-1 min-h-0 flex flex-col">
+          <NoteView threadId={threadId} threads={threads} setThreads={setThreads} tasks={tasks} onSwitchToChat={() => setNoteMode(false)} />
+        </div>
+      ) : null}
+
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-[20px_16px_8px] flex flex-col gap-3 scrollbar-hide min-h-0" style={{ display: noteMode ? 'none' : undefined }}>
+        {(() => {
+          const visibleMsgs = thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls);
+          if (visibleMsgs.length === 0) return (
+            <div className="flex-1 flex flex-col items-center justify-center gap-2">
+              <div className="text-[28px] font-extrabold text-center leading-[1.25]" style={{ color: '#222224' }}>
+                Привет!<br />Есть мысли?
+              </div>
+              <div className="text-[15px] text-text-tertiary text-center">
+                Поделись тем, что на уме
+              </div>
             </div>
-            <div className="text-[15px] text-text-tertiary text-center">
-              Поделись тем, что на уме
-            </div>
-          </div>
-        ) : (
-          thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls).map((m, i) => (
-            <div key={i} className={`flex flex-col max-w-[85%] gap-[3px] ${m.role === 'user' ? 'self-end items-end' : 'self-start items-start'}`}>
-              <div className={`p-[10px_14px] rounded-[18px] text-[15px] leading-[1.5] ${
-                m.role === 'user' ? 'bg-accent text-white rounded-br-[4px]' : 'bg-surface2 text-text-primary rounded-bl-[4px]'
-              }`}>
-                {m.content}
-                
+          );
+          // Close dropdown on outside click
+          const backdropEl = openMsgMenuIdx !== null ? (
+            <div key="msg-backdrop" style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => setOpenMsgMenuIdx(null)} />
+          ) : null;
+
+          const lastAssistantIdx = visibleMsgs.reduce((last, m, i) => m.role === 'assistant' ? i : last, -1);
+          const msgs = visibleMsgs.map((m, i) => {
+            const isLast = i === visibleMsgs.length - 1;
+            const showAnimated = isLast && m.role === 'assistant' && animatingContent !== null;
+            const showActions = hoveredMsgIdx === i || openMsgMenuIdx === i || (m.role === 'assistant' && i === lastAssistantIdx);
+            return (
+            <div key={i}
+              onMouseEnter={() => m.role === 'assistant' && setHoveredMsgIdx(i)}
+              onMouseLeave={() => setHoveredMsgIdx(null)}
+              style={{
+              display: 'flex', flexDirection: 'column', gap: 3,
+              alignItems: m.role === 'user' ? 'flex-end' : 'flex-start',
+              alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+              maxWidth: m.role === 'user' ? '85%' : '100%',
+              width: m.role === 'user' ? undefined : '100%',
+            }}>
+              <div style={m.role === 'user'
+                ? { background: 'rgba(9,14,23,0.07)', borderRadius: 18, borderBottomRightRadius: 4, padding: '10px 14px', fontSize: 15, lineHeight: 1.5, color: '#222224', fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif" }
+                : { fontSize: 15, lineHeight: 1.75, color: '#222224', fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", width: '100%' }
+              }>
+                {m.role === 'user'
+                  ? m.content
+                  : showAnimated
+                    ? <span style={{ whiteSpace: 'pre-wrap' }}>{animatingContent}</span>
+                    : renderMarkdown(m.content)
+                }
+
+                {isOnboarding && m.role === 'assistant' && i === visibleMsgs.findIndex(x => x.role === 'assistant') && !showAnimated && (
+                  <TelegramConnectBlock />
+                )}
+
                 {m.planning_data && (
                   <div className="mt-3 flex flex-col gap-3">
                     {m.planning_data.status === 'questionnaire' && (
@@ -448,7 +882,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                               <div className="font-semibold">{m.planning_data?.answers?.[q.id]}</div>
                             </div>
                           );
-                          
+
                           return (
                             <div key={q.id} className="flex flex-col gap-2">
                               <div className="text-[14px] font-bold text-text-primary">{q.question}</div>
@@ -463,7 +897,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                                   </button>
                                 ))}
                                 <div className="relative">
-                                  <input 
+                                  <input
                                     placeholder="Свой вариант..."
                                     className="w-full p-2 bg-surface rounded-xl text-[13px] text-text-primary border border-border outline-none focus:border-accent focus:bg-surface2 transition-colors"
                                     onKeyDown={(e) => {
@@ -492,7 +926,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                               <div className="w-5 h-5 rounded-full bg-accent/10 text-accent flex items-center justify-center text-[10px] font-bold mt-0.5 flex-shrink-0">
                                 {sIdx + 1}
                               </div>
-                              <input 
+                              <input
                                 value={step}
                                 onChange={(e) => updatePlanStep(i, sIdx, e.target.value)}
                                 className="flex-1 bg-transparent text-[13px] text-text-primary outline-none focus:text-accent"
@@ -501,13 +935,13 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                           ))}
                         </div>
                         <div className="flex gap-2 mt-2">
-                          <button 
+                          <button
                             onClick={() => handleAcceptPlan(i)}
                             className="flex-1 h-10 bg-accent text-white rounded-xl text-[13px] font-bold active:scale-95 transition-transform"
                           >
                             Принять
                           </button>
-                          <button 
+                          <button
                             onClick={() => handleRejectPlan(i)}
                             className="flex-1 h-10 bg-surface2 text-text-primary rounded-xl text-[13px] font-bold active:scale-95 transition-transform"
                           >
@@ -520,36 +954,272 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                 )}
               </div>
               <div className="text-[11px] text-text-tertiary px-1">{m.time}</div>
+
+              {/* Action panel — assistant messages only */}
+              {m.role === 'assistant' && !showAnimated && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  width: '100%', marginTop: 2,
+                  opacity: showActions ? 1 : 0,
+                  pointerEvents: showActions ? 'auto' : 'none',
+                  transition: 'opacity 0.15s',
+                  position: 'relative',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <button
+                      onClick={() => navigator.clipboard?.writeText(m.content)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#bbb', display: 'flex', alignItems: 'center', transition: 'color 0.12s' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = '#555')}
+                      onMouseLeave={e => (e.currentTarget.style.color = '#bbb')}
+                    >
+                      <Copy size={14} strokeWidth={1.5} />
+                    </button>
+
+                    {m.sources && m.sources.length > 0 && !showAnimated && (
+                      <button
+                        onClick={() => setOpenSourcesIdx(openSourcesIdx === i ? null : i)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 4,
+                          background: openSourcesIdx === i ? 'rgba(34,34,36,0.08)' : 'none',
+                          border: 'none', cursor: 'pointer', padding: '2px 8px', borderRadius: 20,
+                          fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+                          fontSize: 12, color: openSourcesIdx === i ? '#222224' : '#bbb',
+                          transition: 'color 0.12s, background 0.12s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.color = '#555'; }}
+                        onMouseLeave={e => { e.currentTarget.style.color = openSourcesIdx === i ? '#222224' : '#bbb'; }}
+                      >
+                        <BookOpen size={13} strokeWidth={1.5} />
+                        Источники
+                      </button>
+                    )}
+                  </div>
+
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      onClick={() => setOpenMsgMenuIdx(openMsgMenuIdx === i ? null : i)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#bbb', display: 'flex', alignItems: 'center', transition: 'color 0.12s' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = '#555')}
+                      onMouseLeave={e => (e.currentTarget.style.color = '#bbb')}
+                    >
+                      <MoreHorizontal size={14} strokeWidth={1.5} />
+                    </button>
+
+                    <AnimatePresence>
+                      {openMsgMenuIdx === i && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                          transition={{ duration: 0.12 }}
+                          style={{
+                            position: 'absolute', right: 0, bottom: '100%', marginBottom: 4,
+                            background: '#fff', border: '1px solid #ebebeb',
+                            borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                            padding: '4px 0', zIndex: 20, minWidth: 160,
+                          }}
+                        >
+                          {[
+                            { label: 'Сохранить как заметку', color: '#222', action: () => { saveMessageAsNote(m.content); setOpenMsgMenuIdx(null); } },
+                            { label: 'Ответить', color: '#222', action: () => { setReplyQuote(m.content); setOpenMsgMenuIdx(null); inputRef.current?.focus(); } },
+                            { label: 'Удалить', color: '#e53e3e', action: () => { deleteMessage(m); setOpenMsgMenuIdx(null); } },
+                          ].map(item => (
+                            <button key={item.label}
+                              onClick={item.action}
+                              style={{
+                                display: 'block', width: '100%', textAlign: 'left',
+                                padding: '8px 14px', fontSize: 13, color: item.color,
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+                                transition: 'background 0.1s',
+                              }}
+                              onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
+                              onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              )}
             </div>
-          ))
-        )}
-        
+            );
+          });
+          return [backdropEl, ...msgs];
+        })()}
+
         {isTyping && (
-          <div className="flex flex-col max-w-[80%] gap-[3px] self-start items-start">
-            <div className="flex gap-1 p-[11px_15px] bg-surface2 rounded-[18px] rounded-bl-[4px] w-fit">
-              <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce" />
-              <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce [animation-delay:0.2s]" />
-              <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce [animation-delay:0.4s]" />
-            </div>
+          <div style={{ alignSelf: 'flex-start', paddingLeft: 2, paddingBottom: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <MysliThinking />
+            <ThinkingPhrase />
           </div>
         )}
       </div>
 
-      <div className="p-[10px_14px] pb-[calc(10px+env(safe-area-inset-bottom,0px))] flex items-center gap-2.5 bg-surface border-t border-border flex-shrink-0">
-        <input
-          className="flex-1 h-11 bg-surface2 border-[1.5px] border-transparent rounded-[22px] px-4 font-sans text-[15px] text-text-primary outline-none focus:border-accent focus:bg-surface transition-all placeholder:text-text-tertiary"
-          placeholder="Что думаешь? Пиши сюда"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-        />
-        <button
-          disabled={!input.trim() || isTyping}
-          onClick={handleSend}
-          className="w-11 h-11 rounded-full bg-accent flex items-center justify-center disabled:bg-border transition-colors flex-shrink-0"
-        >
-          <Send size={18} color="white" strokeWidth={2.5} />
-        </button>
+      {/* Sources bottom sheet */}
+      <AnimatePresence>
+        {openSourcesIdx !== null && (() => {
+          const srcMsg = thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls)[openSourcesIdx];
+          const sources = srcMsg?.sources || [];
+          return (
+            <>
+              <motion.div
+                key="sources-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                style={{ position: 'fixed', inset: 0, zIndex: 40, background: 'rgba(0,0,0,0.25)' }}
+                onClick={() => setOpenSourcesIdx(null)}
+              />
+              <motion.div
+                key="sources-sheet"
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', stiffness: 380, damping: 36 }}
+                style={{
+                  position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 41,
+                  background: '#ffffff', borderRadius: '20px 20px 0 0',
+                  paddingBottom: 'max(24px, env(safe-area-inset-bottom, 24px))',
+                }}
+              >
+                <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(34,34,36,0.12)', margin: '12px auto 20px' }} />
+                <div style={{ padding: '0 20px 8px', fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase' as const, color: 'rgba(34,34,36,0.35)' }}>
+                  Из архива · {sources.length}
+                </div>
+                {sources.map((s, si) => {
+                  const thr = threads.find(t => t.title === s.title);
+                  return (
+                    <button
+                      key={si}
+                      onClick={() => {
+                        setOpenSourcesIdx(null);
+                        if (thr) { onOpenThread ? onOpenThread(thr.id) : onNavigate('threads'); }
+                      }}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 14,
+                        padding: '14px 20px', background: 'none', border: 'none', cursor: thr ? 'pointer' : 'default',
+                        borderTop: si > 0 ? '1px solid rgba(34,34,36,0.06)' : undefined,
+                        textAlign: 'left',
+                      }}
+                    >
+                      <div style={{
+                        width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                        background: 'rgba(34,34,36,0.07)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 12, fontWeight: 600, color: 'rgba(34,34,36,0.4)',
+                      }}>
+                        {si + 1}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 14, color: '#222224', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {s.title}
+                        </div>
+                        {s.snippet && (
+                          <div style={{ fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 12, color: 'rgba(34,34,36,0.4)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', marginTop: 2 }}>
+                            {s.snippet}
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </motion.div>
+            </>
+          );
+        })()}
+      </AnimatePresence>
+
+      <div
+        className="px-4 flex-shrink-0"
+        style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))' }}
+      >
+        <AnimatePresence>
+          {replyQuote && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 6 }}
+              transition={{ duration: 0.12 }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: '#f5f5f5', borderRadius: 6, padding: '8px 12px',
+                marginBottom: 6, borderLeft: '2px solid #aaa',
+              }}
+            >
+              <span style={{ flex: 1, fontSize: 12, color: '#888', fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {replyQuote.length > 100 ? replyQuote.slice(0, 100) + '...' : replyQuote}
+              </span>
+              <button onClick={() => setReplyQuote(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#aaa', padding: 0, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                <X size={14} strokeWidth={1.5} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <div className="rounded-[20px] p-4" style={{ background: '#ffffff' }}>
+          <textarea
+            ref={inputRef}
+            rows={1}
+            className="w-full bg-transparent outline-none"
+            style={{
+              fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+              fontSize: '15px',
+              color: '#222224',
+              resize: 'none',
+              lineHeight: 1.55,
+              border: 'none',
+              display: 'block',
+              maxHeight: '120px',
+              overflowY: 'auto',
+            }}
+            placeholder="Есть мысли?"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => !isTouchDevice && e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
+          />
+          <div className="flex items-center justify-end mt-3">
+            <div className="flex items-center gap-2">
+              <motion.button
+                title={isMobile ? 'Удерживай для записи' : 'Нажми для записи, ещё раз — стоп'}
+                {...(isMobile
+                  ? {
+                      onPointerDown: startRecording,
+                      onPointerUp: stopRecording,
+                      onPointerCancel: stopRecording,
+                    }
+                  : {
+                      onClick: toggleRecording,
+                    }
+                )}
+                disabled={voiceState === 'processing'}
+                style={{
+                  width: 32, height: 32, borderRadius: '50%', border: 'none', cursor: 'pointer', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: voiceState === 'recording' ? '#c0392b' : voiceState === 'processing' ? 'rgba(34,34,36,0.15)' : 'rgba(34,34,36,0.08)',
+                  transition: 'background 0.15s',
+                }}
+              >
+                {voiceState === 'processing'
+                  ? <Loader size={15} strokeWidth={2} color="#222224" className="animate-spin" />
+                  : <Mic size={15} strokeWidth={1.75} color={voiceState === 'recording' ? '#fff' : 'rgba(34,34,36,0.5)'} />
+                }
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                disabled={!input.trim() || isTyping}
+                onClick={handleSend}
+                className="w-11 h-11 rounded-full flex items-center justify-center transition-colors"
+                style={{ background: input.trim() && !isTyping ? '#222224' : 'rgba(34,34,36,0.15)' }}
+              >
+                <ArrowUp size={20} strokeWidth={2} color="#ffffff" />
+              </motion.button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

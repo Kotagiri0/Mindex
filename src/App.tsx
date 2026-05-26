@@ -3,35 +3,105 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { db } from './lib/db';
+import { db, syncTimezone } from './lib/db';
 import { getCurrentUser, logoutLocalUser } from './lib/auth';
+import { storage } from './lib/storage';
 import { Screen, Task, Thread, Settings, LocalUser } from './types';
 import { uuid } from './lib/utils';
+import { sortTasks } from './lib/sortTasks';
 import LocalAuth from './components/LocalAuth';
+import EmailAttachBanner, { shouldShowEmailBanner } from './components/EmailAttachBanner';
 import Onboarding from './components/Onboarding';
 import Dashboard from './components/Dashboard';
 import AIChat from './components/AIChat';
 import Threads from './components/Threads';
 import SettingsScreen from './components/Settings';
+import Calendar from './components/Calendar';
 import BottomNav from './components/BottomNav';
+import DesktopApp from './components/DesktopApp';
+import TodayMobile from './components/TodayMobile';
 
 const defaultSettings = { agent: true, confirm: true, notifs: true };
+const TASK_REFRESH_INTERVAL_MS = 60_000;
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<LocalUser | null>(getCurrentUser());
-  const [screen, setScreen] = useState<Screen>('ob');
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [screen, setScreen] = useState<Screen>(() => getCurrentUser() ? 'dash' : 'ob');
+  const [tasks, setTasksRaw] = useState<Task[]>([]);
+  const setTasks = useCallback((arg: Task[] | ((prev: Task[]) => Task[])) => {
+    setTasksRaw(prev => {
+      const next = typeof arg === 'function' ? arg(prev) : arg;
+      return sortTasks(next);
+    });
+  }, []);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [curTh, setCurTh] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(getCurrentUser()));
+  const [pendingMsg, setPendingMsg] = useState('');
+  const [threadsSubScreen, setThreadsSubScreen] = useState(false);
+  const [isOnboardingChat, setIsOnboardingChat] = useState(false);
+  const [showEmailBanner, setShowEmailBanner] = useState(() => {
+    const user = getCurrentUser();
+    return shouldShowEmailBanner(user?.provider, user?.email);
+  });
+
+  const navigateMobile = (next: Screen) => { setScreen(next); if (next !== 'threads') setThreadsSubScreen(false); };
   const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [isDesktopViewport, setIsDesktopViewport] = useState(
+    typeof window !== 'undefined' ? window.innerWidth >= 1024 : false,
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const mediaQuery = window.matchMedia('(min-width: 1024px)');
+    const handleViewportChange = (event: MediaQueryListEvent) => {
+      setIsDesktopViewport(event.matches);
+    };
+
+    setIsDesktopViewport(mediaQuery.matches);
+    mediaQuery.addEventListener('change', handleViewportChange);
+
+    return () => {
+      mediaQuery.removeEventListener('change', handleViewportChange);
+    };
+  }, []);
 
   useEffect(() => {
     const user = getCurrentUser();
     setCurrentUser(user);
+
+    // Тихая миграция для старых local-аккаунтов: если пользователь есть но токена нет
+    if (user && !storage.getSessionToken()) {
+      fetch('/api/auth/migrate-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      })
+        .then(r => r.json())
+        .then(d => { if (d.token) storage.setSessionToken(d.token); })
+        .catch(() => {});
+    }
+
+    // Подтягиваем актуальные данные пользователя — баннер email и provider могут устареть
+    if (user && storage.getSessionToken()) {
+      fetch('/api/auth/me', {
+        headers: { 'Authorization': `Bearer ${storage.getSessionToken()}` },
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          if (d?.user) {
+            storage.setCurrentUser(d.user);
+            setCurrentUser(d.user);
+            setShowEmailBanner(shouldShowEmailBanner(d.user.provider, d.user.email));
+          }
+        })
+        .catch(() => {});
+    }
+
     setLoading(false);
   }, []);
 
@@ -55,6 +125,7 @@ export default function App() {
           db.getTasks(),
           db.getThreads(),
         ]);
+        syncTimezone();
 
         if (cancelled) return;
 
@@ -75,13 +146,58 @@ export default function App() {
 
     loadData();
 
+    let refreshInFlight = false;
+    let intervalId: number | null = null;
+
+    const refreshTasks = async (source: 'interval' | 'visibility') => {
+      if (cancelled || refreshInFlight) return;
+      if (source === 'interval' && document.visibilityState !== 'visible') return;
+      refreshInFlight = true;
+      try {
+        const fresh = await db.refreshTasks();
+        if (!cancelled) setTasks(fresh);
+      } catch (error) {
+        console.warn('Failed to refresh tasks:', error);
+      } finally {
+        refreshInFlight = false;
+      }
+    };
+
+    const startInterval = () => {
+      if (intervalId !== null) return;
+      intervalId = window.setInterval(() => {
+        refreshTasks('interval');
+      }, TASK_REFRESH_INTERVAL_MS);
+    };
+
+    const stopInterval = () => {
+      if (intervalId === null) return;
+      window.clearInterval(intervalId);
+      intervalId = null;
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        startInterval();
+        refreshTasks('visibility');
+        return;
+      }
+      stopInterval();
+    };
+
+    handleVisibilityChange();
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       cancelled = true;
+      stopInterval();
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [currentUser]);
 
   const handleAuthenticated = (user: LocalUser) => {
     setCurrentUser(user);
+    setShowEmailBanner(shouldShowEmailBanner(user.provider, user.email));
   };
 
   const handleLogout = () => {
@@ -105,7 +221,7 @@ export default function App() {
   const updateThreads = (newThreads: Thread[] | ((prev: Thread[]) => Thread[])) => {
     setThreads((prev) => {
       const updated = typeof newThreads === 'function' ? newThreads(prev) : newThreads;
-      return updated;
+      return [...updated].sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
     });
   };
 
@@ -114,10 +230,19 @@ export default function App() {
     await db.upsertProfile(onboardingComplete, newSettings);
   };
 
-  const handleOnboardingComplete = async () => {
+  const handleOnboardingComplete = async (threadId?: string, initialMsg?: string) => {
     setOnboardingComplete(true);
     await db.upsertProfile(true, settings);
-    setScreen('dash');
+    if (threadId) {
+      const freshThreads = await db.getThreads();
+      setThreads(freshThreads);
+      setCurTh(threadId);
+      if (initialMsg) setPendingMsg(initialMsg);
+      setIsOnboardingChat(true);
+      setScreen('ai');
+    } else {
+      setScreen(isDesktopViewport ? 'dash' : 'today');
+    }
   };
 
   const startNewThread = async () => {
@@ -135,6 +260,21 @@ export default function App() {
     setScreen('ai');
   };
 
+  const startNewThreadWithMessage = async (msg: string) => {
+    const newTh: Thread = {
+      id: uuid(),
+      title: 'Новая мысль',
+      preview: msg.length > 60 ? msg.slice(0, 60) + '…' : msg,
+      messages: [],
+      createdAt: Date.now(),
+    };
+    setThreads(prev => [newTh, ...prev]);
+    await db.saveThread(newTh);
+    setCurTh(newTh.id);
+    setPendingMsg(msg);
+    setScreen('ai');
+  };
+
   if (!currentUser) {
     return <LocalAuth onAuthenticated={handleAuthenticated} />;
   }
@@ -147,10 +287,63 @@ export default function App() {
     );
   }
 
+  if (isDesktopViewport) {
+    // Онбординг для новых юзеров показываем и на десктопе — иначе сразу пустой дашборд
+    if (screen === 'ob' && !onboardingComplete) {
+      return (
+        <div className="w-full bg-bg" style={{ height: '100dvh' }}>
+          <Onboarding onComplete={handleOnboardingComplete} />
+        </div>
+      );
+    }
+    return (
+      <div className="relative">
+        <DesktopApp
+          tasks={tasks}
+          setTasks={updateTasks}
+          threads={threads}
+          setThreads={updateThreads}
+          settings={settings}
+          setSettings={updateSettings}
+          screen={screen}
+          setScreen={setScreen}
+          curTh={curTh}
+          setCurTh={setCurTh}
+          startNewThread={startNewThread}
+          handleLogout={handleLogout}
+        />
+        <AnimatePresence>
+          {showEmailBanner && (
+            <EmailAttachBanner onDismiss={() => setShowEmailBanner(false)} />
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  }
+
   return (
-    <div className="relative w-full h-screen overflow-hidden bg-bg">
+    <>
+    <div className="safe-area-container relative w-full overflow-hidden bg-bg" style={{ height: '100dvh' }}>
       <AnimatePresence mode="wait">
-        {screen === 'ob' && (
+        {screen === 'today' && (
+          <motion.div
+            key="today"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0"
+          >
+            <TodayMobile
+              tasks={tasks}
+              setTasks={updateTasks}
+              onNavigate={navigateMobile}
+              onNewThreadWithMessage={startNewThreadWithMessage}
+              onOpenThread={(id) => { setCurTh(id); setScreen('ai'); }}
+            />
+          </motion.div>
+        )}
+
+        {screen === 'ob' && !onboardingComplete && (
           <motion.div
             key="ob"
             initial={{ opacity: 0 }}
@@ -173,7 +366,7 @@ export default function App() {
             <Dashboard
               tasks={tasks}
               setTasks={updateTasks}
-              onNavigate={setScreen}
+              onNavigate={navigateMobile}
               onNewThread={startNewThread}
               onLogout={handleLogout}
               onOpenThread={(id) => {
@@ -198,8 +391,21 @@ export default function App() {
               setThreads={updateThreads}
               tasks={tasks}
               setTasks={updateTasks}
-              onClose={() => setScreen('threads')}
-              onNavigate={setScreen}
+              onClose={() => {
+                const th = threads.find(t => t.id === curTh);
+                const hasLinkedTask = tasks.some(t => t.threadId === curTh);
+                if (th && !hasLinkedTask && th.messages.filter(m => m.role === 'user').length === 0) {
+                  setThreads(prev => prev.filter(t => t.id !== curTh));
+                  db.deleteThread(curTh!);
+                }
+                setIsOnboardingChat(false);
+                navigateMobile('threads');
+              }}
+              onNavigate={navigateMobile}
+              onOpenThread={(id) => { setCurTh(id); setScreen('ai'); }}
+              autoSend={pendingMsg}
+              onAutoSentClear={() => setPendingMsg('')}
+              isOnboarding={isOnboardingChat}
             />
           </motion.div>
         )}
@@ -215,12 +421,14 @@ export default function App() {
             <Threads
               threads={threads}
               setThreads={updateThreads}
-              onNavigate={setScreen}
+              tasks={tasks}
+              onNavigate={navigateMobile}
               onOpenThread={(id) => {
                 setCurTh(id);
                 setScreen('ai');
               }}
               onNewThread={startNewThread}
+              onSubScreenChange={setThreadsSubScreen}
             />
           </motion.div>
         )}
@@ -236,18 +444,42 @@ export default function App() {
             <SettingsScreen
               settings={settings}
               setSettings={updateSettings}
-              onBack={() => setScreen('dash')}
+              onBack={() => navigateMobile('dash')}
               onLogout={handleLogout}
             />
           </motion.div>
         )}
+
+        {screen === 'cal' && (
+          <motion.div
+            key="cal"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            className="absolute inset-0"
+          >
+            <div className="w-full h-full bg-bg px-4 pt-3 pb-6 overflow-hidden">
+              <Calendar onBack={() => setScreen('dash')} />
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
-      <BottomNav
-        activeScreen={screen}
-        onNavigate={setScreen}
-        onNewThread={startNewThread}
-      />
+      {!threadsSubScreen && (
+        <BottomNav
+          activeScreen={screen}
+          onNavigate={navigateMobile}
+          onNewThread={startNewThread}
+        />
+      )}
+
     </div>
+
+    <AnimatePresence>
+      {showEmailBanner && (
+        <EmailAttachBanner onDismiss={() => setShowEmailBanner(false)} />
+      )}
+    </AnimatePresence>
+    </>
   );
 }

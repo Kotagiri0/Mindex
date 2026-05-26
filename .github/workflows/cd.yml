@@ -1,0 +1,160 @@
+name: CD
+
+on:
+  # Run CD only after the CI workflow completes for main.
+  workflow_run:
+    workflows: ["CI"]
+    branches: [master, main]
+    types: [completed]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  # Make required secrets available to every deployment job.
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+  GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+  GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+  NODE_ENV: ${{ secrets.NODE_ENV }}
+  PORT: ${{ secrets.PORT }}
+  APP_URL: ${{ secrets.APP_URL }}
+  MINI_APP_URL: ${{ secrets.MINI_APP_URL }}
+  ROUTERAI_API_KEY: ${{ secrets.ROUTERAI_API_KEY }}
+  GRAFANA_CLOUD_API_KEY: ${{ secrets.GRAFANA_CLOUD_API_KEY }}
+  GRAFANA_CLOUD_USER_ID: ${{ secrets.GRAFANA_CLOUD_USER_ID }}
+  VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+  SSH_HOST: ${{ secrets.SSH_HOST }}
+  SSH_USER: ${{ secrets.SSH_USER }}
+  SSH_KEY: ${{ secrets.SSH_KEY }}
+
+jobs:
+  build-and-push:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    needs: []
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Use the same commit that passed the CI workflow.
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:sha-${{ github.event.workflow_run.head_sha }}
+            ghcr.io/${{ github.repository }}:latest
+
+  deploy-staging:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    steps:
+      # SSH deploy uses the configured host and key to pull the new image.
+      - name: Deploy to staging
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            docker compose pull
+            docker compose up -d
+
+  smoke-test:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    needs: [deploy-staging]
+    steps:
+      # Poll the health endpoint to ensure staging is responding.
+      - name: Smoke test staging
+        run: |
+          for i in {1..6}; do
+            if curl -fsS "${{ secrets.APP_URL }}/health" >/dev/null; then
+              echo "Staging is healthy."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Staging smoke test failed."
+          exit 1
+
+  approve:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    needs: [smoke-test]
+    environment: production
+    steps:
+      # Manual approval gate is enforced via the production environment rules.
+      - name: Await approval
+        run: echo "Approved via environment protection."
+
+  deploy-production:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    needs: [approve]
+    steps:
+      # SSH deploy uses the configured host and key to pull the new image.
+      - name: Deploy to production
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            docker compose pull
+            docker compose up -d
+
+  notify:
+    if: failure()
+    runs-on: ubuntu-latest
+    needs:
+      - build-and-push
+      - deploy-staging
+      - smoke-test
+      - approve
+      - deploy-production
+    steps:
+      # Determine which jobs failed so the alert is actionable.
+      - name: Collect failed jobs
+        id: failures
+        env:
+          NEEDS_CONTEXT: ${{ toJson(needs) }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+
+          needs = json.loads(os.environ["NEEDS_CONTEXT"])
+          failed = [name for name, info in needs.items() if info.get("result") == "failure"]
+          failed_list = ", ".join(failed) if failed else "unknown"
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+            output.write(f"failed={failed_list}\n")
+          PY
+
+      - name: Notify Slack
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          FAILED_JOBS: ${{ steps.failures.outputs.failed }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"❌ CD pipeline failed in job(s): ${FAILED_JOBS}. ${RUN_URL}\"}" \
+            "$SLACK_WEBHOOK"

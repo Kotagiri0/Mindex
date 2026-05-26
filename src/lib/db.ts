@@ -1,12 +1,37 @@
 import { Task, Thread, Settings, LocalProfile } from '../types';
 import { getCurrentUser } from './auth';
+import { deleteGoogleCalendarEvent, syncGoogleCalendarTask } from './google-calendar';
 import { storage } from './storage';
 
 const getUserId = () => getCurrentUser()?.id;
 const apiBase = () => `${window.location.origin}/api/data`;
 
+export const syncTimezone = async () => {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (!tz) return;
+  try {
+    await request<{ success: boolean }>(`${apiBase()}/timezone`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timezone: tz }),
+    });
+  } catch {}
+};
+
+const authHeaders = (): Record<string, string> => {
+  const token = storage.getSessionToken();
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 const request = async <T>(url: string, options?: RequestInit): Promise<T> => {
-  const response = await fetch(url, options);
+  const merged: RequestInit = {
+    ...options,
+    headers: {
+      ...authHeaders(),
+      ...(options?.headers as Record<string, string> || {}),
+    },
+  };
+  const response = await fetch(url, merged);
   if (!response.ok) {
     throw new Error(`Request failed: ${response.status}`);
   }
@@ -19,6 +44,31 @@ const defaultProfile = (): LocalProfile => ({
   updated_at: new Date().toISOString(),
 });
 
+const persistTask = async (userId: string, task: Task) => {
+  const tasks = storage.getTasks(userId);
+  const index = tasks.findIndex((item) => item.id === task.id);
+  if (index >= 0) tasks[index] = task;
+  else tasks.unshift(task);
+  storage.setTasks(userId, tasks);
+
+  try {
+    await request<{ success: boolean }>(`${apiBase()}/task`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task }),
+    });
+  } catch {
+    // Local fallback already saved.
+  }
+};
+
+const mergeStoredCalendarEvent = (userId: string, task: Task) => {
+  if (task.calendarEventId) return task;
+  const stored = storage.getTasks(userId).find((item) => item.id === task.id);
+  if (!stored?.calendarEventId) return task;
+  return { ...task, calendarEventId: stored.calendarEventId };
+};
+
 export const db = {
   getUserId: () => getCurrentUser()?.id,
   getProfile: async () => {
@@ -29,7 +79,7 @@ export const db = {
 
     try {
       const data = await request<{ profile: LocalProfile | null; tasks: Task[]; threads: Thread[] }>(
-        `${apiBase()}/bootstrap?userId=${encodeURIComponent(userId)}`
+        `${apiBase()}/bootstrap`
       );
 
       if (data.profile) {
@@ -58,11 +108,7 @@ export const db = {
       await request<{ success: boolean }>(`${apiBase()}/profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          settings,
-          onboarding_complete: onboardingComplete,
-        }),
+        body: JSON.stringify({ settings, onboarding_complete: onboardingComplete }),
       });
     } catch {
       // Offline/DB unavailable: local fallback is already saved.
@@ -77,7 +123,7 @@ export const db = {
 
     try {
       const data = await request<{ profile: LocalProfile | null; tasks: Task[]; threads: Thread[] }>(
-        `${apiBase()}/bootstrap?userId=${encodeURIComponent(userId)}`
+        `${apiBase()}/bootstrap`
       );
       const serverThreads = data.threads || [];
       const serverIds = new Set(serverThreads.map((t) => t.id));
@@ -86,11 +132,11 @@ export const db = {
       for (const t of pendingLocal) {
         db.saveThread(t).catch(() => {});
       }
-      const merged = [...pendingLocal, ...serverThreads].sort((a, b) => b.createdAt - a.createdAt);
+      const merged = [...pendingLocal, ...serverThreads].sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
       storage.setThreads(userId, merged);
       return merged;
     } catch {
-      return localThreads.sort((a, b) => b.createdAt - a.createdAt);
+      return localThreads.sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
     }
   },
   
@@ -100,12 +146,13 @@ export const db = {
       return;
     }
 
+    const updated = { ...thread, updatedAt: Date.now() };
     const threads = storage.getThreads(userId);
-    const index = threads.findIndex((item) => item.id === thread.id);
+    const index = threads.findIndex((item) => item.id === updated.id);
     if (index >= 0) {
-      threads[index] = thread;
+      threads[index] = updated;
     } else {
-      threads.unshift(thread);
+      threads.unshift(updated);
     }
     storage.setThreads(userId, threads);
 
@@ -113,13 +160,28 @@ export const db = {
       await request<{ success: boolean }>(`${apiBase()}/thread`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, thread }),
+        body: JSON.stringify({ thread: updated }),
       });
     } catch (err) {
       console.error('[db] saveThread failed, thread only in localStorage:', err);
     }
   },
   
+  archiveThread: async (id: string) => {
+    const userId = getUserId();
+    if (!userId) return;
+
+    try {
+      await request<{ success: boolean }>(`${apiBase()}/thread/${encodeURIComponent(id)}/archive`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+    } catch {
+      // Local fallback not needed — source update is server-side only
+    }
+  },
+
   deleteThread: async (id: string) => {
     const userId = getUserId();
     if (!userId) {
@@ -131,7 +193,7 @@ export const db = {
 
     try {
       await request<{ success: boolean }>(
-        `${apiBase()}/thread/${encodeURIComponent(id)}?userId=${encodeURIComponent(userId)}`,
+        `${apiBase()}/thread/${encodeURIComponent(id)}`,
         { method: 'DELETE' }
       );
     } catch {
@@ -143,37 +205,63 @@ export const db = {
     const userId = getUserId();
     if (!userId) return [];
 
+    const localTasks = storage.getTasks(userId);
+
     try {
       const data = await request<{ profile: LocalProfile | null; tasks: Task[]; threads: Thread[] }>(
-        `${apiBase()}/bootstrap?userId=${encodeURIComponent(userId)}`
+        `${apiBase()}/bootstrap`
       );
-      storage.setTasks(userId, data.tasks || []);
-      return data.tasks || [];
+      const serverTasks = data.tasks || [];
+      const serverIds = new Set(serverTasks.map((t) => t.id));
+      // Задачи, которые есть локально но не на сервере — pending-save, сохраняем обратно
+      const pendingLocal = localTasks.filter((t) => !serverIds.has(t.id));
+      for (const t of pendingLocal) {
+        db.saveTask(t, { skipCalendarSync: true }).catch(() => {});
+      }
+      const merged = [...pendingLocal, ...serverTasks];
+      storage.setTasks(userId, merged);
+      return merged;
+    } catch {
+      return localTasks;
+    }
+  },
+
+  refreshTasks: async (): Promise<Task[]> => {
+    const userId = getUserId();
+    if (!userId) return [];
+
+    try {
+      const data = await request<{ tasks: Task[] }>(
+        `${apiBase()}/bootstrap`
+      );
+      const serverTasks = data.tasks || [];
+      storage.setTasks(userId, serverTasks);
+      return serverTasks;
     } catch {
       return storage.getTasks(userId);
     }
   },
   
-  saveTask: async (task: Task) => {
+  saveTask: async (task: Task, options?: { skipCalendarSync?: boolean }) => {
     const userId = getUserId();
     if (!userId) {
       return;
     }
 
-    const tasks = storage.getTasks(userId);
-    const index = tasks.findIndex((item) => item.id === task.id);
-    if (index >= 0) tasks[index] = task;
-    else tasks.unshift(task);
-    storage.setTasks(userId, tasks);
+    const baseTask = mergeStoredCalendarEvent(userId, task);
+    await persistTask(userId, baseTask);
+
+    if (options?.skipCalendarSync) {
+      return;
+    }
 
     try {
-      await request<{ success: boolean }>(`${apiBase()}/task`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, task }),
-      });
-    } catch {
-      // Local fallback already saved.
+      const syncedTask = await syncGoogleCalendarTask(baseTask);
+      if (syncedTask?.calendarEventId && syncedTask.calendarEventId !== baseTask.calendarEventId) {
+        await persistTask(userId, syncedTask);
+      }
+    } catch (error) {
+      console.warn('[GCAL] Sync failed for task', { userId, taskId: baseTask.id, error });
     }
   },
   
@@ -183,12 +271,22 @@ export const db = {
       return;
     }
 
-    const tasks = storage.getTasks(userId).filter((task) => task.id !== id);
+    const storedTasks = storage.getTasks(userId);
+    const existing = storedTasks.find((task) => task.id === id);
+    if (existing?.calendarEventId) {
+      try {
+        await deleteGoogleCalendarEvent(existing.calendarEventId);
+      } catch {
+        // Ignore calendar delete failures.
+      }
+    }
+
+    const tasks = storedTasks.filter((task) => task.id !== id);
     storage.setTasks(userId, tasks);
 
     try {
       await request<{ success: boolean }>(
-        `${apiBase()}/task/${encodeURIComponent(id)}?userId=${encodeURIComponent(userId)}`,
+        `${apiBase()}/task/${encodeURIComponent(id)}`,
         { method: 'DELETE' }
       );
     } catch {

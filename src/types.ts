@@ -13,6 +13,9 @@ export interface Task {
   threadId?: string;
   type?: 'regular' | 'thought';
   subtasks?: SubTask[];
+  calendarEventId?: string;
+  description?: string;
+  location?: string;
 }
 
 export interface Message {
@@ -21,6 +24,8 @@ export interface Message {
   time: string;
   tool_calls?: any[];
   tool_call_id?: string;
+  reasoning_content?: string;
+  sources?: { title: string; snippet?: string }[];
   planning_data?: {
     questions: {
       id: string;
@@ -42,6 +47,11 @@ export interface Thread {
   preview: string;
   messages: Message[];
   createdAt: number;
+  updatedAt?: number;
+  source?: 'thread' | 'text' | 'мысль' | 'заметка' | 'skill';
+  label?: string;
+  summary?: string;
+  is_meaningful?: boolean | null;
 }
 
 export interface Settings {
@@ -51,6 +61,7 @@ export interface Settings {
   name?: string;
   avatar?: string;
   email?: string;
+  instructions?: string;
 }
 
 export interface LocalUser {
@@ -58,7 +69,7 @@ export interface LocalUser {
   username: string;
   displayName: string;
   createdAt: number;
-  provider?: 'local' | 'google';
+  provider?: 'local' | 'google' | 'email';
   email?: string;
   avatarUrl?: string;
 }
@@ -69,4 +80,4 @@ export interface LocalProfile {
   updated_at: string;
 }
 
-export type Screen = 'ob' | 'dash' | 'ai' | 'threads' | 'settings';
+export type Screen = 'ob' | 'dash' | 'ai' | 'threads' | 'settings' | 'cal' | 'today';

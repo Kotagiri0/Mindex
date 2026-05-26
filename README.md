@@ -1,9 +1,36 @@
-<div align="center">
-</div>
-
 # Есть мысли?
 
-Mindex — персональный AI-ассистент для планирования задач в локальном браузере.
+Mindex — локальный AI-планировщик задач с авторизацией, хранением данных по пользователям и интеграцией с Groq.
+
+## Что внутри
+
+- Frontend: React 19, TypeScript 5.8, Vite 6, Motion, Lucide React
+- Backend: Node.js, Express, Vercel Serverless Functions, `tsx`
+- Storage: `localStorage` + серверные API для профиля, задач и тредов
+- AI: Groq SDK с моделью `llama-3.3-70b-versatile`
+- Metrics: `prom-client` + Grafana Alloy + Grafana Cloud
+- Styling: Tailwind CSS 4
+
+## Основные модули
+
+- `src/App.tsx` — главный экранный роутер и инициализация данных
+- `src/components/LocalAuth.tsx` — локальный вход и регистрация
+- `src/components/Onboarding.tsx` — первый запуск и базовые настройки
+- `src/components/Dashboard.tsx` — список задач
+- `src/components/AIChat.tsx` — чат с Мыслью
+- `src/components/Threads.tsx` — история диалогов
+- `src/components/Settings.tsx` — настройки профиля
+- `src/components/BottomNav.tsx` — нижняя навигация
+- `src/components/TaskItem.tsx` — карточка задачи
+- `src/components/AddTaskModal.tsx` и `src/components/EditTaskModal.tsx` — модалки задач
+- `src/lib/auth.ts` — local auth и Google login
+- `src/lib/db.ts` — доступ к профилю, задачам и тредам через API
+- `src/lib/storage.ts` — изолированное localStorage-хранилище по пользователю
+- `src/lib/groq.ts` — вызовы Groq
+- `src/lib/google-auth.ts` — проверка Google ID token
+- `src/lib/theme.tsx` — тема и UI-настройки
+- `api/chat.ts` и `server.ts` — AI-эндпоинты
+- `server.ts` — основной локальный Express-сервер и Prometheus `/metrics`
 
 ## Локальный запуск
 
@@ -13,139 +40,114 @@ Mindex — персональный AI-ассистент для планиро�
 npm install
 ```
 
-2. Создай файл `.env` на основе `.env.example` и заполни ключи:
+2. Создай `.env` на основе `.env.example`.
+
+Минимальные значения для локального запуска:
 
 ```bash
 GROQ_API_KEY=
 DATABASE_URL=postgresql://mindex:mindex@postgres:5432/mindex
 ```
 
-3. Запусти dev-сервер:
-
-```bash
-npm run dev
-```
-
-Если нужен вход через Google, добавь в `.env` OAuth client id:
+Если нужен Google login, добавь:
 
 ```bash
 VITE_GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_ID=
 ```
 
-В Google Cloud Console нужно включить Google Identity Services и добавить `http://localhost:3000` в authorized JavaScript origins.
-
-4. Открой приложение в браузере:
-
-```bash
-http://localhost:3000
-```
-
-Если нужен запуск собранной версии, используй:
-
-```bash
-npm run build
-npm run preview
-```
-
-## Запуск в Docker
-
-1. Подготовь `.env` (`GROQ_API_KEY` и `DATABASE_URL`).
-
-2. Собери и подними контейнер:
-
-```bash
-docker compose up --build -d
-```
-
-3. Открой приложение:
-
-```bash
-http://localhost:3000
-```
-
-Полезные команды:
-
-```bash
-docker compose logs -f
-docker compose down
-```
-
-После запуска регистрация и вход сохраняются в Postgres (`auth_users`).
-
-## Grafana Alloy без Render
-
-Если нужен локальный сбор метрик и отправка их сразу в Grafana Cloud, используй Grafana Alloy в `docker compose`.
-
-1. Добавь в `.env` два значения:
+Если нужен локальный сбор метрик и отправка в Grafana Cloud через Alloy, добавь:
 
 ```bash
 GRAFANA_CLOUD_USER_ID=
 GRAFANA_CLOUD_API_KEY=
 ```
 
-Где:
-- `GRAFANA_CLOUD_USER_ID` — это **Metrics Instance ID** из Grafana Cloud (не email и не имя токена)
-- `GRAFANA_CLOUD_API_KEY` — это **Cloud Access Policy token** с правом записи метрик
-
-2. Проверь, что [monitoring/alloy/config.alloy](monitoring/alloy/config.alloy) указывает на `mindex:3000/metrics` и на правильный `remote_write` URL Grafana Cloud.
-
-3. Подними стек:
+3. Запусти сервер разработки:
 
 ```bash
-docker compose up --build -d
+npm run dev
 ```
 
-4. Открой приложение и создай трафик:
+4. Открой приложение:
 
 ```bash
 http://localhost:3000
 ```
 
-5. В Grafana Cloud проверь запрос в Explore:
+## Docker
 
-```promql
-sum(rate(http_requests_total[5m]))
-```
+1. Подготовь `.env`.
 
-Если видишь `401 Unauthorized` в логах Alloy:
-- проверь, что `GRAFANA_CLOUD_USER_ID` действительно равен Metrics Instance ID
-- проверь, что токен не отозван и имеет нужные права
-- убедись, что нет лишних пробелов/кавычек в `.env`
-- после изменения `.env` перезапусти стек: `docker compose down && docker compose up -d`
-
-Для локальной схемы Render не нужен: Alloy скрейпит контейнер приложения напрямую по внутренней сети Docker и пушит метрики в Grafana Cloud.
-
-## Prometheus + Grafana Cloud (Render)
-
-Ниже минимальная production-схема для Render: Prometheus скрейпит `https://<твой-сервис>/metrics` и отправляет данные в Grafana Cloud через `remote_write`.
-
-Важно по безопасности: если API key уже публиковался, сразу перевыпусти его в Grafana Cloud и используй новый.
-
-1. Подготовь конфиг на основе шаблона [monitoring/prometheus.render.yml](monitoring/prometheus.render.yml):
-	- `__GRAFANA_CLOUD_USER_ID__` -> твой `username` из Grafana Cloud
-	- `__GRAFANA_CLOUD_API_KEY__` -> новый API key
-	- `__RENDER_SERVICE_DOMAIN__` -> домен твоего Render веб-сервиса без `https://`
-
-2. Проверь, что endpoint метрик доступен:
+2. Подними стек:
 
 ```bash
-curl https://<твой-render-домен>/metrics
+docker compose up --build -d
 ```
 
-3. Разверни отдельный сервис Prometheus на Render (второй сервис рядом с приложением):
-	- Runtime: Docker
-	- Image: `prom/prometheus:v2.54.1`
-	- Start command:
+3. Проверь приложение:
 
 ```bash
---config.file=/etc/prometheus/prometheus.yml --web.listen-address=:9090
+http://localhost:3000
 ```
 
-4. В этот сервис положи подготовленный конфиг как `/etc/prometheus/prometheus.yml`.
+4. Для локального мониторинга Alloy используй:
 
-5. Проверь ingestion в Grafana Cloud:
-	- В Grafana Explore выполни запрос: `sum(rate(http_requests_total[5m]))`
-	- Если данных нет, проверь логи Prometheus (ошибки `remote_write` и `scrape`).
+```bash
+docker compose logs -f alloy
+```
 
-Подсказка по target: указывать нужно хост и порт, без `https://` и без `/metrics`.
+## Метрики
+
+Сервер публикует Prometheus-метрики на:
+
+```bash
+http://localhost:3000/metrics
+```
+
+Основные метрики:
+
+- `http_requests_total`
+- `http_request_duration_seconds`
+- `http_requests_in_flight`
+
+Локальный сборщик Grafana Alloy находится в [monitoring/alloy/config.alloy](monitoring/alloy/config.alloy).
+
+## API
+
+### Local Express server
+
+- `GET /api/config` — конфиг клиента
+- `POST /api/auth/register` — регистрация
+- `POST /api/auth/login` — вход
+- `POST /api/auth/google` — вход через Google
+- `GET /api/data/bootstrap` — профиль, задачи и треды
+- `POST /api/data/profile` — сохранить профиль
+- `POST /api/data/task` — сохранить задачу
+- `DELETE /api/data/task/:id` — удалить задачу
+- `POST /api/data/thread` — сохранить тред
+- `DELETE /api/data/thread/:id` — удалить тред
+- `GET /api/chat` и `POST /api/chat` — health check и Groq chat
+- `GET /metrics` — Prometheus endpoint
+
+### Vercel functions
+
+В репозитории также остались serverless-эндпоинты в `api/` для деплоя на Vercel и совместимости с облачным режимом.
+
+## Важные переменные окружения
+
+- `PORT` — порт сервера
+- `DATABASE_URL` — строка подключения к PostgreSQL
+- `GROQ_API_KEY` — ключ Groq
+- `GOOGLE_CLIENT_ID` и `VITE_GOOGLE_CLIENT_ID` — Google OAuth client ID
+- `GRAFANA_CLOUD_USER_ID` — Metrics Instance ID для Alloy
+- `GRAFANA_CLOUD_API_KEY` — Grafana Cloud token для remote_write
+
+## Архитектура в двух словах
+
+1. Пользователь входит через LocalAuth или Google.
+2. Данные профиля, задач и тредов кэшируются в localStorage по пользователю.
+3. Сервер отвечает за авторизацию, bootstrap и запись данных.
+4. Чат отправляется в Groq.
+5. Метрики снимаются через middleware и экспортируются в Prometheus формате.
+6. Grafana Alloy забирает `/metrics` и отправляет их в Grafana Cloud.

@@ -1,0 +1,106 @@
+const CACHE_NAME = 'mindex-cache-v4';
+const URLS_TO_CACHE = [
+  '/',
+  '/index.html',
+  '/offline.html',
+  '/manifest.webmanifest',
+  '/icons/icon.svg',
+  '/icons/icon-180.png',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      await cache.addAll(URLS_TO_CACHE);
+
+      try {
+        const response = await fetch('/', { cache: 'no-store' });
+        const html = await response.text();
+        const assetMatches = html.match(/\/assets\/[^"' )]+\.(?:js|css)/g) || [];
+        const uniqueAssets = [...new Set(assetMatches)];
+        await cache.addAll(uniqueAssets);
+      } catch (error) {
+        console.warn('Failed to cache dynamic assets:', error);
+      }
+    })(),
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) =>
+      Promise.all(
+        cacheNames
+          .filter((cacheName) => cacheName !== CACHE_NAME)
+          .map((cacheName) => caches.delete(cacheName)),
+      ),
+    ),
+  );
+  self.clients.claim();
+});
+
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith('/api/')) {
+    return;
+  }
+
+  const isNavigation = event.request.mode === 'navigate';
+
+  if (isNavigation) {
+    event.respondWith(
+      fetch(event.request, { cache: 'reload' })
+        .then(async (response) => {
+          const contentType = response.headers.get('content-type') || '';
+          if (response && response.status === 200 && contentType.includes('text/html')) {
+            const responseToCache = response.clone();
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(event.request, responseToCache);
+          }
+          return response;
+        })
+        .catch(async (error) => {
+          console.warn('Navigation fetch failed in service worker:', event.request.url, error);
+          const cached = await caches.match(event.request);
+          if (cached) return cached;
+          const index = await caches.match('/index.html');
+          if (index) return index;
+          const offline = await caches.match('/offline.html');
+          if (offline) return offline;
+          const root = await caches.match('/');
+          if (root) return root;
+          return new Response('Offline', { status: 503, statusText: 'Offline' });
+        }),
+    );
+    return;
+  }
+
+  event.respondWith(
+    caches.match(event.request).then(
+      (cachedResponse) =>
+        cachedResponse ||
+        fetch(event.request)
+          .then((response) => {
+            if (!response || response.status !== 200 || response.type !== 'basic') {
+              return response;
+            }
+            const responseToCache = response.clone();
+            caches
+              .open(CACHE_NAME)
+              .then((cache) => cache.put(event.request, responseToCache));
+            return response;
+          })
+          .catch(async () => {
+            return new Response('Offline', { status: 503, statusText: 'Offline' });
+          }),
+    ),
+  );
+});
