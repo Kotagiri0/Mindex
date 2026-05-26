@@ -322,6 +322,7 @@ export default function App() {
   }
 
   return (
+    <>
     <div className="safe-area-container relative w-full overflow-hidden bg-bg" style={{ height: '100dvh' }}>
       <AnimatePresence mode="wait">
         {screen === 'today' && (
@@ -342,7 +343,7 @@ export default function App() {
           </motion.div>
         )}
 
-        {screen === 'ob' && (
+        {screen === 'ob' && !onboardingComplete && (
           <motion.div
             key="ob"
             initial={{ opacity: 0 }}
@@ -472,11 +473,13 @@ export default function App() {
         />
       )}
 
-      <AnimatePresence>
-        {showEmailBanner && (
-          <EmailAttachBanner onDismiss={() => setShowEmailBanner(false)} />
-        )}
-      </AnimatePresence>
     </div>
+
+    <AnimatePresence>
+      {showEmailBanner && (
+        <EmailAttachBanner onDismiss={() => setShowEmailBanner(false)} />
+      )}
+    </AnimatePresence>
+    </>
   );
 }
