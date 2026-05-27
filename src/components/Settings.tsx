@@ -9,6 +9,8 @@ import {
   disconnectGoogleCalendar,
   fetchCalendarList,
   getSelectedCalendarId,
+  isGoogleMeetEnabled,
+  setGoogleMeetEnabled,
   setSelectedCalendarId,
   type GoogleCalendarItem,
 } from '../lib/google-calendar';
@@ -170,6 +172,7 @@ function GoogleCalendarRow() {
   const [loading, setLoading] = useState(false);
   const [calendars, setCalendars] = useState<GoogleCalendarItem[]>([]);
   const [selectedId, setSelectedId] = useState(() => getSelectedCalendarId());
+  const [meetEnabled, setMeetEnabled] = useState(() => isGoogleMeetEnabled());
   const [showPicker, setShowPicker] = useState(false);
   const [loadingCalendars, setLoadingCalendars] = useState(false);
 
@@ -209,6 +212,7 @@ function GoogleCalendarRow() {
     setConnected(false);
     setCalendars([]);
     setSelectedId('primary');
+    setMeetEnabled(false);
     setShowPicker(false);
   };
 
@@ -222,6 +226,11 @@ function GoogleCalendarRow() {
   const displayName = loadingCalendars
     ? 'Загружаем...'
     : selectedCalendar?.summary || (selectedId === 'primary' ? 'Основной' : selectedId);
+  const toggleMeet = () => {
+    const next = !meetEnabled;
+    setGoogleMeetEnabled(next);
+    setMeetEnabled(next);
+  };
 
   return (
     <div>
@@ -230,10 +239,10 @@ function GoogleCalendarRow() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <div style={{ fontFamily: M, fontSize: 15, color: 'var(--text-primary)', marginBottom: 3 }}>
-              Google Календарь
+              Google Календарь + Meet
             </div>
             <div style={{ fontFamily: M, fontSize: 13, color: connected ? '#22c55e' : 'var(--text-muted)' }}>
-              {connected ? 'Подключён' : 'Синхронизация твоих событий и задач'}
+              {connected ? 'Аккаунт подключён' : 'Синхронизация событий и задач'}
             </div>
           </div>
           {connected ? (
@@ -245,6 +254,30 @@ function GoogleCalendarRow() {
 
         {connected && (
           <div style={{ marginTop: 12 }}>
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontFamily: M, fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>
+                Google Meet
+              </div>
+              <button
+                onClick={toggleMeet}
+                style={{
+                  width: '100%', padding: '10px 14px', borderRadius: 12,
+                  border: '1px solid rgba(0,0,0,0.1)',
+                  background: 'var(--surface2, rgba(0,0,0,0.03))',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  cursor: 'pointer', fontFamily: M, fontSize: 14, color: 'var(--text-primary)',
+                  boxSizing: 'border-box' as const,
+                }}
+              >
+                <span>Создавать Meet-ссылку для задач с временем</span>
+                <span style={{ color: meetEnabled ? '#22c55e' : 'var(--text-muted)', fontSize: 12 }}>
+                  {meetEnabled ? 'Вкл' : 'Выкл'}
+                </span>
+              </button>
+              <div style={{ marginTop: 6, fontFamily: M, fontSize: 12, color: 'var(--text-muted)' }}>
+                Meet-ссылка добавляется только к задачам с указанным временем.
+              </div>
+            </div>
             <div style={{ fontFamily: M, fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>
               Активный календарь
             </div>

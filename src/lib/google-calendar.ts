@@ -35,10 +35,12 @@ const TOKEN_TTL_BUFFER_MS = 60_000;
 const DEFAULT_EVENT_DURATION_MINUTES = 60;
 const TOKEN_STORAGE_PREFIX = 'mx_google_calendar_token_';
 const CALENDAR_ID_STORAGE_PREFIX = 'mx_google_calendar_id_';
+const MEET_ENABLED_STORAGE_PREFIX = 'mx_google_meet_enabled_';
 
 let googleScriptPromise: Promise<void> | null = null;
 let tokenClient: TokenClient | null = null;
 let cachedClientId: string | null = null;
+let meetRequestCounter = 0;
 
 const loadGoogleScript = async () => {
   const accounts = (window as any).google?.accounts;
@@ -193,6 +195,7 @@ export const disconnectGoogleCalendar = () => {
   if (!userId) return;
   clearToken(userId);
   localStorage.removeItem(`${CALENDAR_ID_STORAGE_PREFIX}${userId}`);
+  localStorage.removeItem(`${MEET_ENABLED_STORAGE_PREFIX}${userId}`);
   // Reset cached token client so next connect uses updated scopes
   tokenClient = null;
 };
@@ -207,6 +210,18 @@ export const setSelectedCalendarId = (calendarId: string) => {
   const userId = getCurrentUser()?.id;
   if (!userId) return;
   localStorage.setItem(`${CALENDAR_ID_STORAGE_PREFIX}${userId}`, calendarId);
+};
+
+export const isGoogleMeetEnabled = () => {
+  const userId = getCurrentUser()?.id;
+  if (!userId) return false;
+  return localStorage.getItem(`${MEET_ENABLED_STORAGE_PREFIX}${userId}`) === 'true';
+};
+
+export const setGoogleMeetEnabled = (enabled: boolean) => {
+  const userId = getCurrentUser()?.id;
+  if (!userId) return;
+  localStorage.setItem(`${MEET_ENABLED_STORAGE_PREFIX}${userId}`, enabled ? 'true' : 'false');
 };
 
 export const fetchCalendarList = async (): Promise<GoogleCalendarItem[]> => {
@@ -268,7 +283,25 @@ const buildDateTime = (date: string, time: string) => {
   return `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}T${pad(local.getHours())}:${pad(local.getMinutes())}:00${tz}`;
 };
 
-const buildEventPayload = (task: Task) => {
+const generateMeetRequestId = () => {
+  if (typeof crypto !== 'undefined') {
+    if (typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    if (typeof crypto.getRandomValues === 'function') {
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+    }
+  }
+  meetRequestCounter = (meetRequestCounter + 1) % Number.MAX_SAFE_INTEGER;
+  const monotonicPart = typeof performance !== 'undefined'
+    ? Math.floor(performance.now() * 1000)
+    : 0;
+  return `${Date.now()}_${meetRequestCounter}_${monotonicPart}`;
+};
+
+const buildEventPayload = (task: Task, options?: { includeMeet?: boolean }) => {
   if (!task.date) return null;
 
   if (!task.time) {
@@ -301,12 +334,23 @@ const buildEventPayload = (task: Task) => {
     `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`,
   );
 
+  const shouldIncludeMeet = Boolean(options?.includeMeet);
+  const requestId = generateMeetRequestId();
+
   return {
     summary: task.name,
     description: task.description || undefined,
     location: task.location || undefined,
     start: { dateTime: start },
     end: { dateTime: end },
+    conferenceData: shouldIncludeMeet
+      ? {
+        createRequest: {
+          requestId,
+          conferenceSolutionKey: { type: 'hangoutsMeet' },
+        },
+      }
+      : undefined,
     extendedProperties: {
       private: { mindexTaskId: task.id },
     },
@@ -325,9 +369,29 @@ const calendarRequest = async (path: string, method: string, accessToken: string
   return response;
 };
 
-const createCalendarEvent = async (accessToken: string, payload: object) => {
+const extractMeetLink = (event: { hangoutLink?: string; conferenceData?: { entryPoints?: { entryPointType?: string; uri?: string }[] } } | null) => {
+  if (!event) return undefined;
+  if (event.hangoutLink) return event.hangoutLink;
+  const entry = event.conferenceData?.entryPoints?.find((item) => item.entryPointType === 'video' && item.uri);
+  return entry?.uri;
+};
+
+const appendMeetLinkToDescription = (description: string | undefined, meetLink?: string) => {
+  if (!meetLink) return description;
+  const formattedMeetLine = `Google Meet: ${meetLink}`;
+  if (description?.includes(formattedMeetLine)) return description;
+  const base = description?.trim();
+  return base ? `${base}\n\n${formattedMeetLine}` : formattedMeetLine;
+};
+
+const createCalendarEvent = async (
+  accessToken: string,
+  payload: object,
+  options?: { includeMeet?: boolean },
+): Promise<{ eventId: string; meetLink?: string } | null> => {
   const calendarId = getSelectedCalendarId();
-  const response = await calendarRequest(`/calendars/${encodeURIComponent(calendarId)}/events`, 'POST', accessToken, payload);
+  const query = options?.includeMeet ? '?conferenceDataVersion=1' : '';
+  const response = await calendarRequest(`/calendars/${encodeURIComponent(calendarId)}/events${query}`, 'POST', accessToken, payload);
   if (response.status === 401 || response.status === 403) {
     const userId = getCurrentUser()?.id;
     if (userId) clearToken(userId);
@@ -338,35 +402,47 @@ const createCalendarEvent = async (accessToken: string, payload: object) => {
     console.warn(`[GCAL] Ошибка создания события: ${response.status} ${text}`);
     return null;
   }
-  const data = await response.json().catch(() => null) as { id?: string } | null;
+  const data = await response.json().catch(() => null) as {
+    id?: string;
+    hangoutLink?: string;
+    conferenceData?: { entryPoints?: { entryPointType?: string; uri?: string }[] };
+  } | null;
   if (!data?.id) {
     console.warn('[GCAL] Ответ создания события без id.');
     return null;
   }
-  return data.id;
+  return { eventId: data.id, meetLink: extractMeetLink(data) };
 };
 
 export const syncGoogleCalendarTask = async (task: Task): Promise<Task | null> => {
   const accessToken = await ensureGoogleCalendarToken({ allowPrompt: false });
   if (!accessToken) return null;
 
-  const payload = buildEventPayload(task);
+  const includeMeet = isGoogleMeetEnabled() && Boolean(task.time);
+  const payload = buildEventPayload(task, { includeMeet });
   if (!payload) return null;
+  const withMeetDescription = (baseTask: Task, meetLink?: string): Task => {
+    if (!includeMeet || !meetLink) return baseTask;
+    const nextDescription = appendMeetLinkToDescription(baseTask.description, meetLink);
+    if (nextDescription === baseTask.description) return baseTask;
+    return { ...baseTask, description: nextDescription };
+  };
 
   const calendarId = getSelectedCalendarId();
 
   if (task.calendarEventId) {
+    const patchQuery = includeMeet ? '?conferenceDataVersion=1' : '';
     const response = await calendarRequest(
-      `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(task.calendarEventId)}`,
+      `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(task.calendarEventId)}${patchQuery}`,
       'PATCH',
       accessToken,
       payload,
     );
 
     if (response.status === 404) {
-      const eventId = await createCalendarEvent(accessToken, payload);
-      if (!eventId) return null;
-      return { ...task, calendarEventId: eventId };
+      const created = await createCalendarEvent(accessToken, payload, { includeMeet });
+      if (!created) return null;
+      return withMeetDescription({ ...task, calendarEventId: created.eventId }, created.meetLink);
     }
 
     if (response.status === 401 || response.status === 403) {
@@ -375,15 +451,19 @@ export const syncGoogleCalendarTask = async (task: Task): Promise<Task | null> =
     }
 
     if (response.ok) {
-      return task;
+      const data = await response.json().catch(() => null) as {
+        hangoutLink?: string;
+        conferenceData?: { entryPoints?: { entryPointType?: string; uri?: string }[] };
+      } | null;
+      return withMeetDescription(task, extractMeetLink(data));
     }
 
     return null;
   }
 
-  const eventId = await createCalendarEvent(accessToken, payload);
-  if (!eventId) return null;
-  return { ...task, calendarEventId: eventId };
+  const created = await createCalendarEvent(accessToken, payload, { includeMeet });
+  if (!created) return null;
+  return withMeetDescription({ ...task, calendarEventId: created.eventId }, created.meetLink);
 };
 
 export const deleteGoogleCalendarEvent = async (eventId: string) => {
