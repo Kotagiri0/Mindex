@@ -358,6 +358,7 @@ function GoogleWorkspaceRow() {
   const [loading, setLoading] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const [error, setError] = useState('');
+  const [oauthPopup, setOauthPopup] = useState<Window | null>(null);
 
   const refreshStatus = async () => {
     const response = await apiFetch('/api/integrations/google-workspace/status');
@@ -372,6 +373,7 @@ function GoogleWorkspaceRow() {
   useEffect(() => {
     const onMessage = async (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
+      if (oauthPopup && event.source !== oauthPopup) return;
       const payload = event.data as { type?: string; code?: string; error?: string } | null;
       if (!payload || payload.type !== 'google-workspace-oauth') return;
 
@@ -382,7 +384,7 @@ function GoogleWorkspaceRow() {
       }
 
       const code = String(payload.code || '').trim();
-      if (!code) {
+      if (!/^[A-Za-z0-9\-._/]{20,}$/.test(code)) {
         setWaiting(false);
         setError('Код авторизации не получен');
         return;
@@ -404,12 +406,13 @@ function GoogleWorkspaceRow() {
       } finally {
         setLoading(false);
         setWaiting(false);
+        setOauthPopup(null);
       }
     };
 
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, []);
+  }, [oauthPopup]);
 
   const handleConnect = async () => {
     setLoading(true);
@@ -425,6 +428,7 @@ function GoogleWorkspaceRow() {
         window.location.href = data.authUrl;
         return;
       }
+      setOauthPopup(popup);
       setWaiting(true);
     } catch (err: any) {
       setError(err?.message || 'Ошибка подключения Google Workspace');

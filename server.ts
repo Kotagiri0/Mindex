@@ -1240,6 +1240,9 @@ app.get('/api/integrations/google-workspace/status', requireAuth, async (req, re
   const auth = getGoogleWorkspaceAuth();
   if (!auth || !db) return res.status(500).json({ error: 'База данных не настроена.' });
   const userId = (req as any).userId as string;
+  if (!checkCustomRateLimit(`gw:status:${userId}:${req.ip || 'unknown'}`, 60, 60_000)) {
+    return res.status(429).json({ error: 'Слишком много запросов. Подожди минуту.' });
+  }
   const store = new GoogleWorkspaceTokenStore(db);
   const tokens = await store.getTokens(userId);
   return res.json({ connected: Boolean(tokens?.access_token || tokens?.refresh_token) });
@@ -1249,6 +1252,9 @@ app.post('/api/integrations/google-workspace/connect', requireAuth, async (req, 
   const auth = getGoogleWorkspaceAuth();
   if (!auth) return res.status(500).json({ error: 'База данных не настроена.' });
   const userId = (req as any).userId as string;
+  if (!checkCustomRateLimit(`gw:connect:${userId}:${req.ip || 'unknown'}`, 10, 60_000)) {
+    return res.status(429).json({ error: 'Слишком много попыток подключения. Подожди минуту.' });
+  }
   const result = auth.getAuthorizationUrl(userId);
   if (!result.success || !result.data?.authUrl) {
     return res.status(500).json({ error: result.error?.message || 'Не удалось начать Google OAuth' });
@@ -1260,6 +1266,9 @@ app.post('/api/integrations/google-workspace/exchange', requireAuth, async (req,
   const auth = getGoogleWorkspaceAuth();
   if (!auth) return res.status(500).json({ error: 'База данных не настроена.' });
   const userId = (req as any).userId as string;
+  if (!checkCustomRateLimit(`gw:exchange:${userId}:${req.ip || 'unknown'}`, 12, 10 * 60_000)) {
+    return res.status(429).json({ error: 'Слишком много OAuth-попыток. Подожди 10 минут.' });
+  }
   const code = String(req.body?.code || '').trim();
   const result = await auth.exchangeAuthorizationCode(userId, code);
   if (!result.success) {
@@ -1271,6 +1280,9 @@ app.post('/api/integrations/google-workspace/exchange', requireAuth, async (req,
 app.post('/api/integrations/google-workspace/disconnect', requireAuth, async (req, res) => {
   if (!db) return res.status(500).json({ error: 'База данных не настроена.' });
   const userId = (req as any).userId as string;
+  if (!checkCustomRateLimit(`gw:disconnect:${userId}:${req.ip || 'unknown'}`, 10, 60_000)) {
+    return res.status(429).json({ error: 'Слишком много запросов. Подожди минуту.' });
+  }
   const store = new GoogleWorkspaceTokenStore(db);
   await store.clearTokens(userId);
   return res.json({ connected: false });
