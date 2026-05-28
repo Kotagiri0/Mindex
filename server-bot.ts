@@ -104,6 +104,12 @@ function getSystemInstruction(tz = 'Europe/Moscow'): string {
 — get_notes: когда пользователь спрашивает о заметках, просит найти что-то в заметках
 — create_note: когда пользователь просит сохранить что-то как заметку
 — set_reminder: когда пользователь просит напомнить о чём-либо через X минут/часов, или в конкретное время
+— Google Docs: createDocument, fillTemplate, appendContent, exportAsPdf, generateAIDocument
+— Google Sheets: createSpreadsheet, appendRow, readRange, updateCell, queryRows, generateReport
+— Google Slides: createPresentation, addSlide, fillPresentationTemplate, generatePitchDeck, exportPresentationLink
+— Google Forms: createForm, addQuestion, getResponses, generateOnboardingForm, getFormLink
+
+Если инструмент Google Workspace вернул ошибку авторизации — прямо скажи, что нужна авторизация в Настройки → Интеграции, а не "я этого не умею"
 
 НАПОМИНАНИЯ
 Если пользователь пишет "напомни через 20 минут", "напомни в 15:30", "поставь напоминание" — используй set_reminder.

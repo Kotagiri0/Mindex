@@ -353,6 +353,138 @@ function GoogleCalendarRow() {
   );
 }
 
+function GoogleWorkspaceRow() {
+  const [connected, setConnected] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [waiting, setWaiting] = useState(false);
+  const [error, setError] = useState('');
+
+  const refreshStatus = async () => {
+    const response = await apiFetch('/api/integrations/google-workspace/status');
+    const data = await response.json().catch(() => ({ connected: false }));
+    if (response.ok) setConnected(Boolean(data.connected));
+  };
+
+  useEffect(() => {
+    refreshStatus().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const onMessage = async (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const payload = event.data as { type?: string; code?: string; error?: string } | null;
+      if (!payload || payload.type !== 'google-workspace-oauth') return;
+
+      if (payload.error) {
+        setWaiting(false);
+        setError('Google OAuth отклонён');
+        return;
+      }
+
+      const code = String(payload.code || '').trim();
+      if (!code) {
+        setWaiting(false);
+        setError('Код авторизации не получен');
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const response = await apiFetch('/api/integrations/google-workspace/exchange', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        });
+        const data = await response.json().catch(() => ({ error: 'Не удалось завершить авторизацию' }));
+        if (!response.ok) throw new Error(data.error || 'Не удалось завершить авторизацию');
+        setConnected(true);
+        setError('');
+      } catch (err: any) {
+        setError(err?.message || 'Ошибка подключения Google Workspace');
+      } finally {
+        setLoading(false);
+        setWaiting(false);
+      }
+    };
+
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  const handleConnect = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await apiFetch('/api/integrations/google-workspace/connect', {
+        method: 'POST',
+      });
+      const data = await response.json().catch(() => ({ error: 'Не удалось начать Google OAuth' }));
+      if (!response.ok || !data.authUrl) throw new Error(data.error || 'Не удалось начать Google OAuth');
+      const popup = window.open(data.authUrl, 'google-workspace-auth', 'width=520,height=700');
+      if (!popup) {
+        window.location.href = data.authUrl;
+        return;
+      }
+      setWaiting(true);
+    } catch (err: any) {
+      setError(err?.message || 'Ошибка подключения Google Workspace');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await apiFetch('/api/integrations/google-workspace/disconnect', {
+        method: 'POST',
+      });
+      const data = await response.json().catch(() => ({ error: 'Не удалось отключить Google Workspace' }));
+      if (!response.ok) throw new Error(data.error || 'Не удалось отключить Google Workspace');
+      setConnected(false);
+      setWaiting(false);
+    } catch (err: any) {
+      setError(err?.message || 'Ошибка отключения Google Workspace');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <div style={{ height: 1, background: 'rgba(0,0,0,0.06)' }} />
+      <div style={{ padding: '18px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontFamily: M, fontSize: 15, color: 'var(--text-primary)', marginBottom: 3 }}>
+              Google Workspace
+            </div>
+            <div style={{ fontFamily: M, fontSize: 13, color: connected ? '#22c55e' : 'var(--text-muted)' }}>
+              {connected ? 'Docs, Sheets, Slides и Forms подключены' : 'Подключение документов и таблиц для Telegram-бота'}
+            </div>
+          </div>
+          {connected ? (
+            <PillButton label={loading ? '...' : 'Отключить'} onClick={handleDisconnect} danger />
+          ) : (
+            <PillButton label={loading ? '...' : 'Подключить'} onClick={handleConnect} />
+          )}
+        </div>
+        {waiting && (
+          <div style={{ marginTop: 8, fontFamily: M, fontSize: 12, color: 'var(--text-muted)' }}>
+            Заверши вход Google во всплывающем окне
+          </div>
+        )}
+        {error && (
+          <div style={{ marginTop: 8, fontFamily: M, fontSize: 12, color: '#c0392b' }}>
+            {error}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SettingRow({ label, desc, value, onChange }: { label: string; desc?: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
     <div>
@@ -482,6 +614,7 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
             <div style={{ fontFamily: M, fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Интеграции</div>
             <TelegramRow />
             <GoogleCalendarRow />
+            <GoogleWorkspaceRow />
           </div>
         </div>
       </div>
@@ -598,6 +731,7 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
           </div>
           <TelegramRow />
           <GoogleCalendarRow />
+          <GoogleWorkspaceRow />
         </div>
 
         {/* Account */}

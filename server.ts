@@ -18,6 +18,8 @@ import {
 } from "prom-client";
 import { verifyGoogleIdToken } from './src/lib/google-auth.ts';
 import { Resend } from 'resend';
+import { GoogleWorkspaceAuth } from './src/integrations/google/oauth';
+import { GoogleWorkspaceTokenStore } from './src/integrations/google/token-store';
 
 dotenv.config();
 
@@ -31,6 +33,11 @@ const db = DATABASE_URL ? new Pool({
   connectionString: DATABASE_URL,
   ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
 }) : null;
+
+const getGoogleWorkspaceAuth = () => {
+  if (!db) return null;
+  return new GoogleWorkspaceAuth(new GoogleWorkspaceTokenStore(db));
+};
 
 // Кэш для троттлинга обновления last_active_at — раз в 60 сек на юзера, чтоб не молотить БД
 const lastActiveTouchCache = new Map<string, number>();
@@ -1204,6 +1211,69 @@ app.post('/api/auth/google', async (req, res) => {
     console.error('[AUTH][GOOGLE]', error?.message || error);
     return res.status(401).json({ error: error?.message || 'Не удалось выполнить вход через Google.' });
   }
+});
+
+app.get('/api/integrations/google-workspace/callback', (_req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`<!doctype html>
+<html>
+  <head><meta charset="utf-8" /><title>Google Workspace</title></head>
+  <body>
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search || '');
+        var payload = {
+          type: 'google-workspace-oauth',
+          code: params.get('code'),
+          state: params.get('state'),
+          error: params.get('error')
+        };
+        if (window.opener) window.opener.postMessage(payload, window.location.origin);
+        window.close();
+      })();
+    </script>
+  </body>
+</html>`);
+});
+
+app.get('/api/integrations/google-workspace/status', requireAuth, async (req, res) => {
+  const auth = getGoogleWorkspaceAuth();
+  if (!auth || !db) return res.status(500).json({ error: 'База данных не настроена.' });
+  const userId = (req as any).userId as string;
+  const store = new GoogleWorkspaceTokenStore(db);
+  const tokens = await store.getTokens(userId);
+  return res.json({ connected: Boolean(tokens?.access_token || tokens?.refresh_token) });
+});
+
+app.post('/api/integrations/google-workspace/connect', requireAuth, async (req, res) => {
+  const auth = getGoogleWorkspaceAuth();
+  if (!auth) return res.status(500).json({ error: 'База данных не настроена.' });
+  const userId = (req as any).userId as string;
+  const result = auth.getAuthorizationUrl(userId);
+  if (!result.success || !result.data?.authUrl) {
+    return res.status(500).json({ error: result.error?.message || 'Не удалось начать Google OAuth' });
+  }
+  return res.json({ authUrl: result.data.authUrl });
+});
+
+app.post('/api/integrations/google-workspace/exchange', requireAuth, async (req, res) => {
+  const auth = getGoogleWorkspaceAuth();
+  if (!auth) return res.status(500).json({ error: 'База данных не настроена.' });
+  const userId = (req as any).userId as string;
+  const code = String(req.body?.code || '').trim();
+  const result = await auth.exchangeAuthorizationCode(userId, code);
+  if (!result.success) {
+    return res.status(400).json({ error: result.error?.message || 'Не удалось завершить Google OAuth' });
+  }
+  return res.json({ connected: true });
+});
+
+app.post('/api/integrations/google-workspace/disconnect', requireAuth, async (req, res) => {
+  if (!db) return res.status(500).json({ error: 'База данных не настроена.' });
+  const userId = (req as any).userId as string;
+  const store = new GoogleWorkspaceTokenStore(db);
+  await store.clearTokens(userId);
+  return res.json({ connected: false });
 });
 
 app.get("/api/data/bootstrap", requireAuth, async (req, res) => {

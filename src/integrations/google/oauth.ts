@@ -3,6 +3,13 @@ import type { WorkspaceResult } from './types';
 import { GoogleWorkspaceTokenStore } from './token-store';
 
 const AUTH_ERROR_CODE = 'AUTH_REQUIRED';
+const WORKSPACE_SCOPES = [
+  'https://www.googleapis.com/auth/documents',
+  'https://www.googleapis.com/auth/drive',
+  'https://www.googleapis.com/auth/spreadsheets',
+  'https://www.googleapis.com/auth/presentations',
+  'https://www.googleapis.com/auth/forms.body',
+];
 
 const getAuthUrl = (scopes: string[], userId: string) => {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
@@ -29,6 +36,82 @@ const getErrorStatus = (error: any): number | undefined =>
 
 export class GoogleWorkspaceAuth {
   constructor(private readonly tokenStore: GoogleWorkspaceTokenStore) {}
+
+  getAuthorizationUrl(userId: string, scopes: string[] = WORKSPACE_SCOPES): WorkspaceResult<{ authUrl: string }> {
+    const authUrl = getAuthUrl(scopes, userId);
+    if (!authUrl) {
+      return {
+        success: false,
+        error: {
+          code: AUTH_ERROR_CODE,
+          message: 'Google OAuth не настроен',
+        },
+      };
+    }
+    return { success: true, data: { authUrl } };
+  }
+
+  async exchangeAuthorizationCode(
+    userId: string,
+    code: string,
+    scopes: string[] = WORKSPACE_SCOPES,
+  ): Promise<WorkspaceResult<{ connected: boolean }>> {
+    const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+    const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI;
+
+    if (!clientId || !clientSecret || !redirectUri) {
+      return {
+        success: false,
+        error: {
+          code: AUTH_ERROR_CODE,
+          message: 'Google OAuth не настроен',
+          reauthUrl: getAuthUrl(scopes, userId),
+        },
+      };
+    }
+
+    if (!code) {
+      return {
+        success: false,
+        error: {
+          code: 'INVALID_AUTH_CODE',
+          message: 'Код авторизации не передан',
+        },
+      };
+    }
+
+    try {
+      const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+      const { tokens } = await oauth2Client.getToken(code);
+      const normalizedTokens = {
+        access_token: tokens.access_token || undefined,
+        refresh_token: tokens.refresh_token || undefined,
+        expiry_date: typeof tokens.expiry_date === 'number' ? tokens.expiry_date : undefined,
+        token_type: tokens.token_type || undefined,
+        scope: tokens.scope || undefined,
+      };
+      if (!normalizedTokens.access_token && !normalizedTokens.refresh_token) {
+        return {
+          success: false,
+          error: {
+            code: 'INVALID_AUTH_CODE',
+            message: 'Google не вернул токены',
+          },
+        };
+      }
+      await this.tokenStore.saveTokens(userId, normalizedTokens);
+      return { success: true, data: { connected: true } };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: {
+          code: 'GOOGLE_AUTH_EXCHANGE_FAILED',
+          message: error?.message || 'Не удалось обменять код Google OAuth на токены',
+        },
+      };
+    }
+  }
 
   async withAuth<T>(
     userId: string,
