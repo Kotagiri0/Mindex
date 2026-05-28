@@ -1236,7 +1236,7 @@ app.get('/api/integrations/google-workspace/callback', (_req, res) => {
 </html>`);
 });
 
-app.get('/api/integrations/google-workspace/status', requireAuth, async (req, res) => {
+app.get('/api/integrations/google-workspace/status', requireAuth, dataRateLimit, async (req, res) => {
   const auth = getGoogleWorkspaceAuth();
   if (!auth || !db) return res.status(500).json({ error: 'База данных не настроена.' });
   const userId = (req as any).userId as string;
@@ -1248,7 +1248,7 @@ app.get('/api/integrations/google-workspace/status', requireAuth, async (req, re
   return res.json({ connected: Boolean(tokens?.access_token || tokens?.refresh_token) });
 });
 
-app.post('/api/integrations/google-workspace/connect', requireAuth, async (req, res) => {
+app.post('/api/integrations/google-workspace/connect', requireAuth, dataRateLimit, async (req, res) => {
   const auth = getGoogleWorkspaceAuth();
   if (!auth) return res.status(500).json({ error: 'База данных не настроена.' });
   const userId = (req as any).userId as string;
@@ -1262,7 +1262,7 @@ app.post('/api/integrations/google-workspace/connect', requireAuth, async (req, 
   return res.json({ authUrl: result.data.authUrl });
 });
 
-app.post('/api/integrations/google-workspace/exchange', requireAuth, async (req, res) => {
+app.post('/api/integrations/google-workspace/exchange', requireAuth, dataRateLimit, async (req, res) => {
   const auth = getGoogleWorkspaceAuth();
   if (!auth) return res.status(500).json({ error: 'База данных не настроена.' });
   const userId = (req as any).userId as string;
@@ -1277,7 +1277,7 @@ app.post('/api/integrations/google-workspace/exchange', requireAuth, async (req,
   return res.json({ connected: true });
 });
 
-app.post('/api/integrations/google-workspace/disconnect', requireAuth, async (req, res) => {
+app.post('/api/integrations/google-workspace/disconnect', requireAuth, dataRateLimit, async (req, res) => {
   if (!db) return res.status(500).json({ error: 'База данных не настроена.' });
   const userId = (req as any).userId as string;
   if (!checkCustomRateLimit(`gw:disconnect:${userId}:${req.ip || 'unknown'}`, 10, 60_000)) {

@@ -359,6 +359,7 @@ function GoogleWorkspaceRow() {
   const [waiting, setWaiting] = useState(false);
   const [error, setError] = useState('');
   const [oauthPopup, setOauthPopup] = useState<Window | null>(null);
+  const [oauthState, setOauthState] = useState('');
 
   const refreshStatus = async () => {
     const response = await apiFetch('/api/integrations/google-workspace/status');
@@ -374,12 +375,19 @@ function GoogleWorkspaceRow() {
     const onMessage = async (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
       if (oauthPopup && event.source !== oauthPopup) return;
-      const payload = event.data as { type?: string; code?: string; error?: string } | null;
+      const payload = event.data as { type?: string; code?: string; state?: string; error?: string } | null;
       if (!payload || payload.type !== 'google-workspace-oauth') return;
+      if (oauthState && payload.state !== oauthState) {
+        setWaiting(false);
+        setError('Неверный OAuth state');
+        setOauthState('');
+        return;
+      }
 
       if (payload.error) {
         setWaiting(false);
         setError('Google OAuth отклонён');
+        setOauthState('');
         return;
       }
 
@@ -387,6 +395,7 @@ function GoogleWorkspaceRow() {
       if (!/^[A-Za-z0-9\-._/]{20,}$/.test(code)) {
         setWaiting(false);
         setError('Код авторизации не получен');
+        setOauthState('');
         return;
       }
 
@@ -407,12 +416,13 @@ function GoogleWorkspaceRow() {
         setLoading(false);
         setWaiting(false);
         setOauthPopup(null);
+        setOauthState('');
       }
     };
 
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [oauthPopup]);
+  }, [oauthPopup, oauthState]);
 
   const handleConnect = async () => {
     setLoading(true);
@@ -423,11 +433,13 @@ function GoogleWorkspaceRow() {
       });
       const data = await response.json().catch(() => ({ error: 'Не удалось начать Google OAuth' }));
       if (!response.ok || !data.authUrl) throw new Error(data.error || 'Не удалось начать Google OAuth');
+      const state = new URL(data.authUrl).searchParams.get('state') || '';
       const popup = window.open(data.authUrl, 'google-workspace-auth', 'width=520,height=700');
       if (!popup) {
         window.location.href = data.authUrl;
         return;
       }
+      setOauthState(state);
       setOauthPopup(popup);
       setWaiting(true);
     } catch (err: any) {
