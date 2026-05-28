@@ -15,6 +15,7 @@ import { promisify } from 'util';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { GoogleWorkspaceAdapter } from './src/integrations/google';
 
 const execFileAsync = promisify(execFile);
 
@@ -221,6 +222,8 @@ const botTools: any[] = [
   }
 ];
 
+const allBotTools: any[] = [...botTools, ...GoogleWorkspaceAdapter.toolDefinitions()];
+
 // ─── Conflict & dependency check ─────────────────────────────────────────────
 
 async function checkTaskConflicts(
@@ -284,6 +287,11 @@ async function checkTaskConflicts(
 async function executeTool(name: string, args: any, db: Pool, userId: string): Promise<any> {
   const userTz = await getUserTimezone(db, userId);
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: userTz });
+
+  const workspaceAdapter = new GoogleWorkspaceAdapter(db);
+  if (workspaceAdapter.canHandle(name)) {
+    return workspaceAdapter.execute(name, args, userId);
+  }
 
   switch (name) {
     case 'get_tasks': {
@@ -482,7 +490,8 @@ async function processWithAI(
   threadMessages: StoredMessage[],
   db: Pool,
   userId: string,
-  apiKey: string
+  apiKey: string,
+  onToolNotification?: (payload: { text: string; link?: string }) => Promise<void>
 ): Promise<{ aiResponse: string; newMessages: StoredMessage[] }> {
   const now = () => new Date().toISOString();
   const userMsg: StoredMessage = { role: 'user', content: userText, time: now() };
@@ -498,7 +507,7 @@ async function processWithAI(
     const data = await callRouterAI(apiKey, {
       model: 'deepseek/deepseek-v4-flash',
       messages: [{ role: 'system', content: getSystemInstruction(userTz) }, ...loopMessages],
-      tools: botTools,
+      tools: allBotTools,
       tool_choice: 'auto',
       temperature: 0.7,
       max_tokens: 1024,
@@ -533,6 +542,9 @@ async function processWithAI(
           continue;
         }
         const result = await executeTool(toolCall.function.name, args, db, userId);
+        if (result?.notification && onToolNotification) {
+          await onToolNotification(result.notification).catch(() => undefined);
+        }
         const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
         const toolEntry: StoredMessage = {
           role: 'tool',
@@ -870,7 +882,15 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
       existingMessages,
       db,
       webUserId,
-      apiKey
+      apiKey,
+      async (notification) => {
+        if (!notification?.text) return;
+        await tgApi(token, 'sendMessage', {
+          chat_id: chatId,
+          text: notification.link ? `${notification.text}` : notification.text,
+          disable_web_page_preview: false,
+        });
+      },
     );
     console.log(`[Bot] AI ответил: "${aiResponse?.slice(0, 80)}"`);
     await saveBotThread(db, webUserId, thread?.id ?? null, [...existingMessages, ...newMessages]);
