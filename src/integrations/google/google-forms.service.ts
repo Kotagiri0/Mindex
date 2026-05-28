@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import type { FormQuestion, WorkspaceResult } from './types';
+import type { FormQuestion, GoogleAuthExecutor, WorkspaceResult } from './types';
 import { GoogleRateLimitedQueue } from './rate-limited-queue';
 
 const FORMS_SCOPE = 'https://www.googleapis.com/auth/forms.body';

@@ -224,6 +224,13 @@ const botTools: any[] = [
 
 const allBotTools: any[] = [...botTools, ...GoogleWorkspaceAdapter.toolDefinitions()];
 
+let workspaceAdapter: GoogleWorkspaceAdapter | null = null;
+
+const getWorkspaceAdapter = (db: Pool) => {
+  if (!workspaceAdapter) workspaceAdapter = new GoogleWorkspaceAdapter(db);
+  return workspaceAdapter;
+};
+
 // ─── Conflict & dependency check ─────────────────────────────────────────────
 
 async function checkTaskConflicts(
@@ -288,7 +295,7 @@ async function executeTool(name: string, args: any, db: Pool, userId: string): P
   const userTz = await getUserTimezone(db, userId);
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: userTz });
 
-  const workspaceAdapter = new GoogleWorkspaceAdapter(db);
+  const workspaceAdapter = getWorkspaceAdapter(db);
   if (workspaceAdapter.canHandle(name)) {
     return workspaceAdapter.execute(name, args, userId);
   }

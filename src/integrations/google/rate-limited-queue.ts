@@ -26,7 +26,7 @@ export class GoogleRateLimitedQueue {
           if (!status || !RETRYABLE_STATUSES.has(status) || attempt >= this.maxRetries) {
             throw error;
           }
-          const delay = this.baseDelayMs * 2 ** attempt;
+          const delay = Math.min(this.baseDelayMs * 2 ** attempt, 10_000);
           attempt += 1;
           await wait(delay);
         }

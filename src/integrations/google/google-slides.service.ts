@@ -1,12 +1,13 @@
+import crypto from 'crypto';
 import { google } from 'googleapis';
-import type { SlideContent, WorkspaceResult } from './types';
+import type { GoogleAuthExecutor, SlideContent, WorkspaceResult } from './types';
 import { GoogleRateLimitedQueue } from './rate-limited-queue';
 
 const SLIDES_SCOPE = 'https://www.googleapis.com/auth/presentations';
 
 type SlidesClient = ReturnType<typeof google.slides>;
 
-const randomId = (prefix: string) => `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
+const randomId = (prefix: string) => `${prefix}_${crypto.randomUUID().replace(/-/g, '')}`;
 
 export class GoogleSlidesService {
   constructor(

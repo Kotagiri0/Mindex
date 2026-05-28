@@ -71,7 +71,7 @@ export class GoogleWorkspaceAuth {
     });
 
     try {
-      if (tokens.expiry_date && tokens.expiry_date <= Date.now() && tokens.refresh_token) {
+      if (tokens.expiry_date && tokens.expiry_date <= Date.now() + 5 * 60 * 1000 && tokens.refresh_token) {
         const refreshed = await oauth2Client.refreshAccessToken();
         if (refreshed.credentials) {
           await this.tokenStore.saveTokens(userId, { ...tokens, ...refreshed.credentials });

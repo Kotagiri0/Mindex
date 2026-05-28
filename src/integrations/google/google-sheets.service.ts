@@ -140,7 +140,18 @@ export class GoogleSheetsService {
   }
 
   async generateReport(userId: string, spreadsheetId: string): Promise<WorkspaceResult> {
-    const read = await this.readRange(userId, spreadsheetId, 'Sheet1!A:ZZ');
+    const metadata = await this.auth.withAuth(userId, [SHEETS_SCOPE], async (authClient) =>
+      this.queue.enqueue(async () => {
+        const sheets = this.sheetsFactory(authClient);
+        const response = await sheets.spreadsheets.get({ spreadsheetId });
+        return response.data.sheets?.[0]?.properties?.title || 'Sheet1';
+      }),
+    );
+
+    if (!metadata.success) return metadata;
+
+    const sheetName = String(metadata.data || 'Sheet1');
+    const read = await this.readRange(userId, spreadsheetId, `${sheetName}!A:ZZ`);
     if (!read.success) return read;
     const rows = (read.data?.rows || []) as Record<string, string>[];
     const summary = await this.aiReportGenerator(rows);
@@ -149,6 +160,7 @@ export class GoogleSheetsService {
       data: {
         spreadsheetId,
         summary,
+        sheetName,
         url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`,
       },
     };
