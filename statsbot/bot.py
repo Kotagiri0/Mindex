@@ -158,7 +158,7 @@ def main():
 
     scheduler = AsyncIOScheduler(timezone=MSK)
     scheduler.add_job(
-        lambda: asyncio.ensure_future(send_digest(app.bot)),
+        lambda: asyncio.run_coroutine_threadsafe(send_digest(app.bot), asyncio.get_event_loop()),
         trigger="cron",
         hour=9,
         minute=0,

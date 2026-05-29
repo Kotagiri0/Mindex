@@ -2,12 +2,13 @@
 .header-link {
   font-family: 'Muller', sans-serif;
   font-size: 14px;
-  color: rgba(34, 34, 36, 0.7);
+  color: rgba(255, 255, 255, 0.8);
   text-decoration: none;
   padding: 8px 12px;
+  outline: none;
   transition: color 0.15s;
 }
-.header-link:hover { color: #222224; }
+.header-link:hover { color: #ffffff; }
 
 /* ── Local fonts ── */
 @font-face {
