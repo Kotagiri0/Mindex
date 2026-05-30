@@ -544,15 +544,35 @@ async function processWithAI(
         newMessages.push(toolEntry);
       }
     } else {
-      const text = typeof msg.content === 'string' && msg.content
-        ? msg.content
-        : 'Не могу ответить прямо сейчас.';
+      let text = typeof msg.content === 'string' ? msg.content.trim() : '';
+      // Иногда модель возвращает пустой content после tool-цикла. Делаем фоллбек
+      // без инструментов, чтобы вытянуть нормальный текстовый ответ.
+      if (!text) {
+        try {
+          const retry = await callRouterAI(apiKey, {
+            model: 'deepseek/deepseek-v4-flash',
+            messages: [
+              { role: 'system', content: getSystemInstruction(userTz) },
+              ...loopMessages,
+              { role: 'user', content: 'Дай короткий текстовый ответ человеку на основе выполненных действий.' },
+            ],
+            temperature: 0.7,
+            max_tokens: 512,
+            thinking: false,
+          });
+          const retryText = retry?.choices?.[0]?.message?.content;
+          if (typeof retryText === 'string' && retryText.trim()) text = retryText.trim();
+        } catch (e: any) {
+          console.warn('[Bot] fallback-запрос не удался:', e?.message);
+        }
+      }
+      if (!text) text = 'Готово';
       newMessages.push({ role: 'assistant', content: text, time: now() });
       return { aiResponse: text, newMessages };
     }
   }
 
-  return { aiResponse: 'Не удалось обработать запрос.', newMessages };
+  return { aiResponse: 'Готово', newMessages };
 }
 
 // ─── Thread management (PostgreSQL) ──────────────────────────────────────────
