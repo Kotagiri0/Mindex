@@ -1118,20 +1118,28 @@ export function startProactiveScheduler(token: string, db: Pool): void {
   scheduleNext();
 }
 
-// Конвертирует локальное время пользователя (date + time строки) в UTC Date
+// Конвертирует локальное время пользователя (date + time строки) в UTC Date.
+// Работает корректно при любом TZ сервера (включая UTC в Docker).
 // Пример: "2026-05-22", "15:00", "Europe/Moscow" → 2026-05-22T12:00:00.000Z
 function localTimeToUtc(dateStr: string, timeStr: string, tz: string): Date {
-  // Берём произвольный момент и смотрим как en-US форматирует его в нужной TZ
-  // чтобы вычислить смещение. Используем сам момент задачи.
-  const isoStr = `${dateStr}T${timeStr}:00`;
-  // Форматируем как будто время локальное в нужной TZ → получаем UTC
-  // Trick: создаём Date из строки без Z (local), потом корректируем на offset TZ
-  const assumed = new Date(isoStr); // интерпретируется как LOCAL время сервера (UTC на сервере)
-  // Узнаём какое время показывает assumed в нужной TZ
-  const inTz = new Date(assumed.toLocaleString('en-US', { timeZone: tz }));
-  // Разница = смещение TZ от UTC сервера
-  const offset = assumed.getTime() - inTz.getTime();
-  return new Date(assumed.getTime() + offset);
+  // Парсим как UTC-момент (точка отсчёта)
+  const utcGuess = new Date(`${dateStr}T${timeStr}:00Z`);
+  // Смотрим какое время показывает Intl.DateTimeFormat в нужной TZ для этого момента
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  }).formatToParts(utcGuess);
+  const get = (t: string) => parts.find(p => p.type === t)?.value || '00';
+  const asTzMs = Date.UTC(
+    Number(get('year')), Number(get('month')) - 1, Number(get('day')),
+    Number(get('hour')) % 24, Number(get('minute')), Number(get('second'))
+  );
+  // offset = насколько TZ опережает UTC в этот момент
+  const offsetMs = asTzMs - utcGuess.getTime();
+  // Возвращаем UTC-эквивалент локального времени пользователя
+  return new Date(utcGuess.getTime() - offsetMs);
 }
 
 export async function startNotificationScheduler(token: string, db: Pool): Promise<void> {
@@ -1141,26 +1149,56 @@ export async function startNotificationScheduler(token: string, db: Pool): Promi
   await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS remind_at TIMESTAMPTZ`).catch(() => {});
   await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS remind_notified_at TIMESTAMPTZ`).catch(() => {});
 
-  const sendNotification = async (chatId: string, text: string, taskId: string, column: 'notified_at' | 'remind_notified_at') => {
-    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, tgFetchOptions({
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text }),
-    }));
-    await db.query(`UPDATE user_tasks SET ${column} = NOW() WHERE id = $1`, [taskId]);
+  // Сначала помечаем задачу как уведомлённую (атомарно), и только если RETURNING вернул строку — шлём.
+  // Это исключает дубли при медленной БД, сетевых ретраях и параллельных тиках.
+  const claimAndSend = async (
+    taskId: string,
+    chatId: string,
+    text: string,
+    column: 'notified_at' | 'remind_notified_at',
+    extraCondition: string = ''
+  ): Promise<boolean> => {
+    const res = await db.query(
+      `UPDATE user_tasks SET ${column} = NOW()
+       WHERE id = $1
+         AND (${column} IS NULL OR ${column} < NOW() - INTERVAL '23 hours')
+         ${extraCondition}
+       RETURNING id`,
+      [taskId]
+    );
+    if (res.rowCount === 0) return false;
+    try {
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, tgFetchOptions({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text }),
+      }));
+      return true;
+    } catch (e: any) {
+      // Откатываем claim, чтобы попробовать в следующем тике
+      await db.query(`UPDATE user_tasks SET ${column} = NULL WHERE id = $1`, [taskId]).catch(() => {});
+      console.error('[Notif] Ошибка отправки, откатили claim:', e?.message);
+      return false;
+    }
   };
 
+  // Защита от наложения тиков: если предыдущий ещё не закончил — пропускаем
+  let isTicking = false;
+
   const tick = async () => {
+    if (isTicking) {
+      console.log('[Notif] предыдущий тик ещё не завершён, пропускаем');
+      return;
+    }
+    isTicking = true;
     try {
       const now = new Date();
-      const targetTime = new Date(now.getTime() + REMIND_BEFORE_MIN * 60 * 1000);
+      // Окно ±3 минуты, чтобы переживать пропуски тиков (интервал 60 сек).
+      // Защита от дублей — атомарный claim через UPDATE...RETURNING.
+      const windowStart = new Date(now.getTime() + (REMIND_BEFORE_MIN - 3) * 60 * 1000);
+      const windowEnd   = new Date(now.getTime() + (REMIND_BEFORE_MIN + 3) * 60 * 1000);
 
       // ── 1. Напоминания за 15 минут до задачи с временем ──────────────────────
-      // Строим временной диапазон: задача должна начаться между +14 и +16 минутами от сейчас
-      // Это даёт окно в 2 минуты, но notified_at защищает от повторов
-      const windowStart = new Date(now.getTime() + (REMIND_BEFORE_MIN - 1) * 60 * 1000);
-      const windowEnd   = new Date(now.getTime() + (REMIND_BEFORE_MIN + 1) * 60 * 1000);
-
       const { rows } = await db.query(
         `SELECT t.id, t.name, t.date, t.time, t.user_id, p.telegram_chat_id,
                 COALESCE(p.timezone, 'Europe/Moscow') AS timezone
@@ -1177,20 +1215,22 @@ export async function startNotificationScheduler(token: string, db: Pool): Promi
 
       const toNotify = rows.filter((row: any) => {
         const tz = row.timezone || 'Europe/Moscow';
-        const dateStr = row.date; // YYYY-MM-DD
-        const timeStr = row.time; // HH:MM
+        const dateStr = row.date;
+        const timeStr = row.time;
         if (!dateStr || !timeStr || !/^\d{2}:\d{2}$/.test(timeStr)) return false;
         const taskUtc = localTimeToUtc(dateStr, timeStr, tz);
-        console.log(`[Notif] задача "${row.name}" date=${dateStr} time=${timeStr} tz=${tz} taskUtc=${taskUtc.toISOString()} попадает=${taskUtc >= windowStart && taskUtc <= windowEnd}`);
-        return taskUtc >= windowStart && taskUtc <= windowEnd;
+        const hits = taskUtc >= windowStart && taskUtc <= windowEnd;
+        if (hits) console.log(`[Notif] задача "${row.name}" date=${dateStr} time=${timeStr} tz=${tz} taskUtc=${taskUtc.toISOString()} → отправляем`);
+        return hits;
       });
 
       for (const row of toNotify) {
-        try {
-          await sendNotification(row.telegram_chat_id, `⏰ Через ${REMIND_BEFORE_MIN} минут: ${row.name}`, row.id, 'notified_at');
-        } catch (e: any) {
-          console.error('[Notif] Ошибка отправки (time):', e?.message);
-        }
+        await claimAndSend(
+          row.id,
+          row.telegram_chat_id,
+          `⏰ Через ${REMIND_BEFORE_MIN} минут: ${row.name}`,
+          'notified_at'
+        );
       }
 
       // ── 2. Плавающие напоминания через remind_at ─────────────────────────────
@@ -1207,19 +1247,37 @@ export async function startNotificationScheduler(token: string, db: Pool): Promi
       );
 
       for (const row of remindRows) {
+        // Для remind_at защита через "не отправляли после установки remind_at"
+        const res = await db.query(
+          `UPDATE user_tasks SET remind_notified_at = NOW()
+           WHERE id = $1
+             AND remind_at IS NOT NULL
+             AND remind_at <= NOW()
+             AND (remind_notified_at IS NULL OR remind_notified_at < remind_at)
+           RETURNING id`,
+          [row.id]
+        );
+        if (res.rowCount === 0) continue;
         try {
-          await sendNotification(row.telegram_chat_id, `🔔 Напоминание: ${row.name}`, row.id, 'remind_notified_at');
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, tgFetchOptions({
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: row.telegram_chat_id, text: `🔔 Напоминание: ${row.name}` }),
+          }));
         } catch (e: any) {
+          await db.query(`UPDATE user_tasks SET remind_notified_at = NULL WHERE id = $1`, [row.id]).catch(() => {});
           console.error('[Notif] Ошибка отправки (remind_at):', e?.message);
         }
       }
 
     } catch (e: any) {
       console.error('[Notif] Ошибка планировщика:', e?.message);
+    } finally {
+      isTicking = false;
     }
   };
 
   setInterval(tick, 60_000);
-  tick(); // первый тик сразу при старте
-  console.log('[Notif] Планировщик уведомлений запущен (интервал 1 мин)');
+  tick();
+  console.log('[Notif] Планировщик уведомлений запущен (интервал 1 мин, окно ±3 мин)');
 }
