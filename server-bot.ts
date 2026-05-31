@@ -108,6 +108,9 @@ function getSystemInstruction(tz = 'Europe/Moscow'): string {
 Если пользователь пишет "напомни через 20 минут", "напомни в 15:30", "поставь напоминание" — используй set_reminder.
 Если пользователь создаёт задачу со временем и НЕ упомянул напоминание — спроси один раз: "Напомнить за 15 минут?" (только если задача сегодня или завтра).
 
+ВРЕМЯ И ДАТА — КРИТИЧНО
+Все time и date в инструментах — это ЛОКАЛЬНОЕ время пользователя в его часовом поясе (МСК). Никакого UTC, никакого смещения. Если пользователь сказал "в 23:00" — записывай time="23:00" и date=сегодня. Если "завтра в 9 утра" — time="09:00", date=завтрашний день. НЕ переводи в UTC. НЕ прибавляй и не вычитай часы.
+
 Текущие дата и время: ${dateStr}, ${timeStr} (Москва)`;
 }
 
@@ -136,8 +139,8 @@ const botTools: any[] = [
         type: 'object',
         properties: {
           name: { type: 'string', description: 'Название задачи.' },
-          time: { type: 'string', description: 'Время HH:MM (необязательно).' },
-          date: { type: 'string', description: 'Дата YYYY-MM-DD. По умолчанию — сегодня.' }
+          time: { type: 'string', description: 'ЛОКАЛЬНОЕ время пользователя HH:MM (МСК). Пример: "23:00" значит 23:00 по Москве. НЕ переводить в UTC.' },
+          date: { type: 'string', description: 'ЛОКАЛЬНАЯ дата пользователя YYYY-MM-DD (МСК). По умолчанию — сегодня по МСК.' }
         },
         required: ['name']
       }
@@ -154,8 +157,8 @@ const botTools: any[] = [
           id: { type: 'string', description: 'ID задачи.' },
           done: { type: 'boolean', description: 'Статус выполнения.' },
           name: { type: 'string', description: 'Новое название.' },
-          time: { type: 'string', description: 'Новое время HH:MM.' },
-          date: { type: 'string', description: 'Новая дата YYYY-MM-DD.' }
+          time: { type: 'string', description: 'Новое ЛОКАЛЬНОЕ время HH:MM (МСК). НЕ переводить в UTC.' },
+          date: { type: 'string', description: 'Новая ЛОКАЛЬНАЯ дата YYYY-MM-DD (МСК).' }
         },
         required: ['id']
       }
