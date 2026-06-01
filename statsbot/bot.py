@@ -8,6 +8,7 @@ import os
 import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -25,7 +26,7 @@ ALLOWED_IDS = set(int(x) for x in os.environ.get("STATS_ALLOWED_IDS", "").split(
 # Куда слать утренний дайджест (chat_id через запятую)
 DIGEST_CHAT_IDS = [int(x) for x in os.environ.get("STATS_DIGEST_CHAT_IDS", "").split(",") if x.strip()]
 
-MSK = timezone(timedelta(hours=3))
+MSK = ZoneInfo("Europe/Moscow")
 
 
 def get_db():
