@@ -152,19 +152,28 @@ async def send_digest(bot: Bot):
         log.exception("Ошибка при отправке дайджеста")
 
 
-def main():
-    app = Application.builder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("stats", cmd_stats))
-
-    scheduler = AsyncIOScheduler(timezone=MSK)
+async def post_init(app):
+    # Запускаем планировщик ВНУТРИ event loop приложения — тогда get_event_loop() работает корректно.
+    scheduler = AsyncIOScheduler(timezone=MSK, event_loop=asyncio.get_running_loop())
     scheduler.add_job(
-        lambda: asyncio.run_coroutine_threadsafe(send_digest(app.bot), asyncio.get_event_loop()),
+        send_digest,
         trigger="cron",
         hour=9,
         minute=0,
+        args=[app.bot],
     )
     scheduler.start()
+    log.info("Scheduler started inside running loop")
 
+
+def main():
+    app = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .post_init(post_init)
+        .build()
+    )
+    app.add_handler(CommandHandler("stats", cmd_stats))
     log.info("Stats bot started")
     app.run_polling(drop_pending_updates=True)
 
