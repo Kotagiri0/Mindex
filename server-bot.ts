@@ -1274,13 +1274,17 @@ export async function startNotificationScheduler(token: string, db: Pool): Promi
            AND t.time IS NOT NULL AND t.time != ''`
       );
 
+      // Просрочку до 5 минут отрабатываем, более старые игнорируем (видимо контейнер лежал давно).
+      const STALE_THRESHOLD_MS = 5 * 60 * 1000;
+
       for (const row of tasks) {
         const tz = row.timezone || 'Europe/Moscow';
         if (!row.date || !row.time || !/^\d{2}:\d{2}$/.test(row.time)) continue;
         const taskUtc = localTimeToUtc(row.date, row.time, tz).getTime();
         const fireAt = taskUtc - REMIND_BEFORE_MS;
-        // Только если попадает в [now, now + HORIZON]
-        if (fireAt < nowMs - 60_000 || fireAt > horizonMs) continue;
+        // В прошлом >5 минут — пропуск, в будущем >HORIZON — пропуск.
+        if (fireAt < nowMs - STALE_THRESHOLD_MS) continue;
+        if (fireAt > horizonMs) continue;
         schedule(`${row.id}:time`, fireAt, () =>
           claimAndFire(row.id, 'time', row.telegram_chat_id,
             `⏰ Через 15 минут: ${row.name}`)
@@ -1296,12 +1300,13 @@ export async function startNotificationScheduler(token: string, db: Pool): Promi
            AND p.telegram_chat_id IS NOT NULL
            AND t.remind_at IS NOT NULL
            AND (t.remind_notified_at IS NULL OR t.remind_notified_at < t.remind_at)
-           AND t.remind_at <= NOW() + ($1 || ' milliseconds')::INTERVAL`,
-        [String(HORIZON_MS)]
+           AND t.remind_at <= NOW() + make_interval(secs => $1)`,
+        [HORIZON_MS / 1000]
       );
 
       for (const row of reminds) {
         const fireAt = new Date(row.remind_at).getTime();
+        if (fireAt < nowMs - STALE_THRESHOLD_MS) continue;
         if (fireAt > horizonMs) continue;
         schedule(`${row.id}:remind`, fireAt, () =>
           claimAndFire(row.id, 'remind', row.telegram_chat_id,
@@ -1330,5 +1335,5 @@ export async function startNotificationScheduler(token: string, db: Pool): Promi
 
   setInterval(scan, SCAN_INTERVAL_MS);
   scan();
-  console.log(`[Notif] Планировщик запущен: sканирование каждые ${SCAN_INTERVAL_MS / 1000}с, горизонт ${HORIZON_MS / 60000}мин, точность отправки ±1с`);
+  console.log(`[Notif] Планировщик запущен: сканирование каждые ${SCAN_INTERVAL_MS / 1000}с, горизонт ${HORIZON_MS / 60000}мин, точность отправки ±1с`);
 }
