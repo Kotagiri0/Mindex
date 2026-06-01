@@ -1044,17 +1044,19 @@ export async function startBot(db: Pool): Promise<void> {
 
 // ─── Notification & Proactive schedulers ────────────────────────────────────
 
+// Колонка proactive_sent_date нужна для дедупликации:
+// чтобы не отправить пользователю дважды за один день локальной даты.
+async function ensureProactiveColumn(db: Pool): Promise<void> {
+  await db.query(`ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS proactive_sent_date TEXT`).catch(() => {});
+}
+
 async function sendProactiveMessages(token: string, db: Pool): Promise<void> {
   const apiKey = process.env.ROUTERAI_API_KEY;
   if (!apiKey) return;
 
   try {
-    // Берём только тех, кто:
-    // — подключил Telegram
-    // — заходил в приложение за последние 14 дней (есть смысл писать)
-    // — не отключил уведомления (settings.notifs != false)
     const { rows: users } = await db.query(
-      `SELECT p.user_id, p.telegram_chat_id, p.last_active_at,
+      `SELECT p.user_id, p.telegram_chat_id, p.last_active_at, p.proactive_sent_date,
               COALESCE(p.timezone, 'Europe/Moscow') AS timezone,
               p.settings
        FROM user_profiles p
@@ -1066,7 +1068,14 @@ async function sendProactiveMessages(token: string, db: Pool): Promise<void> {
     const now = new Date();
     for (const user of users) {
       try {
+        // Запускаем раз в час; для каждого юзера шлём только если у НЕГО локально 9 утра.
+        const userHour = Number(now.toLocaleString('en-US', { timeZone: user.timezone, hour: '2-digit', hour12: false }));
+        if (userHour !== 9) continue;
+
         const userTodayInTz = now.toLocaleDateString('sv-SE', { timeZone: user.timezone });
+
+        // Дедупликация: уже отправили сегодня — не повторяем.
+        if (user.proactive_sent_date === userTodayInTz) continue;
         // Только АКТУАЛЬНЫЕ задачи: на сегодня или будущее. Просроченные — пропускаем.
         const tasksRes = await db.query(
           `SELECT name, date, time FROM user_tasks
@@ -1088,17 +1097,18 @@ async function sendProactiveMessages(token: string, db: Pool): Promise<void> {
           return `- ${t.name} (${when}${t.time ? ', ' + t.time : ''})`;
         }).join('\n');
 
-        const prompt = `Ты — Мысль, персональный AI-ассистент. Сгенерируй одно короткое проактивное утреннее сообщение пользователю.
+        const prompt = `Ты — Мысль, персональный AI-ассистент. Сгенерируй одно короткое проактивное сообщение пользователю.
 
 Незакрытые задачи на сегодня и далее:
 ${taskLines}
 
 Правила:
-- Максимум 2 предложения, теплый и человечный тон
+- Максимум 2 предложения, тёплый и человечный тон
 - Конкретная отсылка к 1-2 ближайшим задачам по названию
-- Никогда: "Как дела?", "Чем могу помочь?", "Доброе утро"
+- Не приветствуй ("Доброе утро", "Привет"), сразу к делу
+- Никогда: "Как дела?", "Чем могу помочь?"
 - Не перечисляй все задачи — выдели самое важное
-- Plaintext, без кавычек, без эмодзи`;
+- Plaintext, без кавычек, без эмодзи, без Markdown`;
 
         const response = await fetch('https://routerai.ru/api/v1/chat/completions', tgFetchOptions({
           method: 'POST',
@@ -1117,7 +1127,12 @@ ${taskLines}
           body: JSON.stringify({ chat_id: user.telegram_chat_id, text }),
         }));
 
-        console.log(`[Proactive] Отправлено пользователю ${user.user_id}`);
+        await db.query(
+          `UPDATE user_profiles SET proactive_sent_date = $1 WHERE user_id = $2`,
+          [userTodayInTz, user.user_id]
+        );
+
+        console.log(`[Proactive] Отправлено пользователю ${user.user_id} (${user.timezone}, локальная дата ${userTodayInTz})`);
       } catch (e: any) {
         console.error(`[Proactive] Ошибка для ${user.user_id}:`, e?.message);
       }
@@ -1128,19 +1143,22 @@ ${taskLines}
 }
 
 export function startProactiveScheduler(token: string, db: Pool): void {
-  // 9:00 МСК = 6:00 UTC. Сервер в UTC, поэтому используем UTC-час напрямую.
-  const HOUR_UTC = 6;
+  // Тикаем каждый час в 0 минут. Для каждого пользователя проверяем его локальное время:
+  // если у него сейчас 9:00 и сегодня ещё не отправляли — шлём.
+  // Это автоматически обрабатывает любые часовые пояса корректно.
+  ensureProactiveColumn(db).catch(e => console.error('[Proactive] init column:', e?.message));
+
   const scheduleNext = () => {
     const now = new Date();
-    const next = new Date();
-    next.setUTCHours(HOUR_UTC, 0, 0, 0);
-    if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
+    const next = new Date(now);
+    next.setUTCMinutes(0, 0, 0);
+    next.setUTCHours(next.getUTCHours() + 1);
     const delay = next.getTime() - now.getTime();
     setTimeout(() => {
       sendProactiveMessages(token, db).catch(e => console.error('[Proactive]', e));
-      setInterval(() => sendProactiveMessages(token, db).catch(e => console.error('[Proactive]', e)), 24 * 60 * 60 * 1000);
+      setInterval(() => sendProactiveMessages(token, db).catch(e => console.error('[Proactive]', e)), 60 * 60 * 1000);
     }, delay);
-    console.log(`[Proactive] Следующая отправка в ${next.toISOString()} (≈ 9:00 МСК)`);
+    console.log(`[Proactive] Первый тик в ${next.toISOString()}, далее каждый час`);
   };
   scheduleNext();
 }
