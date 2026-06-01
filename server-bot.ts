@@ -215,7 +215,7 @@ const botTools: any[] = [
         type: 'object',
         properties: {
           task_id: { type: 'string', description: 'ID задачи, к которой привязать напоминание (если есть).' },
-          remind_at_iso: { type: 'string', description: 'Дата и время напоминания в ISO 8601 (например 2025-05-22T15:30:00). Вычисли из "через X минут" используя текущее время из системного промпта.' },
+          remind_at_iso: { type: 'string', description: 'Дата и время напоминания в формате YYYY-MM-DDTHH:MM — ЛОКАЛЬНОЕ время пользователя (МСК). Например: "2026-06-01T18:30". НЕ переводить в UTC, НЕ добавлять Z или +00:00. Для "через X минут" прибавляй к текущему времени МСК из системного промпта.' },
           label: { type: 'string', description: 'Текст напоминания — что именно напомнить.' }
         },
         required: ['remind_at_iso', 'label']
@@ -377,7 +377,16 @@ async function executeTool(name: string, args: any, db: Pool, userId: string): P
       return { success: true, id, title };
     }
     case 'set_reminder': {
-      const remindAt = new Date(String(args.remind_at_iso));
+      // AI передаёт локальное время МСК без суффикса Z. new Date() без Z парсит как UTC — неверно.
+      // Явно конвертируем локальное время в UTC через localTimeToUtc.
+      const isoStr = String(args.remind_at_iso).replace('Z', '').slice(0, 16); // YYYY-MM-DDTHH:MM
+      const [datePart, timePart] = isoStr.split('T');
+      let remindAt: Date;
+      if (datePart && timePart && /^\d{2}:\d{2}$/.test(timePart)) {
+        remindAt = localTimeToUtc(datePart, timePart, userTz);
+      } else {
+        remindAt = new Date(isoStr);
+      }
       if (isNaN(remindAt.getTime())) return { error: 'Некорректное время напоминания' };
 
       // Добавляем колонку если ещё нет (идемпотентно)
