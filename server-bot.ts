@@ -1049,53 +1049,56 @@ async function sendProactiveMessages(token: string, db: Pool): Promise<void> {
   if (!apiKey) return;
 
   try {
+    // Берём только тех, кто:
+    // — подключил Telegram
+    // — заходил в приложение за последние 14 дней (есть смысл писать)
+    // — не отключил уведомления (settings.notifs != false)
     const { rows: users } = await db.query(
-      `SELECT p.user_id, p.telegram_chat_id, COALESCE(p.timezone, 'Europe/Moscow') AS timezone
+      `SELECT p.user_id, p.telegram_chat_id, p.last_active_at,
+              COALESCE(p.timezone, 'Europe/Moscow') AS timezone,
+              p.settings
        FROM user_profiles p
-       WHERE p.telegram_chat_id IS NOT NULL`
+       WHERE p.telegram_chat_id IS NOT NULL
+         AND p.last_active_at >= NOW() - INTERVAL '14 days'
+         AND COALESCE((p.settings->>'notifs')::boolean, true) = true`
     );
 
     const now = new Date();
-    const activeUsers = users.filter((u: any) => {
-      const todayInTz = now.toLocaleDateString('sv-SE', { timeZone: u.timezone });
-      return !u.last_active_at || new Date(u.last_active_at).toLocaleDateString('sv-SE', { timeZone: u.timezone }) < todayInTz;
-    });
-
-    for (const user of activeUsers) {
+    for (const user of users) {
       try {
         const userTodayInTz = now.toLocaleDateString('sv-SE', { timeZone: user.timezone });
-        const [tasksRes, threadsRes] = await Promise.all([
-          db.query(
-            `SELECT name, date, time FROM user_tasks
-             WHERE user_id = $1 AND done = false
-             ORDER BY date ASC, time ASC NULLS LAST LIMIT 5`,
-            [user.user_id]
-          ),
-          db.query(
-            `SELECT title, summary FROM user_threads
-             WHERE user_id = $1 AND summary IS NOT NULL AND is_meaningful = true
-             ORDER BY updated_at DESC LIMIT 3`,
-            [user.user_id]
-          ),
-        ]);
+        // Только АКТУАЛЬНЫЕ задачи: на сегодня или будущее. Просроченные — пропускаем.
+        const tasksRes = await db.query(
+          `SELECT name, date, time FROM user_tasks
+           WHERE user_id = $1 AND done = false
+             AND date >= $2
+           ORDER BY date ASC, time ASC NULLS LAST LIMIT 5`,
+          [user.user_id, userTodayInTz]
+        );
 
-        if (tasksRes.rows.length === 0 && threadsRes.rows.length === 0) continue;
+        // Без актуальных задач — не пишем. Это решает "приходит без задач".
+        // Старые треды как контекст больше не используем — они часто устарели.
+        if (tasksRes.rows.length === 0) {
+          console.log(`[Proactive] ${user.user_id}: нет актуальных задач, пропускаем`);
+          continue;
+        }
 
         const taskLines = tasksRes.rows.map((t: any) => {
           const when = t.date === userTodayInTz ? 'сегодня' : t.date;
           return `- ${t.name} (${when}${t.time ? ', ' + t.time : ''})`;
         }).join('\n');
 
-        const threadLines = threadsRes.rows.map((t: any) =>
-          `[${t.title}]: ${t.summary?.slice(0, 120)}`
-        ).join('\n');
+        const prompt = `Ты — Мысль, персональный AI-ассистент. Сгенерируй одно короткое проактивное утреннее сообщение пользователю.
 
-        const userContext = [
-          taskLines ? `Незакрытые задачи:\n${taskLines}` : '',
-          threadLines ? `Из прошлых разговоров:\n${threadLines}` : '',
-        ].filter(Boolean).join('\n\n');
+Незакрытые задачи на сегодня и далее:
+${taskLines}
 
-        const prompt = `Ты — Мысль, персональный AI-ассистент. Сгенерируй одно короткое проактивное сообщение пользователю.\n\nКонтекст пользователя:\n${userContext}\n\nПравила:\n- Максимум 2 предложения\n- Конкретная отсылка к реальному контексту\n- Никогда: "Как дела?", "Чем могу помочь?"\n- Plaintext, без кавычек`;
+Правила:
+- Максимум 2 предложения, теплый и человечный тон
+- Конкретная отсылка к 1-2 ближайшим задачам по названию
+- Никогда: "Как дела?", "Чем могу помочь?", "Доброе утро"
+- Не перечисляй все задачи — выдели самое важное
+- Plaintext, без кавычек, без эмодзи`;
 
         const response = await fetch('https://routerai.ru/api/v1/chat/completions', tgFetchOptions({
           method: 'POST',
@@ -1125,18 +1128,19 @@ async function sendProactiveMessages(token: string, db: Pool): Promise<void> {
 }
 
 export function startProactiveScheduler(token: string, db: Pool): void {
-  const HOUR = 9;
+  // 9:00 МСК = 6:00 UTC. Сервер в UTC, поэтому используем UTC-час напрямую.
+  const HOUR_UTC = 6;
   const scheduleNext = () => {
     const now = new Date();
     const next = new Date();
-    next.setHours(HOUR, 0, 0, 0);
-    if (next <= now) next.setDate(next.getDate() + 1);
+    next.setUTCHours(HOUR_UTC, 0, 0, 0);
+    if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
     const delay = next.getTime() - now.getTime();
     setTimeout(() => {
       sendProactiveMessages(token, db).catch(e => console.error('[Proactive]', e));
       setInterval(() => sendProactiveMessages(token, db).catch(e => console.error('[Proactive]', e)), 24 * 60 * 60 * 1000);
     }, delay);
-    console.log(`[Proactive] Следующая отправка в ${next.toISOString()}`);
+    console.log(`[Proactive] Следующая отправка в ${next.toISOString()} (≈ 9:00 МСК)`);
   };
   scheduleNext();
 }
