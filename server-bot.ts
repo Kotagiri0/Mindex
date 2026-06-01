@@ -1068,9 +1068,9 @@ async function sendProactiveMessages(token: string, db: Pool): Promise<void> {
     const now = new Date();
     for (const user of users) {
       try {
-        // Запускаем раз в час; для каждого юзера шлём только если у НЕГО локально 9 утра.
+        // Запускаем раз в час; для каждого юзера шлём только если у НЕГО локально 12:00.
         const userHour = Number(now.toLocaleString('en-US', { timeZone: user.timezone, hour: '2-digit', hour12: false }));
-        if (userHour !== 9) continue;
+        if (userHour !== 12) continue;
 
         const userTodayInTz = now.toLocaleDateString('sv-SE', { timeZone: user.timezone });
 
