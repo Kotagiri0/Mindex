@@ -1188,63 +1188,82 @@ function localTimeToUtc(dateStr: string, timeStr: string, tz: string): Date {
 }
 
 export async function startNotificationScheduler(token: string, db: Pool): Promise<void> {
-  const REMIND_BEFORE_MIN = 15;
+  const REMIND_BEFORE_MS = 15 * 60 * 1000;
+  // Горизонт планирования — насколько вперёд смотрим в БД при каждом сканировании.
+  // Должен быть ≥ интервал сканирования, чтобы все задачи успевали запланироваться заранее.
+  const HORIZON_MS = 20 * 60 * 1000;
+  const SCAN_INTERVAL_MS = 30 * 1000;
 
-  // Добавляем колонки при старте (идемпотентно)
   await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS remind_at TIMESTAMPTZ`).catch(() => {});
   await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS remind_notified_at TIMESTAMPTZ`).catch(() => {});
 
-  // Сначала помечаем задачу как уведомлённую (атомарно), и только если RETURNING вернул строку — шлём.
-  // Это исключает дубли при медленной БД, сетевых ретраях и параллельных тиках.
-  const claimAndSend = async (
+  // Ключ: `${taskId}:${kind}` где kind = 'time' | 'remind'.
+  // Хранит timeout-handle и плановое UTC-время — чтобы знать, нужно ли перепланировать при изменении задачи.
+  type Scheduled = { handle: NodeJS.Timeout; firesAt: number };
+  const scheduled = new Map<string, Scheduled>();
+
+  // Атомарный claim перед отправкой — защита от дублей при перезапуске и параллельных тиках.
+  const claimAndFire = async (
     taskId: string,
+    kind: 'time' | 'remind',
     chatId: string,
-    text: string,
-    column: 'notified_at' | 'remind_notified_at',
-    extraCondition: string = ''
-  ): Promise<boolean> => {
-    const res = await db.query(
-      `UPDATE user_tasks SET ${column} = NOW()
-       WHERE id = $1
-         AND (${column} IS NULL OR ${column} < NOW() - INTERVAL '23 hours')
-         ${extraCondition}
-       RETURNING id`,
-      [taskId]
-    );
-    if (res.rowCount === 0) return false;
+    text: string
+  ) => {
+    const column = kind === 'time' ? 'notified_at' : 'remind_notified_at';
+    const extraCondition = kind === 'remind' ? 'AND remind_at IS NOT NULL' : '';
     try {
-      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, tgFetchOptions({
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text }),
-      }));
-      return true;
+      const res = await db.query(
+        `UPDATE user_tasks SET ${column} = NOW()
+         WHERE id = $1
+           AND done = false
+           AND (${column} IS NULL OR ${column} < NOW() - INTERVAL '23 hours')
+           ${extraCondition}
+         RETURNING id`,
+        [taskId]
+      );
+      if (res.rowCount === 0) return;
+      try {
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, tgFetchOptions({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text }),
+        }));
+        console.log(`[Notif] отправлено (${kind}) task=${taskId}`);
+      } catch (e: any) {
+        await db.query(`UPDATE user_tasks SET ${column} = NULL WHERE id = $1`, [taskId]).catch(() => {});
+        console.error(`[Notif] отправка не удалась (${kind}), откатили claim:`, e?.message);
+      }
     } catch (e: any) {
-      // Откатываем claim, чтобы попробовать в следующем тике
-      await db.query(`UPDATE user_tasks SET ${column} = NULL WHERE id = $1`, [taskId]).catch(() => {});
-      console.error('[Notif] Ошибка отправки, откатили claim:', e?.message);
-      return false;
+      console.error(`[Notif] claim error (${kind}) task=${taskId}:`, e?.message);
     }
   };
 
-  // Защита от наложения тиков: если предыдущий ещё не закончил — пропускаем
-  let isTicking = false;
-
-  const tick = async () => {
-    if (isTicking) {
-      console.log('[Notif] предыдущий тик ещё не завершён, пропускаем');
-      return;
+  const schedule = (
+    key: string,
+    fireAtMs: number,
+    fn: () => Promise<void>
+  ) => {
+    const existing = scheduled.get(key);
+    if (existing) {
+      // Если ничего не поменялось — не трогаем.
+      if (Math.abs(existing.firesAt - fireAtMs) < 1000) return;
+      clearTimeout(existing.handle);
     }
-    isTicking = true;
-    try {
-      const now = new Date();
-      // Окно ±3 минуты, чтобы переживать пропуски тиков (интервал 60 сек).
-      // Защита от дублей — атомарный claim через UPDATE...RETURNING.
-      const windowStart = new Date(now.getTime() + (REMIND_BEFORE_MIN - 3) * 60 * 1000);
-      const windowEnd   = new Date(now.getTime() + (REMIND_BEFORE_MIN + 3) * 60 * 1000);
+    const delay = Math.max(0, fireAtMs - Date.now());
+    const handle = setTimeout(async () => {
+      scheduled.delete(key);
+      await fn();
+    }, delay);
+    scheduled.set(key, { handle, firesAt: fireAtMs });
+  };
 
-      // ── 1. Напоминания за 15 минут до задачи с временем ──────────────────────
-      const { rows } = await db.query(
+  const scan = async () => {
+    try {
+      const nowMs = Date.now();
+      const horizonMs = nowMs + HORIZON_MS;
+
+      // ── 1. Задачи со временем: за 15 минут до старта ─────────────────────────
+      const { rows: tasks } = await db.query(
         `SELECT t.id, t.name, t.date, t.time, t.user_id, p.telegram_chat_id,
                 COALESCE(p.timezone, 'Europe/Moscow') AS timezone
          FROM user_tasks t
@@ -1252,77 +1271,64 @@ export async function startNotificationScheduler(token: string, db: Pool): Promi
          WHERE t.done = false
            AND p.telegram_chat_id IS NOT NULL
            AND (t.notified_at IS NULL OR t.notified_at < NOW() - INTERVAL '23 hours')
-           AND t.time IS NOT NULL AND t.time != ''`,
-        []
+           AND t.time IS NOT NULL AND t.time != ''`
       );
 
-      console.log(`[Notif] tick: кандидатов из БД=${rows.length}, окно ${windowStart.toISOString()}..${windowEnd.toISOString()}`);
-
-      const toNotify = rows.filter((row: any) => {
+      for (const row of tasks) {
         const tz = row.timezone || 'Europe/Moscow';
-        const dateStr = row.date;
-        const timeStr = row.time;
-        if (!dateStr || !timeStr || !/^\d{2}:\d{2}$/.test(timeStr)) return false;
-        const taskUtc = localTimeToUtc(dateStr, timeStr, tz);
-        const hits = taskUtc >= windowStart && taskUtc <= windowEnd;
-        if (hits) console.log(`[Notif] задача "${row.name}" date=${dateStr} time=${timeStr} tz=${tz} taskUtc=${taskUtc.toISOString()} → отправляем`);
-        return hits;
-      });
-
-      for (const row of toNotify) {
-        await claimAndSend(
-          row.id,
-          row.telegram_chat_id,
-          `⏰ Через ${REMIND_BEFORE_MIN} минут: ${row.name}`,
-          'notified_at'
+        if (!row.date || !row.time || !/^\d{2}:\d{2}$/.test(row.time)) continue;
+        const taskUtc = localTimeToUtc(row.date, row.time, tz).getTime();
+        const fireAt = taskUtc - REMIND_BEFORE_MS;
+        // Только если попадает в [now, now + HORIZON]
+        if (fireAt < nowMs - 60_000 || fireAt > horizonMs) continue;
+        schedule(`${row.id}:time`, fireAt, () =>
+          claimAndFire(row.id, 'time', row.telegram_chat_id,
+            `⏰ Через 15 минут: ${row.name}`)
         );
       }
 
       // ── 2. Плавающие напоминания через remind_at ─────────────────────────────
-      const { rows: remindRows } = await db.query(
+      const { rows: reminds } = await db.query(
         `SELECT t.id, t.name, t.remind_at, t.user_id, p.telegram_chat_id
          FROM user_tasks t
          JOIN user_profiles p ON p.user_id = t.user_id
          WHERE t.done = false
            AND p.telegram_chat_id IS NOT NULL
            AND t.remind_at IS NOT NULL
-           AND t.remind_at <= NOW()
-           AND (t.remind_notified_at IS NULL OR t.remind_notified_at < t.remind_at)`,
-        []
+           AND (t.remind_notified_at IS NULL OR t.remind_notified_at < t.remind_at)
+           AND t.remind_at <= NOW() + ($1 || ' milliseconds')::INTERVAL`,
+        [String(HORIZON_MS)]
       );
 
-      for (const row of remindRows) {
-        // Для remind_at защита через "не отправляли после установки remind_at"
-        const res = await db.query(
-          `UPDATE user_tasks SET remind_notified_at = NOW()
-           WHERE id = $1
-             AND remind_at IS NOT NULL
-             AND remind_at <= NOW()
-             AND (remind_notified_at IS NULL OR remind_notified_at < remind_at)
-           RETURNING id`,
-          [row.id]
+      for (const row of reminds) {
+        const fireAt = new Date(row.remind_at).getTime();
+        if (fireAt > horizonMs) continue;
+        schedule(`${row.id}:remind`, fireAt, () =>
+          claimAndFire(row.id, 'remind', row.telegram_chat_id,
+            `🔔 Напоминание: ${row.name}`)
         );
-        if (res.rowCount === 0) continue;
-        try {
-          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, tgFetchOptions({
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: row.telegram_chat_id, text: `🔔 Напоминание: ${row.name}` }),
-          }));
-        } catch (e: any) {
-          await db.query(`UPDATE user_tasks SET remind_notified_at = NULL WHERE id = $1`, [row.id]).catch(() => {});
-          console.error('[Notif] Ошибка отправки (remind_at):', e?.message);
-        }
       }
 
+      // ── 3. Очистка: если задача исчезла из выборки (выполнена, удалена, перенесена)
+      //     — отменяем плановый отстрел. БД-условия выше уже фильтруют изменения.
+      const activeKeys = new Set<string>();
+      for (const t of tasks) activeKeys.add(`${t.id}:time`);
+      for (const r of reminds) activeKeys.add(`${r.id}:remind`);
+      for (const [key, s] of scheduled.entries()) {
+        // Не отменяем то что уже скоро сработает — могло просто выйти из горизонта.
+        if (s.firesAt - nowMs < SCAN_INTERVAL_MS * 2) continue;
+        if (!activeKeys.has(key)) {
+          clearTimeout(s.handle);
+          scheduled.delete(key);
+          console.log(`[Notif] отменено: ${key}`);
+        }
+      }
     } catch (e: any) {
-      console.error('[Notif] Ошибка планировщика:', e?.message);
-    } finally {
-      isTicking = false;
+      console.error('[Notif] scan error:', e?.message);
     }
   };
 
-  setInterval(tick, 60_000);
-  tick();
-  console.log('[Notif] Планировщик уведомлений запущен (интервал 1 мин, окно ±3 мин)');
+  setInterval(scan, SCAN_INTERVAL_MS);
+  scan();
+  console.log(`[Notif] Планировщик запущен: sканирование каждые ${SCAN_INTERVAL_MS / 1000}с, горизонт ${HORIZON_MS / 60000}мин, точность отправки ±1с`);
 }
