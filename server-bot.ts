@@ -489,6 +489,98 @@ async function getUserTimezone(db: Pool, userId: string): Promise<string> {
   } catch { return 'Europe/Moscow'; }
 }
 
+async function buildBotSystemPrompt(userText: string, userId: string, userTz: string, db: Pool, apiKey: string): Promise<string> {
+  let prompt = getSystemInstruction(userTz);
+
+  // 1. Профиль пользователя — всегда, без keyword-matching
+  try {
+    const { rows: profileRows } = await db.query(
+      `SELECT summary FROM user_threads
+       WHERE user_id = $1
+         AND summary IS NOT NULL
+         AND is_meaningful IS NOT FALSE
+         AND (title = 'О себе' OR label = 'profile' OR (source = 'заметка' AND title ILIKE '%себ%'))
+       ORDER BY created_at ASC LIMIT 3`,
+      [userId]
+    );
+    if (profileRows.length > 0) {
+      prompt += `\n\n## Что пользователь рассказал о себе\n${profileRows.map((r: any) => r.summary).join('\n\n')}`;
+    }
+  } catch (e: any) {
+    console.warn('[Bot RAG] profile inject failed:', e?.message);
+  }
+
+  // 2. Ближайшие задачи (следующие 30 минут)
+  try {
+    const now = new Date();
+    const todayStr = now.toLocaleDateString('sv-SE', { timeZone: userTz });
+    const currentTimeStr = now.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: userTz });
+    const windowEnd = new Date(now.getTime() + 30 * 60 * 1000);
+    const windowEndStr = windowEnd.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: userTz });
+    const { rows: upcoming } = await db.query(
+      `SELECT name, time FROM user_tasks
+       WHERE user_id = $1 AND date = $2 AND done = false
+         AND time != '' AND time IS NOT NULL
+         AND time >= $3 AND time <= $4
+       ORDER BY time ASC LIMIT 5`,
+      [userId, todayStr, currentTimeStr, windowEndStr]
+    );
+    if (upcoming.length > 0) {
+      const lines = upcoming.map((t: any) => `— ${t.name} в ${t.time}`).join('\n');
+      prompt += `\n\n## Ближайшие задачи (следующие 30 минут)\n${lines}\n\nЕсли уместно — упомяни одну из них к месту. Один раз, без навязчивости.`;
+    }
+  } catch (e: any) {
+    console.warn('[Bot RAG] upcoming tasks failed:', e?.message);
+  }
+
+  // 3. RAG по тексту сообщения — keyword-поиск по заметкам и тредам
+  try {
+    const keywords = userText
+      .toLowerCase()
+      .replace(/[^\wа-яё\s]/gi, '')
+      .split(/\s+/)
+      .filter(w => w.length > 3)
+      .slice(0, 5);
+
+    let ragRows: any[] = [];
+
+    if (keywords.length > 0) {
+      const conditions = keywords.map((_: string, i: number) => `(title ILIKE $${i + 2} OR summary ILIKE $${i + 2})`).join(' OR ');
+      const { rows } = await db.query(
+        `SELECT title, summary FROM user_threads
+         WHERE user_id = $1 AND summary IS NOT NULL AND is_meaningful IS NOT FALSE
+           AND title IS DISTINCT FROM 'О себе' AND label IS DISTINCT FROM 'skill:self_knowledge'
+           AND (${conditions})
+         ORDER BY updated_at DESC LIMIT 3`,
+        [userId, ...keywords.map((k: string) => `%${k}%`)]
+      );
+      ragRows = rows;
+    }
+
+    // Fallback: последние значимые треды
+    if (ragRows.length === 0) {
+      const { rows } = await db.query(
+        `SELECT title, summary FROM user_threads
+         WHERE user_id = $1 AND summary IS NOT NULL AND is_meaningful IS NOT FALSE
+           AND title IS DISTINCT FROM 'О себе' AND label IS DISTINCT FROM 'skill:self_knowledge'
+         ORDER BY updated_at DESC LIMIT 3`,
+        [userId]
+      );
+      ragRows = rows;
+    }
+
+    if (ragRows.length > 0) {
+      const contextBlock = ragRows.map((r: any) => `[${r.title}]\n${r.summary}`).join('\n---\n');
+      prompt += `\n\n## Из архива пользователя\nФрагменты из заметок и прошлых разговоров. Используй как контекст, не упоминай сам факт архива.\n\n${contextBlock}`;
+      console.log('[Bot RAG] injected:', ragRows.map((r: any) => r.title));
+    }
+  } catch (e: any) {
+    console.warn('[Bot RAG] rag failed:', e?.message);
+  }
+
+  return prompt;
+}
+
 async function processWithAI(
   userText: string,
   threadMessages: StoredMessage[],
@@ -499,6 +591,7 @@ async function processWithAI(
   const now = () => new Date().toISOString();
   const userMsg: StoredMessage = { role: 'user', content: userText, time: now() };
   const userTz = await getUserTimezone(db, userId);
+  const systemPrompt = await buildBotSystemPrompt(userText, userId, userTz, db, apiKey);
 
   const loopMessages = [
     ...buildSafeHistory(threadMessages),
@@ -509,7 +602,7 @@ async function processWithAI(
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     const data = await callRouterAI(apiKey, {
       model: 'deepseek/deepseek-v4-flash',
-      messages: [{ role: 'system', content: getSystemInstruction(userTz) }, ...loopMessages],
+      messages: [{ role: 'system', content: systemPrompt }, ...loopMessages],
       tools: botTools,
       tool_choice: 'auto',
       temperature: 0.7,
