@@ -526,7 +526,25 @@ async function buildBotSystemPrompt(userText: string, userId: string, userTz: st
     console.warn('[Bot RAG] profile inject failed:', e?.message);
   }
 
-  // 2. Ближайшие задачи (следующие 30 минут)
+  // 2. Summary вчерашнего дня в боте
+  try {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toLocaleDateString('sv-SE', { timeZone: userTz });
+    const { rows: yRows } = await db.query(
+      `SELECT summary FROM user_threads
+       WHERE user_id = $1 AND title = $2 AND summary IS NOT NULL
+       LIMIT 1`,
+      [userId, botThreadTitle(yesterdayStr)]
+    );
+    if (yRows[0]?.summary) {
+      prompt += `\n\n## Вчера в боте\n${yRows[0].summary}`;
+    }
+  } catch (e: any) {
+    console.warn('[Bot RAG] yesterday summary failed:', e?.message);
+  }
+
+  // 3. Ближайшие задачи (следующие 30 минут)
   try {
     const now = new Date();
     const todayStr = now.toLocaleDateString('sv-SE', { timeZone: userTz });
@@ -721,38 +739,112 @@ async function processWithAI(
 
 // ─── Thread management (PostgreSQL) ──────────────────────────────────────────
 
-async function loadBotThread(db: Pool, userId: string): Promise<{ id: string; messages: StoredMessage[] } | null> {
+function botThreadTitle(dateStr: string): string {
+  return `${BOT_THREAD_TITLE} ${dateStr}`; // например "Telegram Bot 2026-06-02"
+}
+
+// Саммаризирует вчерашний тред — fire-and-forget, не блокирует ответ пользователю.
+async function summarizeBotThread(threadId: string, messages: StoredMessage[], db: Pool, apiKey: string): Promise<void> {
+  const meaningful = messages.filter(m => m.role !== 'tool' && m.content?.trim());
+  if (meaningful.length < 4) return; // слишком короткий тред — не саммаризируем
+
+  const transcript = meaningful
+    .map(m => `${m.role === 'user' ? 'Пользователь' : 'Мысль'}: ${m.content}`)
+    .join('\n');
+
+  try {
+    const response = await fetch('https://routerai.ru/api/v1/chat/completions', tgFetchOptions({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'deepseek/deepseek-v4-flash',
+        messages: [{
+          role: 'user',
+          content: `Сожми этот разговор в 3-5 предложений. Сохрани суть: о чём говорили, какие решения приняли, что важного сказал пользователь о себе или своих планах. Без воды.\n\n${transcript.slice(0, 6000)}`
+        }],
+        max_tokens: 300,
+        temperature: 0.3,
+        thinking: false,
+      }),
+    }));
+    if (!response.ok) return;
+    const data = await response.json();
+    const summary = data.choices?.[0]?.message?.content?.trim();
+    if (!summary || summary.length < 20) return;
+
+    await db.query(
+      `UPDATE user_threads SET summary = $1, is_meaningful = true WHERE id = $2`,
+      [summary, threadId]
+    );
+    console.log(`[Bot] саммари создан для треда ${threadId}`);
+  } catch (e: any) {
+    console.warn('[Bot] саммаризация не удалась:', e?.message);
+  }
+}
+
+async function loadBotThread(
+  db: Pool,
+  userId: string,
+  userTz: string,
+  apiKey: string
+): Promise<{ id: string; messages: StoredMessage[]; isNew: boolean }> {
+  const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: userTz });
+  const todayTitle = botThreadTitle(todayStr);
+
+  // Ищем тред за сегодня
   const { rows } = await db.query(
     `SELECT id, messages FROM user_threads WHERE user_id = $1 AND title = $2 LIMIT 1`,
-    [userId, BOT_THREAD_TITLE]
+    [userId, todayTitle]
   );
-  if (!rows[0]) return null;
-  return { id: rows[0].id, messages: rows[0].messages ?? [] };
+  if (rows[0]) {
+    return { id: rows[0].id, messages: rows[0].messages ?? [], isNew: false };
+  }
+
+  // Нового треда нет — создаём и саммаризируем вчерашний
+  const id = crypto.randomUUID();
+  await db.query(
+    `INSERT INTO user_threads (id, user_id, title, preview, messages, created_at, updated_at, source)
+     VALUES ($1, $2, $3, '', '[]'::jsonb, $4, NOW(), 'telegram')
+     ON CONFLICT DO NOTHING`,
+    [id, userId, todayTitle, Date.now()]
+  );
+
+  // Саммаризируем вчерашний тред (fire-and-forget)
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toLocaleDateString('sv-SE', { timeZone: userTz });
+  const yesterdayTitle = botThreadTitle(yesterdayStr);
+  db.query(
+    `SELECT id, messages FROM user_threads WHERE user_id = $1 AND title = $2 LIMIT 1`,
+    [userId, yesterdayTitle]
+  ).then(({ rows: yRows }) => {
+    if (yRows[0] && yRows[0].messages?.length >= 4) {
+      summarizeBotThread(yRows[0].id, yRows[0].messages, db, apiKey).catch(() => {});
+    }
+  }).catch(() => {});
+
+  // Читаем то что реально создалось (ON CONFLICT мог проигнорировать наш INSERT)
+  const { rows: created } = await db.query(
+    `SELECT id FROM user_threads WHERE user_id = $1 AND title = $2 LIMIT 1`,
+    [userId, todayTitle]
+  );
+  return { id: created[0]?.id ?? id, messages: [], isNew: true };
 }
 
 async function saveBotThread(
   db: Pool,
   userId: string,
-  threadId: string | null,
+  threadId: string,
   allMessages: StoredMessage[]
 ): Promise<void> {
   const preview = allMessages
     .filter(m => m.role !== 'tool')
     .slice(-1)[0]?.content?.slice(0, 80) ?? '';
 
-  if (threadId) {
-    await db.query(
-      `UPDATE user_threads SET messages = $1::jsonb, preview = $2, updated_at = NOW() WHERE id = $3`,
-      [JSON.stringify(allMessages), preview, threadId]
-    );
-  } else {
-    const id = crypto.randomUUID();
-    await db.query(
-      `INSERT INTO user_threads (id, user_id, title, preview, messages, created_at, updated_at, source)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6, NOW(), 'telegram')`,
-      [id, userId, BOT_THREAD_TITLE, preview, JSON.stringify(allMessages), Date.now()]
-    );
-  }
+  await db.query(
+    `UPDATE user_threads SET messages = $1::jsonb, preview = $2, updated_at = NOW() WHERE id = $3`,
+    [JSON.stringify(allMessages), preview, threadId]
+  );
 }
 
 // ─── Получить web userId по telegram chatId ───────────────────────────────────
@@ -1024,10 +1116,11 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
   db.query(`UPDATE user_profiles SET last_active_at = NOW() WHERE user_id = $1`, [webUserId]).catch(() => {});
 
   // Все остальные сообщения → AI (Мысль)
-  const thread = await loadBotThread(db, webUserId);
-  const existingMessages = thread?.messages ?? [];
+  const userTz = await getUserTimezone(db, webUserId);
+  const thread = await loadBotThread(db, webUserId, userTz, apiKey);
+  const existingMessages = thread.messages;
 
-  console.log(`[Bot] вызываю AI для ${webUserId}, сообщение: "${userText.slice(0, 80)}"`);
+  console.log(`[Bot] вызываю AI для ${webUserId}, сообщение: "${userText.slice(0, 80)}"${thread.isNew ? ' [новый тред]' : ''}`);
   try {
     const { aiResponse, newMessages } = await processWithAI(
       userText,
@@ -1037,7 +1130,7 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
       apiKey
     );
     console.log(`[Bot] AI ответил: "${aiResponse?.slice(0, 80)}"`);
-    await saveBotThread(db, webUserId, thread?.id ?? null, [...existingMessages, ...newMessages]);
+    await saveBotThread(db, webUserId, thread.id, [...existingMessages, ...newMessages]);
     const cleanResponse = aiResponse.replace(/\*\*/g, '').replace(/\*/g, '').replace(/^#{1,3}\s/gm, '');
     await tgApi(token, 'sendMessage', { chat_id: chatId, text: cleanResponse });
   } catch (e: any) {
