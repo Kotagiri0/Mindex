@@ -804,13 +804,15 @@ async function loadBotThread(
     return { id: rows[0].id, messages: rows[0].messages ?? [], isNew: false };
   }
 
-  // Нового треда нет — создаём через INSERT ... ON CONFLICT (user_id, title) DO NOTHING
-  // Защита от гонки: два одновременных сообщения не создадут два треда за один день.
+  // Нового треда нет — создаём только если ещё не существует (атомарная защита от гонки).
+  // Не используем ON CONFLICT (user_id, title) — в БД есть дублирующие title у разных тредов.
   const id = crypto.randomUUID();
   await db.query(
     `INSERT INTO user_threads (id, user_id, title, preview, messages, created_at, updated_at, source)
-     VALUES ($1, $2, $3, '', '[]'::jsonb, $4, NOW(), 'telegram')
-     ON CONFLICT (user_id, title) DO NOTHING`,
+     SELECT $1, $2, $3, '', '[]'::jsonb, $4, NOW(), 'telegram'
+     WHERE NOT EXISTS (
+       SELECT 1 FROM user_threads WHERE user_id = $2 AND title = $3
+     )`,
     [id, userId, todayTitle, Date.now()]
   );
 
@@ -1269,16 +1271,6 @@ export async function startBot(db: Pool): Promise<void> {
   const apiKey = process.env.ROUTERAI_API_KEY;
   if (!apiKey) return;
 
-  // Миграция: уникальный constraint для защиты от дублей дневных тредов
-  await db.query(`
-    DO $$ BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'user_threads_user_id_title_key'
-      ) THEN
-        ALTER TABLE user_threads ADD CONSTRAINT user_threads_user_id_title_key UNIQUE (user_id, title);
-      END IF;
-    END $$;
-  `).catch((e: any) => console.warn('[Bot] constraint migration skipped:', e?.message));
 
   const tokenOk = await validateToken(token);
   if (!tokenOk) {
