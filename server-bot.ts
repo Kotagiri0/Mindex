@@ -489,6 +489,22 @@ async function getUserTimezone(db: Pool, userId: string): Promise<string> {
   } catch { return 'Europe/Moscow'; }
 }
 
+async function generateEmbedding(text: string, apiKey: string): Promise<number[] | null> {
+  if (!text?.trim()) return null;
+  try {
+    const response = await fetch('https://routerai.ru/api/v1/embeddings', tgFetchOptions({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: 'openai/text-embedding-3-small', input: text.slice(0, 8000) }),
+    }));
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.data?.[0]?.embedding || null;
+  } catch {
+    return null;
+  }
+}
+
 async function buildBotSystemPrompt(userText: string, userId: string, userTz: string, db: Pool, apiKey: string): Promise<string> {
   let prompt = getSystemInstruction(userTz);
 
@@ -533,31 +549,54 @@ async function buildBotSystemPrompt(userText: string, userId: string, userTz: st
     console.warn('[Bot RAG] upcoming tasks failed:', e?.message);
   }
 
-  // 3. RAG по тексту сообщения — keyword-поиск по заметкам и тредам
+  // 3. RAG — vector-first, keyword-fallback, recent-fallback
   try {
-    const keywords = userText
-      .toLowerCase()
-      .replace(/[^\wа-яё\s]/gi, '')
-      .split(/\s+/)
-      .filter(w => w.length > 3)
-      .slice(0, 5);
-
     let ragRows: any[] = [];
+    let isExplicit = false;
 
-    if (keywords.length > 0) {
-      const conditions = keywords.map((_: string, i: number) => `(title ILIKE $${i + 2} OR summary ILIKE $${i + 2})`).join(' OR ');
+    // Vector search (если pgvector доступен и есть embeddings)
+    const queryEmbedding = await generateEmbedding(userText, apiKey);
+    if (queryEmbedding) {
       const { rows } = await db.query(
-        `SELECT title, summary FROM user_threads
-         WHERE user_id = $1 AND summary IS NOT NULL AND is_meaningful IS NOT FALSE
-           AND title IS DISTINCT FROM 'О себе' AND label IS DISTINCT FROM 'skill:self_knowledge'
-           AND (${conditions})
-         ORDER BY updated_at DESC LIMIT 3`,
-        [userId, ...keywords.map((k: string) => `%${k}%`)]
+        `SELECT title, summary
+         FROM user_threads
+         WHERE user_id = $1
+           AND summary IS NOT NULL
+           AND embedding IS NOT NULL
+           AND is_meaningful IS NOT FALSE
+           AND label IS DISTINCT FROM 'skill:self_knowledge'
+           AND title IS DISTINCT FROM 'О себе'
+           AND 1 - (embedding <=> $2::vector) > 0.65
+         ORDER BY embedding <=> $2::vector
+         LIMIT 3`,
+        [userId, `[${queryEmbedding.join(',')}]`]
       );
-      ragRows = rows;
+      if (rows.length > 0) { ragRows = rows; isExplicit = true; }
     }
 
-    // Fallback: последние значимые треды
+    // Keyword fallback
+    if (ragRows.length === 0) {
+      const keywords = userText
+        .toLowerCase()
+        .replace(/[^\wа-яё\s]/gi, '')
+        .split(/\s+/)
+        .filter(w => w.length > 3)
+        .slice(0, 5);
+      if (keywords.length > 0) {
+        const conditions = keywords.map((_: string, i: number) => `(title ILIKE $${i + 2} OR summary ILIKE $${i + 2})`).join(' OR ');
+        const { rows } = await db.query(
+          `SELECT title, summary FROM user_threads
+           WHERE user_id = $1 AND summary IS NOT NULL AND is_meaningful IS NOT FALSE
+             AND title IS DISTINCT FROM 'О себе' AND label IS DISTINCT FROM 'skill:self_knowledge'
+             AND (${conditions})
+           ORDER BY updated_at DESC LIMIT 3`,
+          [userId, ...keywords.map((k: string) => `%${k}%`)]
+        );
+        if (rows.length > 0) { ragRows = rows; isExplicit = true; }
+      }
+    }
+
+    // Recent fallback
     if (ragRows.length === 0) {
       const { rows } = await db.query(
         `SELECT title, summary FROM user_threads
@@ -572,7 +611,7 @@ async function buildBotSystemPrompt(userText: string, userId: string, userTz: st
     if (ragRows.length > 0) {
       const contextBlock = ragRows.map((r: any) => `[${r.title}]\n${r.summary}`).join('\n---\n');
       prompt += `\n\n## Из архива пользователя\nФрагменты из заметок и прошлых разговоров. Используй как контекст, не упоминай сам факт архива.\n\n${contextBlock}`;
-      console.log('[Bot RAG] injected:', ragRows.map((r: any) => r.title));
+      console.log('[Bot RAG] injected:', ragRows.map((r: any) => r.title), isExplicit ? '(explicit)' : '(fallback)');
     }
   } catch (e: any) {
     console.warn('[Bot RAG] rag failed:', e?.message);
