@@ -1,12 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MessageSquare } from 'lucide-react';
-import { Task } from '../types';
+import { MessageSquare, Check } from 'lucide-react';
+import { Task, TaskCategory } from '../types';
+import { CATEGORY_COLORS, CATEGORY_LABELS, ORDERED_CATEGORIES } from '../lib/taskCategories';
+
+export interface TaskEditPatch {
+  name: string;
+  time: string;
+  endTime: string;
+  date: string;
+  description: string;
+  location: string;
+  category: TaskCategory;
+  /** true — пользователь менял время руками → timeSource станет 'user'. */
+  timeChangedByUser: boolean;
+}
 
 interface EditTaskModalProps {
   task: Task | null;
   onClose: () => void;
-  onUpdate: (id: string, name: string, time: string, date: string, description: string, location: string) => void;
+  onUpdate: (id: string, patch: TaskEditPatch) => void;
   onDelete: (id: string) => void;
   onOpenThread?: (id: string) => void;
 }
@@ -14,23 +27,33 @@ interface EditTaskModalProps {
 export default function EditTaskModal({ task, onClose, onUpdate, onDelete, onOpenThread }: EditTaskModalProps) {
   const [name, setName] = useState('');
   const [time, setTime] = useState('');
+  const [endTime, setEndTime] = useState('');
   const [date, setDate] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
+  const [category, setCategory] = useState<TaskCategory>('none');
+  // Запоминаем исходное время, чтобы понять, менял ли пользователь его руками.
+  const [initialTime, setInitialTime] = useState('');
+  const [initialEnd, setInitialEnd] = useState('');
 
   useEffect(() => {
     if (task) {
       setName(task.name);
       setTime(task.time || '');
+      setEndTime(task.endTime || '');
       setDate(task.date || '');
       setDescription(task.description || '');
       setLocation(task.location || '');
+      setCategory(task.category || 'none');
+      setInitialTime(task.time || '');
+      setInitialEnd(task.endTime || '');
     }
   }, [task]);
 
   const handleUpdate = () => {
     if (!task || !name.trim()) return;
-    onUpdate(task.id, name, time, date, description, location);
+    const timeChangedByUser = time !== initialTime || endTime !== initialEnd;
+    onUpdate(task.id, { name, time, endTime, date, description, location, category, timeChangedByUser });
   };
 
   const handleGoToChat = () => {
@@ -84,7 +107,7 @@ export default function EditTaskModal({ task, onClose, onUpdate, onDelete, onOpe
 
             <div className="flex gap-2.5 mb-3">
               <div className="flex-1">
-                <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Время</label>
+                <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Начало</label>
                 <input
                   type="time"
                   className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary"
@@ -93,13 +116,54 @@ export default function EditTaskModal({ task, onClose, onUpdate, onDelete, onOpe
                 />
               </div>
               <div className="flex-1">
-                <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Дата</label>
+                <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Конец</label>
                 <input
-                  type="date"
-                  className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  type="time"
+                  className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary disabled:opacity-40"
+                  value={endTime}
+                  disabled={!time}
+                  onChange={(e) => setEndTime(e.target.value)}
                 />
+              </div>
+            </div>
+
+            <div className="mb-3">
+              <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Дата</label>
+              <input
+                type="date"
+                className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </div>
+
+            {/* Цветовой пикер категории — плашки-цвета, не названия */}
+            <div className="mb-3">
+              <label className="block text-[11px] font-bold text-text-tertiary mb-1.5 uppercase tracking-wider">Категория</label>
+              <div className="flex gap-2.5">
+                {ORDERED_CATEGORIES.map((cat) => {
+                  const c = CATEGORY_COLORS[cat];
+                  const active = category === cat;
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      aria-label={CATEGORY_LABELS[cat]}
+                      aria-pressed={active}
+                      onClick={() => setCategory(cat)}
+                      className="flex items-center justify-center rounded-full transition-transform active:scale-90"
+                      style={{
+                        width: 38,
+                        height: 38,
+                        background: c.bg,
+                        border: `1.5px solid ${active ? c.text : c.border}`,
+                        boxShadow: active ? `0 0 0 3px ${c.bg}` : 'none',
+                      }}
+                    >
+                      {active && <Check size={16} strokeWidth={2.5} color={c.text} />}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

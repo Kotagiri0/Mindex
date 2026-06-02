@@ -1,17 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, MessageSquare, Trash2 } from 'lucide-react';
-import { Task } from '../types';
+import { X, MessageSquare, Trash2, Check } from 'lucide-react';
+import { Task, TaskCategory } from '../types';
+import { TaskEditPatch } from './EditTaskModal';
+import { CATEGORY_COLORS, CATEGORY_LABELS, ORDERED_CATEGORIES } from '../lib/taskCategories';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+
+export interface TaskCreatePatch {
+  name: string;
+  time: string;
+  endTime: string;
+  date: string;
+  description: string;
+  location: string;
+  category: TaskCategory;
+}
 
 interface TaskDetailPanelProps {
   task: Task | null;
   onClose: () => void;
-  onUpdate: (id: string, name: string, time: string, date: string, description: string, location: string) => void;
+  onUpdate: (id: string, patch: TaskEditPatch) => void;
   onDelete: (id: string) => void;
   onOpenThread?: (id: string) => void;
-  onCreate?: (name: string, time: string, date: string, description: string, location: string) => void;
+  onCreate?: (patch: TaskCreatePatch) => void;
   initialDate?: string;
   isCreating?: boolean;
 }
@@ -19,34 +31,49 @@ interface TaskDetailPanelProps {
 export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onOpenThread, onCreate, initialDate, isCreating }: TaskDetailPanelProps) {
   const [name, setName] = useState('');
   const [time, setTime] = useState('');
+  const [endTime, setEndTime] = useState('');
   const [date, setDate] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
+  const [category, setCategory] = useState<TaskCategory>('none');
+  const [initialTime, setInitialTime] = useState('');
+  const [initialEnd, setInitialEnd] = useState('');
 
   useEffect(() => {
     if (isCreating) {
       setName('');
       setTime('');
+      setEndTime('');
       setDate(initialDate || '');
       setDescription('');
       setLocation('');
+      setCategory('none');
+      setInitialTime('');
+      setInitialEnd('');
     } else if (task) {
       setName(task.name);
       setTime(task.time || '');
+      setEndTime(task.endTime || '');
       setDate(task.date || '');
       setDescription(task.description || '');
       setLocation(task.location || '');
+      setCategory(task.category || 'none');
+      setInitialTime(task.time || '');
+      setInitialEnd(task.endTime || '');
     }
   }, [task?.id, isCreating]);
 
-  const handleUpdate = () => {
+  // Авто-сохранение по onBlur. Передаём текущие значения явно, т.к. setState асинхронен.
+  const handleUpdate = (overrides?: Partial<TaskEditPatch>) => {
     if (!task || !name.trim()) return;
-    onUpdate(task.id, name, time, date, description, location);
+    const next = { name, time, endTime, date, description, location, category, ...overrides };
+    const timeChangedByUser = next.time !== initialTime || next.endTime !== initialEnd;
+    onUpdate(task.id, { ...next, timeChangedByUser });
   };
 
   const handleCreate = () => {
     if (!name.trim() || !onCreate) return;
-    onCreate(name, time, date, description, location);
+    onCreate({ name, time, endTime, date, description, location, category });
     onClose();
   };
 
@@ -121,34 +148,78 @@ export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onO
                 style={inputStyle}
                 value={name}
                 onChange={e => setName(e.target.value)}
-                onBlur={handleUpdate}
+                onBlur={() => handleUpdate()}
                 onKeyDown={e => e.key === 'Enter' && handleUpdate()}
               />
             </div>
 
-            {/* Date + Time */}
+            {/* Date */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={labelStyle}>Дата</label>
+              <input
+                type="date"
+                className="task-panel-input"
+                style={inputStyle}
+                value={date}
+                onChange={e => setDate(e.target.value)}
+                onBlur={() => handleUpdate()}
+              />
+            </div>
+
+            {/* Time start + end */}
             <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
               <div style={{ flex: 1 }}>
-                <label style={labelStyle}>Дата</label>
-                <input
-                  type="date"
-                  className="task-panel-input"
-                  style={inputStyle}
-                  value={date}
-                  onChange={e => setDate(e.target.value)}
-                  onBlur={handleUpdate}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={labelStyle}>Время</label>
+                <label style={labelStyle}>Начало</label>
                 <input
                   type="time"
                   className="task-panel-input"
                   style={inputStyle}
                   value={time}
                   onChange={e => setTime(e.target.value)}
-                  onBlur={handleUpdate}
+                  onBlur={() => handleUpdate()}
                 />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>Конец</label>
+                <input
+                  type="time"
+                  className="task-panel-input"
+                  style={{ ...inputStyle, opacity: time ? 1 : 0.4 }}
+                  value={endTime}
+                  disabled={!time}
+                  onChange={e => setEndTime(e.target.value)}
+                  onBlur={() => handleUpdate()}
+                />
+              </div>
+            </div>
+
+            {/* Category color picker */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={labelStyle}>Категория</label>
+              <div style={{ display: 'flex', gap: 10 }}>
+                {ORDERED_CATEGORIES.map(cat => {
+                  const c = CATEGORY_COLORS[cat];
+                  const active = category === cat;
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      aria-label={CATEGORY_LABELS[cat]}
+                      aria-pressed={active}
+                      title={CATEGORY_LABELS[cat]}
+                      onClick={() => { setCategory(cat); handleUpdate({ category: cat }); }}
+                      style={{
+                        width: 34, height: 34, borderRadius: '50%', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: c.bg,
+                        border: `1.5px solid ${active ? c.text : c.border}`,
+                        transition: 'transform 0.1s',
+                      }}
+                    >
+                      {active && <Check size={15} strokeWidth={2.5} color={c.text} />}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -161,7 +232,7 @@ export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onO
                 placeholder="Адрес или название"
                 value={location}
                 onChange={e => setLocation(e.target.value)}
-                onBlur={handleUpdate}
+                onBlur={() => handleUpdate()}
               />
             </div>
 
@@ -175,7 +246,7 @@ export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onO
                 rows={3}
                 value={description}
                 onChange={e => setDescription(e.target.value)}
-                onBlur={handleUpdate}
+                onBlur={() => handleUpdate()}
               />
             </div>
 

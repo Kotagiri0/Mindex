@@ -1,11 +1,18 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { CalendarDays, Settings, ChevronLeft, ChevronRight, X, Plus, ArrowUp } from 'lucide-react';
+import { Settings, ChevronLeft, ChevronRight, Plus, ArrowUp, LayoutList, Bot } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Task, Screen } from '../types';
 import TaskItem from './TaskItem';
-import EditTaskModal from './EditTaskModal';
+import EditTaskModal, { TaskEditPatch } from './EditTaskModal';
+import DayTimeline from './DayTimeline';
+import TimelineCreatePopover from './TimelineCreatePopover';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
+
+// Вид панели задач: список (как было) или таймлайн (календарь дня). Запоминается навсегда.
+type DashView = 'list' | 'timeline';
+const VIEW_KEY = 'mx_dash_view';
+const readView = (): DashView => (localStorage.getItem(VIEW_KEY) === 'timeline' ? 'timeline' : 'list');
 
 interface DashboardProps {
   tasks: Task[];
@@ -150,7 +157,18 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
   const suppressClickRef = useRef(false);
   const [miniCalOpen, setMiniCalOpen] = useState(false);
   const [addInput, setAddInput] = useState('');
+  const [view, setView] = useState<DashView>(readView);
+  // Время, по которому тапнули на таймлайне для создания задачи (null — попровер закрыт).
+  const [createAt, setCreateAt] = useState<string | null>(null);
   const today = todayStr();
+
+  const toggleView = () => {
+    setView(prev => {
+      const next = prev === 'list' ? 'timeline' : 'list';
+      localStorage.setItem(VIEW_KEY, next);
+      return next;
+    });
+  };
 
   const weekDays = useMemo(() => getWeekDays(weekOffset), [weekOffset]);
 
@@ -198,10 +216,33 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
   const addTask = async () => {
     const name = addInput.trim();
     if (!name) return;
-    const newTask: Task = { id: uuid(), name, time: '', date: selectedDate, done: false };
+    const newTask: Task = { id: uuid(), name, time: '', date: selectedDate, done: false, category: 'none' };
     setTasks(prev => (Array.isArray(prev) ? [...prev, newTask] : [newTask]));
     await db.saveTask(newTask);
     setAddInput('');
+  };
+
+  // Перетаскивание блока по таймлайну: человек явно переместил → timeSource: 'user'.
+  const moveTask = (taskId: string, time: string, endTime: string) => {
+    setTasks(prev => prev.map(t => {
+      if (t.id !== taskId) return t;
+      const u: Task = { ...t, time, endTime, timeSource: 'user' };
+      db.saveTask(u);
+      return u;
+    }));
+  };
+
+  // Создание задачи тапом по таймлайну: человек явно указал время → timeSource: 'user'.
+  const createTimedTask = async (name: string, time: string, endTime: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const newTask: Task = {
+      id: uuid(), name: trimmed, time, endTime, date: selectedDate,
+      done: false, category: 'none', timeSource: 'user',
+    };
+    setTasks(prev => (Array.isArray(prev) ? [...prev, newTask] : [newTask]));
+    await db.saveTask(newTask);
+    setCreateAt(null);
   };
 
   const toggleTask = async (id: string) => {
@@ -222,10 +263,23 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
     }));
   };
 
-  const updateTask = async (id: string, name: string, time: string, date: string, description: string, location: string) => {
+  const updateTask = async (id: string, patch: TaskEditPatch) => {
     setTasks(prev => prev.map(t => {
-      if (t.id === id) { const u = { ...t, name, time, date, description, location }; db.saveTask(u); return u; }
-      return t;
+      if (t.id !== id) return t;
+      const u: Task = {
+        ...t,
+        name: patch.name,
+        time: patch.time,
+        endTime: patch.endTime || undefined,
+        date: patch.date,
+        description: patch.description,
+        location: patch.location,
+        category: patch.category,
+        // Если время правил человек руками — фиксируем источник как 'user'.
+        timeSource: patch.timeChangedByUser ? 'user' : t.timeSource,
+      };
+      db.saveTask(u);
+      return u;
     }));
     setEditingTask(null);
   };
@@ -315,22 +369,32 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px 8px' }}>
+        {/* Левая иконка — переключатель список ⇄ таймлайн (заглушка lucide).
+            В режиме списка показываем «робота» (вход в календарь), в таймлайне — иконку списка. */}
         <motion.button
           whileTap={{ scale: 0.88 }}
-          onClick={() => setMiniCalOpen(true)}
+          onClick={toggleView}
+          aria-label={view === 'list' ? 'Календарь' : 'Список'}
           style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
         >
-          <CalendarDays size={22} strokeWidth={1.75} color="rgba(34,34,36,0.6)" />
+          {view === 'list'
+            ? <Bot size={23} strokeWidth={1.75} color="rgba(34,34,36,0.6)" />
+            : <LayoutList size={22} strokeWidth={1.75} color="rgba(34,34,36,0.6)" />}
         </motion.button>
 
-        <div style={{ textAlign: 'center' }}>
+        {/* Заголовок месяца — тап открывает мини-календарь для прыжка по датам */}
+        <motion.button
+          whileTap={{ scale: 0.96 }}
+          onClick={() => setMiniCalOpen(true)}
+          style={{ textAlign: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        >
           <div style={{ fontFamily: F, fontSize: 11, color: 'rgba(34,34,36,0.4)', letterSpacing: '0.06em' }}>
             {weekDays[3].getFullYear()}
           </div>
-          <div style={{ fontFamily: F, fontSize: 22, color: '#222224', lineHeight: 1.1 }}>
+          <div style={{ fontFamily: F, fontSize: 22, color: '#222224', lineHeight: 1.1, textTransform: 'uppercase' }}>
             {MONTHS[weekDays[3].getMonth()]}
           </div>
-        </div>
+        </motion.button>
 
         <motion.button
           whileTap={{ scale: 0.88 }}
@@ -404,66 +468,81 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
         onTouchEnd={(e) => handleDaySwipeEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY)}
         onTouchCancel={() => { swipeStartRef.current = null; }}
       >
-        {/* Inline add-task input */}
-        <div style={{ padding: '20px 20px 0', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#f5f5f5', borderRadius: 40, padding: '10px 16px' }}>
-            <Plus size={18} strokeWidth={1.75} color="rgba(34,34,36,0.3)" style={{ flexShrink: 0 }} />
-            <input
-              value={addInput}
-              onChange={e => setAddInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addTask()}
-              placeholder="Добавить задачу"
-              style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 15, color: '#222224' }}
-            />
-            <AnimatePresence>
-              {addInput.trim() && (
-                <motion.button
-                  key="add-btn"
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0, opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={addTask}
-                  style={{ width: 32, height: 32, borderRadius: '50%', background: '#0B0D10', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                >
-                  <ArrowUp size={16} color="#fff" strokeWidth={2} />
-                </motion.button>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
+        {view === 'list' ? (
+          <>
+            {/* Inline add-task input */}
+            <div style={{ padding: '20px 20px 0', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#f5f5f5', borderRadius: 40, padding: '10px 16px' }}>
+                <Plus size={18} strokeWidth={1.75} color="rgba(34,34,36,0.3)" style={{ flexShrink: 0 }} />
+                <input
+                  value={addInput}
+                  onChange={e => setAddInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addTask()}
+                  placeholder="Добавить задачу"
+                  style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 15, color: '#222224' }}
+                />
+                <AnimatePresence>
+                  {addInput.trim() && (
+                    <motion.button
+                      key="add-btn"
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      transition={{ duration: 0.15 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={addTask}
+                      style={{ width: 32, height: 32, borderRadius: '50%', background: '#0B0D10', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                    >
+                      <ArrowUp size={16} color="#fff" strokeWidth={2} />
+                    </motion.button>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
 
-        <div style={{ height: 1, background: 'rgba(34,34,36,0.07)', margin: '12px 20px 0' }} />
+            <div style={{ height: 1, background: 'rgba(34,34,36,0.07)', margin: '12px 20px 0' }} />
 
-        {/* Task list */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 120px', touchAction: 'pan-y' }}>
-          {filteredTasks.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              style={{ textAlign: 'center', marginTop: 40, color: '#bbb', fontFamily: M, fontSize: 15 }}
-            >
-              Нет задач на этот день
-            </motion.div>
-          ) : (
-            <AnimatePresence mode="popLayout">
-              {filteredTasks.map((t, idx) => (
+            {/* Task list */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 120px', touchAction: 'pan-y' }}>
+              {filteredTasks.length === 0 ? (
                 <motion.div
-                  key={t.id}
-                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                  transition={{ delay: idx * 0.04 }}
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  style={{ textAlign: 'center', marginTop: 40, color: '#bbb', fontFamily: M, fontSize: 15 }}
                 >
-                  <TaskItem
-                    task={t}
-                    onToggle={() => toggleTask(t.id)}
-                    onToggleSubtask={toggleSubtask}
-                    onClick={() => setEditingTask(t)}
-                  />
+                  Нет задач на этот день
                 </motion.div>
-              ))}
-            </AnimatePresence>
-          )}
-        </div>
+              ) : (
+                <AnimatePresence mode="popLayout">
+                  {filteredTasks.map((t, idx) => (
+                    <motion.div
+                      key={t.id}
+                      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                      transition={{ delay: idx * 0.04 }}
+                    >
+                      <TaskItem
+                        task={t}
+                        onToggle={() => toggleTask(t.id)}
+                        onToggleSubtask={toggleSubtask}
+                        onClick={() => setEditingTask(t)}
+                      />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              )}
+            </div>
+          </>
+        ) : (
+          <div style={{ flex: 1, minHeight: 0, paddingTop: 12 }}>
+            <DayTimeline
+              date={selectedDate}
+              tasks={filteredTasks}
+              onTaskClick={(t) => setEditingTask(t)}
+              onUntimedClick={(t) => setEditingTask(t)}
+              onCreateAt={(time) => setCreateAt(time)}
+              onTaskMove={moveTask}
+            />
+          </div>
+        )}
       </div>
 
       {/* "Сегодня" button — появляется когда не на текущей неделе */}
@@ -518,6 +597,17 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
         onDelete={deleteTask}
         onOpenThread={onOpenThread}
       />
+
+      {/* Создание задачи тапом по таймлайну */}
+      <AnimatePresence>
+        {createAt && (
+          <TimelineCreatePopover
+            startTime={createAt}
+            onCancel={() => setCreateAt(null)}
+            onCreate={createTimedTask}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {miniCalOpen && (

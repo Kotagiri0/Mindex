@@ -260,14 +260,18 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             const filtered = date ? tasks.filter(t => t.date === date) : tasks;
             result = filtered.length > 0 ? filtered : 'Задач не найдено.';
           } else if (name === 'add_task') {
-            const { name: taskName, time, date, description, location } = args;
+            const { name: taskName, time, endTime, date, category, description, location } = args;
             const newTask: Task = {
               id: uuid(),
               name: taskName,
               time: time || '',
+              endTime: endTime || undefined,
               date: date || new Date().toISOString().split('T')[0],
               done: false,
               threadId: threadId || undefined,
+              category: category || 'none',
+              // Время предложено агентом → 'agent'. Без времени — не ставим.
+              timeSource: time ? 'agent' : undefined,
               description: description || undefined,
               location: location || undefined,
             };
@@ -297,15 +301,20 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             setIsTyping(false);
             return;
           } else if (name === 'update_task') {
-            const { id: taskId, done, name: taskName, time, date, description, location } = args;
+            const { id: taskId, done, name: taskName, time, endTime, date, category, description, location } = args;
             setTasks(prev => prev.map(t => {
               if (t.id === taskId) {
-                const updated = {
+                const timeChanged = time !== undefined && time !== t.time;
+                const updated: Task = {
                   ...t,
                   done: done !== undefined ? done : t.done,
                   name: taskName || t.name,
                   time: time !== undefined ? time : t.time,
+                  endTime: endTime !== undefined ? endTime : t.endTime,
                   date: date !== undefined ? date : t.date,
+                  category: category !== undefined ? category : t.category,
+                  // Агент сдвинул время → источник 'agent' (его предложение).
+                  timeSource: timeChanged ? 'agent' : t.timeSource,
                   description: description !== undefined ? description : t.description,
                   location: location !== undefined ? location : t.location,
                 };
