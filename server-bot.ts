@@ -406,15 +406,15 @@ async function executeTool(name: string, args: any, db: Pool, userId: string): P
         );
         return { success: true, remind_at: remindAt.toISOString() };
       } else {
-        // Создаём задачу-напоминание
+        // Создаём задачу-напоминание без time — иначе планировщик пошлёт ещё одно
+        // уведомление за 15 минут до time, тогда как remind_at уже точный момент отправки.
         const id = crypto.randomUUID();
         const label = String(args.label);
         const taskDate = remindAt.toLocaleDateString('sv-SE', { timeZone: userTz });
-        const taskTime = remindAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: userTz });
         await db.query(
           `INSERT INTO user_tasks (id, user_id, name, time, date, done, type, subtasks, created_at, updated_at, remind_at)
-           VALUES ($1, $2, $3, $4, $5, false, 'regular', '[]'::jsonb, NOW(), NOW(), $6)`,
-          [id, userId, label, taskTime, taskDate, remindAt.toISOString()]
+           VALUES ($1, $2, $3, '', $4, false, 'regular', '[]'::jsonb, NOW(), NOW(), $5)`,
+          [id, userId, label, taskDate, remindAt.toISOString()]
         );
         return { success: true, id, remind_at: remindAt.toISOString() };
       }
