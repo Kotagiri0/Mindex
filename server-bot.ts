@@ -752,8 +752,81 @@ function botThreadTitle(dateStr: string): string {
   return `${BOT_THREAD_TITLE} ${dateStr}`; // например "Telegram Bot 2026-06-02"
 }
 
+// Извлекает факты о пользователе из transcript и дописывает в тред "О себе".
+async function extractAndSaveUserFacts(userId: string, transcript: string, db: Pool, apiKey: string): Promise<void> {
+  // Фильтр: разговор должен содержать личную информацию
+  const personalSignals = ['я ', 'мне ', 'моя ', 'мой ', 'моё ', 'работаю', 'хочу', 'планирую', 'занимаюсь', 'строю', 'делаю', 'учусь', 'живу'];
+  const hasPersonal = personalSignals.some(s => transcript.toLowerCase().includes(s));
+  if (!hasPersonal) return;
+
+  try {
+    // Получаем текущий профиль чтобы не дублировать факты
+    const { rows: profileRows } = await db.query(
+      `SELECT id, summary FROM user_threads
+       WHERE user_id = $1 AND title = 'О себе' AND source = 'заметка'
+       ORDER BY created_at ASC LIMIT 1`,
+      [userId]
+    );
+    const existingProfile = profileRows[0]?.summary || '';
+
+    const response = await fetch('https://routerai.ru/api/v1/chat/completions', tgFetchOptions({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'deepseek/deepseek-v4-flash',
+        messages: [{
+          role: 'user',
+          content: `Из этого разговора извлеки факты о пользователе — кто он, чем занимается, какие цели, проекты, привычки, планы. Только то что явно сказано, без домыслов. Формат: короткие тезисы, каждый с новой строки, начиная с "—".
+
+Уже известно о пользователе (не повторяй):
+${existingProfile || '(ничего)'}
+
+Разговор:
+${transcript.slice(0, 4000)}
+
+Если новых фактов нет — ответь пустой строкой.`
+        }],
+        max_tokens: 200,
+        temperature: 0.2,
+        thinking: false,
+      }),
+    }));
+
+    if (!response.ok) return;
+    const data = await response.json();
+    const newFacts = data.choices?.[0]?.message?.content?.trim();
+    if (!newFacts || newFacts.length < 5) return;
+
+    if (profileRows[0]) {
+      // Дописываем к существующему профилю
+      const updatedSummary = existingProfile
+        ? `${existingProfile}\n${newFacts}`
+        : newFacts;
+      // Ограничиваем размер профиля ~1500 символами
+      const trimmed = updatedSummary.length > 1500
+        ? updatedSummary.slice(updatedSummary.length - 1500)
+        : updatedSummary;
+      await db.query(
+        `UPDATE user_threads SET summary = $1, updated_at = NOW() WHERE id = $2`,
+        [trimmed, profileRows[0].id]
+      );
+    } else {
+      // Создаём тред "О себе"
+      const id = crypto.randomUUID();
+      await db.query(
+        `INSERT INTO user_threads (id, user_id, title, preview, messages, created_at, updated_at, source, summary, is_meaningful)
+         VALUES ($1, $2, 'О себе', '', '[]'::jsonb, NOW(), NOW(), 'заметка', $3, true)`,
+        [id, userId, newFacts]
+      );
+    }
+    console.log(`[Bot] профиль пользователя ${userId} обновлён`);
+  } catch (e: any) {
+    console.warn('[Bot] извлечение фактов не удалось:', e?.message);
+  }
+}
+
 // Саммаризирует вчерашний тред — fire-and-forget, не блокирует ответ пользователю.
-async function summarizeBotThread(threadId: string, messages: StoredMessage[], db: Pool, apiKey: string): Promise<void> {
+async function summarizeBotThread(threadId: string, userId: string, messages: StoredMessage[], db: Pool, apiKey: string): Promise<void> {
   const meaningful = messages.filter(m => m.role !== 'tool' && m.content?.trim());
   if (meaningful.length < 4) return; // слишком короткий тред — не саммаризируем
 
@@ -786,6 +859,9 @@ async function summarizeBotThread(threadId: string, messages: StoredMessage[], d
       [summary, threadId]
     );
     console.log(`[Bot] саммари создан для треда ${threadId}`);
+
+    // После саммаризации — извлекаем факты о пользователе (fire-and-forget)
+    extractAndSaveUserFacts(userId, transcript, db, apiKey).catch(() => {});
   } catch (e: any) {
     console.warn('[Bot] саммаризация не удалась:', e?.message);
   }
@@ -834,7 +910,7 @@ async function loadBotThread(
       const msgs: StoredMessage[] = yRows[0].messages ?? [];
       const meaningful = msgs.filter(m => m.role !== 'tool' && m.content?.trim());
       if (meaningful.length >= 4) {
-        summarizeBotThread(yRows[0].id, msgs, db, apiKey).catch(() => {});
+        summarizeBotThread(yRows[0].id, userId, msgs, db, apiKey).catch(() => {});
       }
     }
   }).catch(() => {});
