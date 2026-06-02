@@ -572,6 +572,16 @@ async function buildBotSystemPrompt(userText: string, userId: string, userTz: st
     let ragRows: any[] = [];
     let isExplicit = false;
 
+    // Исключаем дневные треды бота из RAG — они идут отдельным блоком "Вчера в боте"
+    const BOT_THREAD_PREFIX = `${BOT_THREAD_TITLE} `;
+    const ragBaseFilter = `
+      AND summary IS NOT NULL
+      AND is_meaningful IS NOT FALSE
+      AND label IS DISTINCT FROM 'skill:self_knowledge'
+      AND title IS DISTINCT FROM 'О себе'
+      AND title NOT LIKE '${BOT_THREAD_PREFIX}%'
+    `;
+
     // Vector search (если pgvector доступен и есть embeddings)
     const queryEmbedding = await generateEmbedding(userText, apiKey);
     if (queryEmbedding) {
@@ -579,11 +589,8 @@ async function buildBotSystemPrompt(userText: string, userId: string, userTz: st
         `SELECT title, summary
          FROM user_threads
          WHERE user_id = $1
-           AND summary IS NOT NULL
            AND embedding IS NOT NULL
-           AND is_meaningful IS NOT FALSE
-           AND label IS DISTINCT FROM 'skill:self_knowledge'
-           AND title IS DISTINCT FROM 'О себе'
+           ${ragBaseFilter}
            AND 1 - (embedding <=> $2::vector) > 0.65
          ORDER BY embedding <=> $2::vector
          LIMIT 3`,
@@ -604,9 +611,7 @@ async function buildBotSystemPrompt(userText: string, userId: string, userTz: st
         const conditions = keywords.map((_: string, i: number) => `(title ILIKE $${i + 2} OR summary ILIKE $${i + 2})`).join(' OR ');
         const { rows } = await db.query(
           `SELECT title, summary FROM user_threads
-           WHERE user_id = $1 AND summary IS NOT NULL AND is_meaningful IS NOT FALSE
-             AND title IS DISTINCT FROM 'О себе' AND label IS DISTINCT FROM 'skill:self_knowledge'
-             AND (${conditions})
+           WHERE user_id = $1 ${ragBaseFilter} AND (${conditions})
            ORDER BY updated_at DESC LIMIT 3`,
           [userId, ...keywords.map((k: string) => `%${k}%`)]
         );
@@ -618,8 +623,7 @@ async function buildBotSystemPrompt(userText: string, userId: string, userTz: st
     if (ragRows.length === 0) {
       const { rows } = await db.query(
         `SELECT title, summary FROM user_threads
-         WHERE user_id = $1 AND summary IS NOT NULL AND is_meaningful IS NOT FALSE
-           AND title IS DISTINCT FROM 'О себе' AND label IS DISTINCT FROM 'skill:self_knowledge'
+         WHERE user_id = $1 ${ragBaseFilter}
          ORDER BY updated_at DESC LIMIT 3`,
         [userId]
       );
@@ -800,12 +804,13 @@ async function loadBotThread(
     return { id: rows[0].id, messages: rows[0].messages ?? [], isNew: false };
   }
 
-  // Нового треда нет — создаём и саммаризируем вчерашний
+  // Нового треда нет — создаём через INSERT ... ON CONFLICT (user_id, title) DO NOTHING
+  // Защита от гонки: два одновременных сообщения не создадут два треда за один день.
   const id = crypto.randomUUID();
   await db.query(
     `INSERT INTO user_threads (id, user_id, title, preview, messages, created_at, updated_at, source)
      VALUES ($1, $2, $3, '', '[]'::jsonb, $4, NOW(), 'telegram')
-     ON CONFLICT DO NOTHING`,
+     ON CONFLICT (user_id, title) DO NOTHING`,
     [id, userId, todayTitle, Date.now()]
   );
 
@@ -815,15 +820,19 @@ async function loadBotThread(
   const yesterdayStr = yesterday.toLocaleDateString('sv-SE', { timeZone: userTz });
   const yesterdayTitle = botThreadTitle(yesterdayStr);
   db.query(
-    `SELECT id, messages FROM user_threads WHERE user_id = $1 AND title = $2 LIMIT 1`,
+    `SELECT id, messages FROM user_threads WHERE user_id = $1 AND title = $2 AND summary IS NULL LIMIT 1`,
     [userId, yesterdayTitle]
   ).then(({ rows: yRows }) => {
-    if (yRows[0] && yRows[0].messages?.length >= 4) {
-      summarizeBotThread(yRows[0].id, yRows[0].messages, db, apiKey).catch(() => {});
+    if (yRows[0]) {
+      const msgs: StoredMessage[] = yRows[0].messages ?? [];
+      const meaningful = msgs.filter(m => m.role !== 'tool' && m.content?.trim());
+      if (meaningful.length >= 4) {
+        summarizeBotThread(yRows[0].id, msgs, db, apiKey).catch(() => {});
+      }
     }
   }).catch(() => {});
 
-  // Читаем то что реально создалось (ON CONFLICT мог проигнорировать наш INSERT)
+  // Читаем то что реально создалось (гонка могла создать тред раньше нас)
   const { rows: created } = await db.query(
     `SELECT id FROM user_threads WHERE user_id = $1 AND title = $2 LIMIT 1`,
     [userId, todayTitle]
@@ -1259,6 +1268,17 @@ export async function startBot(db: Pool): Promise<void> {
 
   const apiKey = process.env.ROUTERAI_API_KEY;
   if (!apiKey) return;
+
+  // Миграция: уникальный constraint для защиты от дублей дневных тредов
+  await db.query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'user_threads_user_id_title_key'
+      ) THEN
+        ALTER TABLE user_threads ADD CONSTRAINT user_threads_user_id_title_key UNIQUE (user_id, title);
+      END IF;
+    END $$;
+  `).catch((e: any) => console.warn('[Bot] constraint migration skipped:', e?.message));
 
   const tokenOk = await validateToken(token);
   if (!tokenOk) {
