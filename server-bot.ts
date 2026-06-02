@@ -802,21 +802,21 @@ ${transcript.slice(0, 4000)}
       const updatedSummary = existingProfile
         ? `${existingProfile}\n${newFacts}`
         : newFacts;
-      // Ограничиваем размер профиля ~1500 символами
+      // Ограничиваем размер ~1500 символами — обрезаем старые факты с начала, новые сохраняем
       const trimmed = updatedSummary.length > 1500
-        ? updatedSummary.slice(updatedSummary.length - 1500)
+        ? updatedSummary.slice(updatedSummary.length - 1500).replace(/^[^\n]*\n/, '') // не режем посреди строки
         : updatedSummary;
       await db.query(
         `UPDATE user_threads SET summary = $1, updated_at = NOW() WHERE id = $2`,
         [trimmed, profileRows[0].id]
       );
     } else {
-      // Создаём тред "О себе"
+      // Создаём тред "О себе" — created_at в user_threads хранится как bigint (ms)
       const id = crypto.randomUUID();
       await db.query(
         `INSERT INTO user_threads (id, user_id, title, preview, messages, created_at, updated_at, source, summary, is_meaningful)
-         VALUES ($1, $2, 'О себе', '', '[]'::jsonb, NOW(), NOW(), 'заметка', $3, true)`,
-        [id, userId, newFacts]
+         VALUES ($1, $2, 'О себе', '', '[]'::jsonb, $3, NOW(), 'заметка', $4, true)`,
+        [id, userId, Date.now(), newFacts]
       );
     }
     console.log(`[Bot] профиль пользователя ${userId} обновлён`);
