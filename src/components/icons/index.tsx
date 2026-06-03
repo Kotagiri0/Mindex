@@ -80,8 +80,8 @@ export function SettingsIcon({ size = 24, color, className, style }: IconProps) 
   );
 }
 
-// Чат-пузырь (filled) — навбар, вкладка чата. Источник: threads v2.svg
-export function ChatIcon({ size = 24, color, className, style }: IconProps) {
+// Заметка/саммари (квадратный пузырь с загибом, filled). Источник: threads v2.svg
+export function NoteIcon({ size = 24, color, className, style }: IconProps) {
   return (
     <svg viewBox="0 0 90 91" className={className} {...base(size, color, style)}>
       <path
@@ -110,8 +110,8 @@ export function ComposeIcon({ size = 24, color, className, style }: IconProps) {
   );
 }
 
-// Кружок с загибом (заметка/саммари) — шапка чата. Источник: note.svg
-export function NoteIcon({ size = 24, color, className, style }: IconProps) {
+// Чат-пузырь (круглый, outline) — навбар/шапка, режим чата. Источник: note.svg
+export function ChatIcon({ size = 24, color, className, style }: IconProps) {
   return (
     <svg viewBox="0 0 90 90" className={className} {...base(size, color, style)}>
       <path
