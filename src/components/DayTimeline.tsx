@@ -67,8 +67,9 @@ export default function DayTimeline({
   const isToday = date === todayStr;
 
   // Точка отсчёта для авто-раскладки задач без времени: текущее время (сегодня)
-  // или 9:00 (прошлые/будущие дни — нет понятия «сейчас»).
-  const placeFrom = isToday ? now : 9 * 60;
+  // или 9:00 (прошлые/будущие дни). Округляем вниз до 30 мин, чтобы раскладка не
+  // пересчитывалась каждую минуту и чипы не «прыгали» (баг: layout зависел от now).
+  const placeFrom = isToday ? Math.floor(now / 30) * 30 : 9 * 60;
   const placed = useMemo(() => layoutDay(tasks, placeFrom), [tasks, placeFrom]);
 
   // Календарь честный — все 24 часа.
@@ -97,50 +98,67 @@ export default function DayTimeline({
   const minToY = (min: number) => ((min - topOffset) / 60) * hourH;
 
   // ─── Pinch-to-zoom (мобиль) + Ctrl/⌘+колесо (десктоп) ──────────────────────
+  // hourH держим и в ref, чтобы нативные обработчики (non-passive) видели свежее
+  // значение без пересоздания листенера.
+  const hourHRef = useRef(hourH);
+  hourHRef.current = hourH;
   const pinch = useRef<{ startDist: number; startHourH: number; centerMin: number } | null>(null);
 
-  // Меняет высоту часа, сохраняя точку `anchorMin` под тем же экранным Y (зум вокруг точки).
-  const applyZoom = (nextHourH: number, anchorMin: number) => {
+  // Меняет высоту часа, удерживая точку `anchorMin` под тем же экранным Y (зум вокруг точки).
+  // `fromHourH` — высота на момент начала жеста (стабильна весь жест, без дрейфа от async-стейта).
+  const applyZoom = (nextHourH: number, anchorMin: number, fromHourH: number) => {
     const el = scrollRef.current;
     const clamped = Math.max(HOUR_H_MIN, Math.min(HOUR_H_MAX, nextHourH));
     if (!el) { setHourH(clamped); return; }
-    const anchorY = ((anchorMin - topOffset) / 60) * hourH;
-    const viewportOffset = anchorY - el.scrollTop; // где якорь был на экране
+    const anchorY = ((anchorMin - topOffset) / 60) * fromHourH;
+    const viewportOffset = anchorY - el.scrollTop;
     setHourH(clamped);
-    // после ререндера вернём якорь на то же место
     requestAnimationFrame(() => {
       const newAnchorY = ((anchorMin - topOffset) / 60) * clamped;
       el.scrollTop = newAnchorY - viewportOffset;
     });
   };
 
-  const dist2 = (t: React.TouchList) =>
-    Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-
-  const handleTouchStartZoom = (e: React.TouchEvent) => {
-    if (e.touches.length !== 2) return;
+  // Нативные non-passive обработчики тача для pinch — React-обработчики passive,
+  // их preventDefault браузер игнорирует (страница бы зумилась/скроллилась нативно).
+  useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top + el.scrollTop;
-    pinch.current = {
-      startDist: dist2(e.touches),
-      startHourH: hourH,
-      centerMin: topOffset + (midY / hourH) * 60,
+    const dist2 = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return;
+      const rect = el.getBoundingClientRect();
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top + el.scrollTop;
+      pinch.current = {
+        startDist: dist2(e.touches),
+        startHourH: hourHRef.current,
+        centerMin: topOffset + (midY / hourHRef.current) * 60,
+      };
     };
-  };
+    const onMove = (e: TouchEvent) => {
+      const p = pinch.current;
+      if (!p || e.touches.length !== 2) return;
+      e.preventDefault(); // глушим нативный pinch/scroll — теперь работает (non-passive)
+      const ratio = dist2(e.touches) / p.startDist;
+      applyZoom(p.startHourH * ratio, p.centerMin, p.startHourH);
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) pinch.current = null;
+    };
 
-  const handleTouchMoveZoom = (e: React.TouchEvent) => {
-    const p = pinch.current;
-    if (!p || e.touches.length !== 2) return;
-    e.preventDefault();
-    const ratio = dist2(e.touches) / p.startDist;
-    applyZoom(p.startHourH * ratio, p.centerMin);
-  };
-
-  const handleTouchEndZoom = (e: React.TouchEvent) => {
-    if (e.touches.length < 2) pinch.current = null;
-  };
+    el.addEventListener('touchstart', onStart, { passive: false });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topOffset]);
 
   const handleWheelZoom = (e: React.WheelEvent) => {
     if (!e.ctrlKey && !e.metaKey) return; // обычное колесо — скролл; с Ctrl/⌘ — зум
@@ -149,7 +167,7 @@ export default function DayTimeline({
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const anchorMin = topOffset + ((e.clientY - rect.top + el.scrollTop) / hourH) * 60;
-    applyZoom(hourH * (e.deltaY < 0 ? 1.1 : 0.9), anchorMin);
+    applyZoom(hourH * (e.deltaY < 0 ? 1.1 : 0.9), anchorMin, hourH);
   };
 
   // Тап по пустому полю → создать задачу, время округляем до ближайших 15 мин.
@@ -168,9 +186,6 @@ export default function DayTimeline({
       {/* Скроллируемая сетка времени */}
       <div
         ref={scrollRef}
-        onTouchStart={handleTouchStartZoom}
-        onTouchMove={handleTouchMoveZoom}
-        onTouchEnd={handleTouchEndZoom}
         onWheel={handleWheelZoom}
         style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', touchAction: 'pan-y' }}
       >
@@ -272,7 +287,9 @@ function TimelineBlock({
   const duration = endMin - startMin;
 
   // Смещение по Y во время перетаскивания (px). null — не тащим.
+  // dragDy — для рендера; dyRef — свежее значение для finishDrag (не зависит от async-стейта).
   const [dragDy, setDragDy] = useState<number | null>(null);
+  const dyRef = useRef(0);
   const drag = useRef<{
     startY: number;
     active: boolean;
@@ -323,6 +340,7 @@ function TimelineBlock({
     const startDrag = () => {
       if (!drag.current) return;
       drag.current.active = true;
+      dyRef.current = 0;
       setDragActive(true);
       setDragDy(0);
     };
@@ -351,7 +369,9 @@ function TimelineBlock({
       return;
     }
     e.preventDefault();
-    setDragDy(e.clientY - d.startY);
+    const dy = e.clientY - d.startY;
+    dyRef.current = dy;
+    setDragDy(dy);
   };
 
   const finishDrag = (commit: boolean) => {
@@ -361,8 +381,8 @@ function TimelineBlock({
     if (d.active) {
       // Был реальный drag → гасим следующий click (детали не открываем).
       suppressClick.current = true;
-      if (commit && dragDy !== null && onMove) {
-        const deltaMin = Math.round(dragDy / pxPerMin / SNAP_MIN) * SNAP_MIN;
+      if (commit && onMove) {
+        const deltaMin = Math.round(dyRef.current / pxPerMin / SNAP_MIN) * SNAP_MIN;
         let newStart = startMin + deltaMin;
         // Не выпускаем за границы видимого диапазона.
         newStart = Math.max(minStart, Math.min(maxEnd - duration, newStart));

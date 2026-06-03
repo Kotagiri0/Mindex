@@ -278,6 +278,9 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
         category: patch.category,
         // Если время правил человек руками — фиксируем источник как 'user'.
         timeSource: patch.timeChangedByUser ? 'user' : t.timeSource,
+        // Появилось реальное время — предложение агента больше не нужно.
+        suggestedTime: patch.time ? undefined : t.suggestedTime,
+        suggestedEndTime: patch.time ? undefined : t.suggestedEndTime,
       };
       db.saveTask(u);
       return u;

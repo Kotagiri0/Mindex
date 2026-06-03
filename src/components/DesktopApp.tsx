@@ -2190,6 +2190,9 @@ export default function DesktopApp({
         location: patch.location,
         category: patch.category,
         timeSource: patch.timeChangedByUser ? 'user' : t.timeSource,
+        // Появилось реальное время — предложение агента больше не нужно.
+        suggestedTime: patch.time ? undefined : t.suggestedTime,
+        suggestedEndTime: patch.time ? undefined : t.suggestedEndTime,
       };
       db.saveTask(u);
       return u;

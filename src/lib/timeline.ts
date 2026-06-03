@@ -138,6 +138,7 @@ export const layoutDay = (tasks: Task[], nowMin: number): PlacedTask[] => {
 
   // 1) Задачи, которым агент уже предложил время (suggestedTime) — ставим туда напрямую.
   //    Это "мысль" модели о лучшем слоте; алгоритм её не пересчитывает.
+  //    Их слоты идут в busy, чтобы fallback-задачи (п.2) не садились поверх них.
   const fallbackTasks: Task[] = [];
   for (const task of untimedTasks) {
     const s = parseTime(task.suggestedTime);
@@ -145,7 +146,7 @@ export const layoutDay = (tasks: Task[], nowMin: number): PlacedTask[] => {
     const e = parseTime(task.suggestedEndTime);
     const endMin = e !== null && e > s ? e : s + UNTIMED_SLOT_MIN;
     untimedRaw.push({ task, startMin: s, endMin, untimed: true });
-    // suggested-слоты не блокируют busy друг для друга — пусть стоят рядом, если совпали.
+    busy.push({ s, e: endMin });
   }
 
   // 2) Остальные — fallback-алгоритм: первое свободное дневное окно от текущего времени.
