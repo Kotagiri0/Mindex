@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
 import { Screen } from '../types';
-import { CalendarIcon, ChatIcon, ComposeIcon } from './icons';
+import { CalendarIcon, NoteIcon, ComposeIcon } from './icons';
 
 interface BottomNavProps {
   activeScreen: Screen;
@@ -65,7 +65,7 @@ export default function BottomNav({ activeScreen, onNavigate, onNewThread }: Bot
               <span style={{ position: 'relative', zIndex: 1, display: 'flex' }}>
                 {tab === 'dash'
                   ? <CalendarIcon size={21} color={isActive ? '#111' : '#bbb'} />
-                  : <ChatIcon size={21} color={isActive ? '#111' : '#bbb'} />
+                  : <NoteIcon size={21} color={isActive ? '#111' : '#bbb'} />
                 }
               </span>
             </motion.button>

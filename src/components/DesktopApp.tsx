@@ -2063,7 +2063,7 @@ function Sidebar({
 
         <NavBtn icon={<Sun size={17} strokeWidth={1.75} />} label="Сегодня" active={screen === 'dash' && !calActive} onClick={() => { setScreen('dash'); setCalActive(false); }} />
         <NavBtn icon={<MxIcon.CalendarIcon size={16} />} label="Календарь" active={screen === 'dash' && calActive} onClick={() => { setScreen('dash'); setCalActive(true); }} />
-        <NavBtn icon={<MxIcon.ChatIcon size={16} />} label="Твои мысли" active={screen === 'threads' || (screen === 'ai' && !newChatActive)} onClick={() => setScreen('threads')} />
+        <NavBtn icon={<MxIcon.NoteIcon size={16} />} label="Твои мысли" active={screen === 'threads' || (screen === 'ai' && !newChatActive)} onClick={() => setScreen('threads')} />
       </nav>
 
       {/* Chats section */}
