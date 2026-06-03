@@ -1,6 +1,6 @@
-import { CalendarDays, MessageCircle, PenLine, Plus } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Screen } from '../types';
+import { CalendarIcon, ChatIcon, ComposeIcon } from './icons';
 
 interface BottomNavProps {
   activeScreen: Screen;
@@ -64,8 +64,8 @@ export default function BottomNav({ activeScreen, onNavigate, onNewThread }: Bot
               )}
               <span style={{ position: 'relative', zIndex: 1, display: 'flex' }}>
                 {tab === 'dash'
-                  ? <CalendarDays size={22} strokeWidth={1.75} color={isActive ? '#111' : '#bbb'} />
-                  : <MessageCircle size={22} strokeWidth={1.75} color={isActive ? '#111' : '#bbb'} />
+                  ? <CalendarIcon size={21} color={isActive ? '#111' : '#bbb'} />
+                  : <ChatIcon size={21} color={isActive ? '#111' : '#bbb'} />
                 }
               </span>
             </motion.button>
@@ -83,13 +83,11 @@ export default function BottomNav({ activeScreen, onNavigate, onNewThread }: Bot
           border: 'none',
           cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          gap: 2,
           flexShrink: 0,
           boxShadow: '0 2px 12px rgba(0,0,0,0.18)',
         }}
       >
-        <PenLine size={17} color="#fff" strokeWidth={1.75} />
-        <Plus size={12} color="#fff" strokeWidth={2.5} />
+        <ComposeIcon size={22} color="#fff" />
       </motion.button>
     </div>
   );

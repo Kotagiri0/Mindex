@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Settings, ChevronLeft, ChevronRight, Plus, ArrowUp, LayoutList, Bot } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, ArrowUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Task, Screen } from '../types';
 import TaskItem from './TaskItem';
 import EditTaskModal, { TaskEditPatch } from './EditTaskModal';
 import DayTimeline from './DayTimeline';
 import TimelineCreatePopover from './TimelineCreatePopover';
+import { CalendarGridIcon, TodoIcon, SettingsIcon } from './icons';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
 
@@ -369,8 +370,9 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px 8px' }}>
-        {/* Левая иконка — переключатель список ⇄ таймлайн (заглушка lucide).
-            В режиме списка показываем «робота» (вход в календарь), в таймлайне — иконку списка. */}
+        {/* Левая иконка — переключатель список ⇄ таймлайн.
+            Открыт список → иконка календаря (перейти в таймлайн).
+            Открыт таймлайн → иконка to-do (вернуть список). */}
         <motion.button
           whileTap={{ scale: 0.88 }}
           onClick={toggleView}
@@ -378,8 +380,8 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
           style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
         >
           {view === 'list'
-            ? <Bot size={23} strokeWidth={1.75} color="rgba(34,34,36,0.6)" />
-            : <LayoutList size={22} strokeWidth={1.75} color="rgba(34,34,36,0.6)" />}
+            ? <CalendarGridIcon size={22} color="rgba(34,34,36,0.6)" />
+            : <TodoIcon size={22} color="rgba(34,34,36,0.6)" />}
         </motion.button>
 
         {/* Заголовок месяца — тап открывает мини-календарь для прыжка по датам */}
@@ -401,7 +403,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
           onClick={() => onNavigate('settings')}
           style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
         >
-          <Settings size={22} strokeWidth={1.75} color="rgba(34,34,36,0.6)" />
+          <SettingsIcon size={22} color="rgba(34,34,36,0.6)" />
         </motion.button>
 
       </div>

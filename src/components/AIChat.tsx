@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, Settings, Star, ArrowUp, MessageCircle, StickyNote, Mic, Loader, Copy, MoreHorizontal, X, BookOpen } from 'lucide-react';
+import { ChevronLeft, Star, ArrowUp, Mic, Loader, Copy, MoreHorizontal, X, BookOpen } from 'lucide-react';
+import { ChatIcon, NoteIcon, SettingsIcon } from './icons';
 import { MysliThinking } from './MysliThinking';
 import NoteView from './NoteView';
 import TelegramConnectBlock from './TelegramConnectBlock';
@@ -804,14 +805,14 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             onClick={() => setNoteMode(false)}
             style={{ position: 'relative', zIndex: 1, background: 'transparent' }}
           >
-            <MessageCircle size={20} strokeWidth={1.75} color={!noteMode ? '#222224' : 'rgba(34,34,36,0.3)'} />
+            <ChatIcon size={19} color={!noteMode ? '#222224' : 'rgba(34,34,36,0.3)'} />
           </button>
           <button
             className="w-10 h-10 rounded-full flex items-center justify-center"
             onClick={() => setNoteMode(true)}
             style={{ position: 'relative', zIndex: 1, background: 'transparent' }}
           >
-            <StickyNote size={20} strokeWidth={1.75} color={noteMode ? '#222224' : 'rgba(34,34,36,0.3)'} />
+            <NoteIcon size={19} color={noteMode ? '#222224' : 'rgba(34,34,36,0.3)'} />
           </button>
         </div>
 
@@ -820,7 +821,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           onClick={() => onNavigate('settings')}
           className="w-11 h-11 flex items-center justify-center"
         >
-          <Settings size={22} strokeWidth={1.75} color="rgba(34,34,36,0.5)" />
+          <SettingsIcon size={22} color="rgba(34,34,36,0.5)" />
         </motion.button>
       </div>
 

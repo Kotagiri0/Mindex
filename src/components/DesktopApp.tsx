@@ -13,6 +13,7 @@ import TaskDetailPanel, { TaskCreatePatch } from './TaskDetailPanel';
 import { TaskEditPatch } from './EditTaskModal';
 import DayTimeline from './DayTimeline';
 import TimelineCreatePopover from './TimelineCreatePopover';
+import * as MxIcon from './icons';
 import SettingsScreen from './Settings';
 import NoteView from './NoteView';
 import NoteEditor from './NoteEditor';
@@ -2061,8 +2062,8 @@ function Sidebar({
         <NavBtn icon={<Plus size={17} strokeWidth={1.75} />} label="Новый чат" active={newChatActive} onClick={startNewThread} />
 
         <NavBtn icon={<Sun size={17} strokeWidth={1.75} />} label="Сегодня" active={screen === 'dash' && !calActive} onClick={() => { setScreen('dash'); setCalActive(false); }} />
-        <NavBtn icon={<Calendar size={17} strokeWidth={1.75} />} label="Календарь" active={screen === 'dash' && calActive} onClick={() => { setScreen('dash'); setCalActive(true); }} />
-        <NavBtn icon={<MessageCircle size={17} strokeWidth={1.75} />} label="Твои мысли" active={screen === 'threads' || (screen === 'ai' && !newChatActive)} onClick={() => setScreen('threads')} />
+        <NavBtn icon={<MxIcon.CalendarIcon size={16} />} label="Календарь" active={screen === 'dash' && calActive} onClick={() => { setScreen('dash'); setCalActive(true); }} />
+        <NavBtn icon={<MxIcon.ChatIcon size={16} />} label="Твои мысли" active={screen === 'threads' || (screen === 'ai' && !newChatActive)} onClick={() => setScreen('threads')} />
       </nav>
 
       {/* Chats section */}
@@ -2127,7 +2128,7 @@ function Sidebar({
 
       {/* Settings */}
       <div style={{ padding: '10px 8px 18px' }}>
-        <NavBtn icon={<SettingsIcon size={17} strokeWidth={1.75} />} label="Настройки" active={screen === 'settings'} onClick={() => setScreen('settings')} />
+        <NavBtn icon={<MxIcon.SettingsIcon size={16} />} label="Настройки" active={screen === 'settings'} onClick={() => setScreen('settings')} />
       </div>
     </motion.div>
   );
