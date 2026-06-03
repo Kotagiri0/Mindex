@@ -6,8 +6,7 @@ import {
   PlacedTask,
   formatTime,
   parseTime,
-  splitDayTasks,
-  visibleHourRange,
+  layoutDay,
 } from '../lib/timeline';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
@@ -20,6 +19,8 @@ const GUTTER = 48;
 const RIGHT_PAD = 16;
 /** Зазор между колонками наложенных блоков. */
 const COL_GAP = 6;
+/** Радиус скругления блоков (на ~25% больше прежних 14). */
+const BLOCK_RADIUS = 18;
 
 interface DayTimelineProps {
   date: string;
@@ -50,17 +51,6 @@ export default function DayTimeline({
   onUntimedClick,
   onTaskMove,
 }: DayTimelineProps) {
-  const { timed, untimed } = useMemo(() => splitDayTasks(tasks), [tasks]);
-  const { startHour, endHour } = useMemo(() => visibleHourRange(timed), [timed]);
-
-  const hours = useMemo(
-    () => Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i),
-    [startHour, endHour]
-  );
-
-  const topOffset = startHour * 60;
-  const gridHeight = (endHour - startHour) * HOUR_H + HOUR_H; // +1 час хвоста снизу
-
   // Текущее время — обновляем раз в минуту для движения красной линии.
   const [now, setNow] = useState(nowMinutes());
   useEffect(() => {
@@ -71,6 +61,19 @@ export default function DayTimeline({
   const todayStr = new Date().toISOString().split('T')[0];
   const isToday = date === todayStr;
 
+  // Точка отсчёта для авто-раскладки задач без времени: текущее время (сегодня)
+  // или 9:00 (прошлые/будущие дни — нет понятия «сейчас»).
+  const placeFrom = isToday ? now : 9 * 60;
+  const placed = useMemo(() => layoutDay(tasks, placeFrom), [tasks, placeFrom]);
+
+  // Календарь честный — все 24 часа.
+  const startHour = 0;
+  const endHour = 24;
+  const hours = useMemo(() => Array.from({ length: 24 }, (_, i) => i), []);
+
+  const topOffset = startHour * 60;
+  const gridHeight = (endHour - startHour) * HOUR_H;
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // При смене дня — прокрутить к текущему времени (сегодня) или к первому блоку.
@@ -79,12 +82,12 @@ export default function DayTimeline({
     if (!el) return;
     let target: number;
     if (isToday) target = now;
-    else if (timed.length) target = timed[0].startMin;
+    else if (placed.length) target = Math.min(...placed.map((p) => p.startMin));
     else target = 9 * 60;
     const y = ((target - topOffset) / 60) * HOUR_H - 120;
     el.scrollTo({ top: Math.max(0, y), behavior: 'auto' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date, startHour]);
+  }, [date]);
 
   const minToY = (min: number) => ((min - topOffset) / 60) * HOUR_H;
 
@@ -101,44 +104,6 @@ export default function DayTimeline({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      {/* Чипы задач без времени — вторичный контент, в строку сверху */}
-      {untimed.length > 0 && (
-        <div
-          style={{
-            flexShrink: 0,
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: 8,
-            padding: '4px 20px 12px',
-          }}
-        >
-          {untimed.map((t) => (
-            <motion.button
-              key={t.id}
-              whileTap={{ scale: 0.96 }}
-              onClick={() => onUntimedClick(t)}
-              style={{
-                textAlign: 'left',
-                background: '#f0f0f0',
-                border: 'none',
-                borderRadius: 14,
-                padding: '11px 16px',
-                fontFamily: M,
-                fontSize: 14,
-                color: t.done ? 'rgba(34,34,36,0.4)' : '#222224',
-                textDecoration: t.done ? 'line-through' : 'none',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                cursor: 'pointer',
-              }}
-            >
-              {t.name}
-            </motion.button>
-          ))}
-        </div>
-      )}
-
       {/* Скроллируемая сетка времени */}
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', touchAction: 'pan-y' }}>
         <div
@@ -176,37 +141,37 @@ export default function DayTimeline({
             );
           })}
 
-          {/* Блоки задач */}
-          {timed.map((p) => (
+          {/* Блоки задач (со временем + прикинутые агентом без времени) */}
+          {placed.map((p) => (
             <TimelineBlock
               key={p.task.id}
               placed={p}
               top={minToY(p.startMin)}
-              height={Math.max(34, ((p.endMin - p.startMin) / 60) * HOUR_H - 4)}
+              height={Math.max(p.untimed ? 30 : 34, ((p.endMin - p.startMin) / 60) * HOUR_H - 4)}
               hourH={HOUR_H}
               minStart={topOffset}
               maxEnd={endHour * 60}
-              onClick={() => onTaskClick(p.task)}
-              onMove={onTaskMove}
+              onClick={() => (p.untimed ? onUntimedClick(p.task) : onTaskClick(p.task))}
+              onMove={p.untimed ? undefined : onTaskMove}
             />
           ))}
 
-          {/* Красная линия текущего времени (только сегодня) */}
-          {isToday && now >= topOffset && now <= endHour * 60 && (
+          {/* Едущая красная линия текущего времени (только сегодня) */}
+          {isToday && (
             <div
               style={{
                 position: 'absolute',
-                left: GUTTER - 6,
+                left: GUTTER - 7,
                 right: 0,
                 top: minToY(now),
                 display: 'flex',
                 alignItems: 'center',
                 pointerEvents: 'none',
-                zIndex: 5,
+                zIndex: 10,
               }}
             >
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#FF3B30', flexShrink: 0 }} />
-              <span style={{ flex: 1, height: 1.5, background: '#FF3B30' }} />
+              <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#FF3B30', flexShrink: 0 }} />
+              <span style={{ flex: 1, height: 2, background: '#FF3B30' }} />
             </div>
           )}
         </div>
@@ -234,7 +199,7 @@ function TimelineBlock({
   onClick: () => void;
   onMove?: (taskId: string, time: string, endTime: string) => void;
 }) {
-  const { task, startMin, endMin, col, cols } = placed;
+  const { task, startMin, endMin, col, cols, untimed } = placed;
   const colors = categoryColors(task.category);
   const duration = endMin - startMin;
 
@@ -262,8 +227,9 @@ function TimelineBlock({
       ? `${task.time} - ${task.endTime}`
       : task.time;
 
-  const compact = height < 52;
-  const draggable = !!onMove;
+  // Задача без времени — тонкий серый чип: одна строка, без времени, без перетаскивания.
+  const compact = untimed || height < 52;
+  const draggable = !!onMove && !untimed;
 
   const beginDrag = (clientY: number, pointerId: number, el: HTMLElement, immediate: boolean) => {
     const startDrag = () => {
@@ -343,13 +309,14 @@ function TimelineBlock({
         width: widthCalc,
         height,
         transform: isDragging ? `translateY(${dragDy}px)` : undefined,
-        background: colors.bg,
-        border: `1px solid ${colors.border}`,
-        borderRadius: 14,
-        padding: compact ? '6px 12px' : '8px 14px',
+        background: untimed ? '#EFEFF0' : colors.bg,
+        border: 'none',
+        borderRadius: untimed ? 12 : BLOCK_RADIUS,
+        padding: untimed ? '6px 14px' : (compact ? '6px 14px' : '9px 16px'),
         textAlign: 'left',
         display: 'flex',
         flexDirection: 'column',
+        justifyContent: 'center',
         gap: 2,
         overflow: 'hidden',
         cursor: draggable ? 'grab' : 'pointer',
@@ -361,7 +328,7 @@ function TimelineBlock({
         transition: isDragging ? 'none' : 'box-shadow 0.15s',
       }}
     >
-      {!compact && (
+      {!compact && !untimed && (
         <span style={{ fontFamily: M, fontSize: 11, color: colors.textMuted, flexShrink: 0 }}>
           {isDragging
             ? formatTime(Math.max(minStart, Math.min(maxEnd - duration, startMin + Math.round((dragDy ?? 0) / pxPerMin / SNAP_MIN) * SNAP_MIN)))
@@ -371,13 +338,15 @@ function TimelineBlock({
       <span
         style={{
           fontFamily: M,
-          fontSize: 15,
-          fontWeight: 500,
-          color: colors.text,
+          fontSize: untimed ? 13 : 15,
+          fontWeight: untimed ? 400 : 500,
+          color: untimed ? 'rgba(34,34,36,0.7)' : colors.text,
           lineHeight: 1.2,
           textDecoration: task.done ? 'line-through' : 'none',
           overflow: 'hidden',
-          display: '-webkit-box',
+          whiteSpace: 'nowrap',
+          textOverflow: 'ellipsis',
+          display: untimed ? 'block' : '-webkit-box',
           WebkitLineClamp: compact ? 1 : 2,
           WebkitBoxOrient: 'vertical',
         }}
