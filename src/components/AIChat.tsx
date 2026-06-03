@@ -261,7 +261,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             const filtered = date ? tasks.filter(t => t.date === date) : tasks;
             result = filtered.length > 0 ? filtered : 'Задач не найдено.';
           } else if (name === 'add_task') {
-            const { name: taskName, time, endTime, date, category, description, location } = args;
+            const { name: taskName, time, endTime, suggestedTime, suggestedEndTime, date, category, description, location } = args;
             const newTask: Task = {
               id: uuid(),
               name: taskName,
@@ -273,6 +273,9 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
               category: category || 'none',
               // Время предложено агентом → 'agent'. Без времени — не ставим.
               timeSource: time ? 'agent' : undefined,
+              // Гибкая задача без жёсткого времени — рекомендованный агентом слот.
+              suggestedTime: suggestedTime || undefined,
+              suggestedEndTime: suggestedEndTime || undefined,
               description: description || undefined,
               location: location || undefined,
             };

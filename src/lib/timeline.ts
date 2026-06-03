@@ -6,6 +6,10 @@ export const DEFAULT_DURATION_MIN = 60;
 /** Длительность слота, который агент прикидывает для задачи без времени (тонкий чип). */
 export const UNTIMED_SLOT_MIN = 30;
 
+/** Рабочее окно дня для авто-раскладки задач без времени (не ставим ночью). */
+export const WORK_START_MIN = 8 * 60;   // 08:00
+export const WORK_END_MIN = 23 * 60;    // 23:00
+
 /** "HH:MM" → минуты от полуночи. Невалидно → null. */
 export const parseTime = (value?: string): number | null => {
   if (!value) return null;
@@ -85,20 +89,22 @@ const assignColumns = (raw: RawPlaced[]): PlacedTask[] => {
  * Подбирает агентом (в коде, скрыто от пользователя) слот для задачи без времени
  * в свободном окне дня. НЕ меняет данные задачи — это только визуальное предложение.
  *
- * Ищем первое окно длиной UNTIMED_SLOT_MIN, начиная с `fromMin`, которое не пересекает
- * занятые интервалы. `busy` — уже занятые [start,end) (включая ранее размещённые untimed).
+ * Ищем первое окно длиной UNTIMED_SLOT_MIN в рабочем окне [WORK_START..WORK_END],
+ * начиная с max(fromMin, WORK_START), которое не пересекает занятые интервалы.
+ * Если день забит до конца рабочего окна — складываем рядом в дневные слоты
+ * (не уходим в ночь): возвращаем последнюю позицию внутри окна.
  */
-const findFreeSlot = (busy: { s: number; e: number }[], fromMin: number, dayEnd: number): number => {
+const findFreeSlot = (busy: { s: number; e: number }[], fromMin: number): number => {
   const sorted = [...busy].sort((a, b) => a.s - b.s);
-  let cursor = Math.max(0, fromMin);
+  let cursor = Math.max(WORK_START_MIN, fromMin);
   for (const b of sorted) {
     if (b.e <= cursor) continue;
     if (b.s - cursor >= UNTIMED_SLOT_MIN) return cursor; // влезает перед этим занятым
     cursor = Math.max(cursor, b.e);
   }
-  // После всех занятых — если до конца дня влезает, ставим тут; иначе впритык к концу.
-  if (cursor + UNTIMED_SLOT_MIN <= dayEnd) return cursor;
-  return Math.max(0, dayEnd - UNTIMED_SLOT_MIN);
+  // Не уходим за рабочее окно — при переполнении клеим к последнему дневному слоту.
+  if (cursor + UNTIMED_SLOT_MIN <= WORK_END_MIN) return cursor;
+  return Math.max(WORK_START_MIN, WORK_END_MIN - UNTIMED_SLOT_MIN);
 };
 
 /**
@@ -127,25 +133,37 @@ export const layoutDay = (tasks: Task[], nowMin: number): PlacedTask[] => {
     timedRaw.push({ task, startMin, endMin: Math.max(endMin, startMin + 15) });
   }
 
-  // Агент кладёт untimed в свободные окна между занятыми временем блоками.
-  // Несколько untimed подряд садятся в одно окно (по 2 в ряд) — колонки разведёт
-  // assignColumns. В busy для поиска добавляем только timed-блоки, чтобы untimed
-  // могли встать рядом друг с другом в том же окне.
   const busy = timedRaw.map((t) => ({ s: t.startMin, e: t.endMin }));
   const untimedRaw: RawPlaced[] = [];
-  const from = Math.max(0, Math.min(nowMin, 24 * 60 - UNTIMED_SLOT_MIN));
-  const PER_ROW = 2; // сколько untimed-чипов умещаем в одну строку окна
-  let slotStart = findFreeSlot(busy, from, 24 * 60);
-  let inRow = 0;
+
+  // 1) Задачи, которым агент уже предложил время (suggestedTime) — ставим туда напрямую.
+  //    Это "мысль" модели о лучшем слоте; алгоритм её не пересчитывает.
+  const fallbackTasks: Task[] = [];
   for (const task of untimedTasks) {
-    if (inRow >= PER_ROW) {
-      // строка заполнена — ищем следующее свободное окно ниже неё
-      busy.push({ s: slotStart, e: slotStart + UNTIMED_SLOT_MIN });
-      slotStart = findFreeSlot(busy, slotStart + UNTIMED_SLOT_MIN, 24 * 60);
-      inRow = 0;
+    const s = parseTime(task.suggestedTime);
+    if (s === null) { fallbackTasks.push(task); continue; }
+    const e = parseTime(task.suggestedEndTime);
+    const endMin = e !== null && e > s ? e : s + UNTIMED_SLOT_MIN;
+    untimedRaw.push({ task, startMin: s, endMin, untimed: true });
+    // suggested-слоты не блокируют busy друг для друга — пусть стоят рядом, если совпали.
+  }
+
+  // 2) Остальные — fallback-алгоритм: первое свободное дневное окно от текущего времени.
+  //    Несколько подряд садятся в одно окно (по 2 в ряд), колонки разведёт assignColumns.
+  const from = Math.max(WORK_START_MIN, Math.min(nowMin, WORK_END_MIN - UNTIMED_SLOT_MIN));
+  const PER_ROW = 2;
+  if (fallbackTasks.length) {
+    let slotStart = findFreeSlot(busy, from);
+    let inRow = 0;
+    for (const task of fallbackTasks) {
+      if (inRow >= PER_ROW) {
+        busy.push({ s: slotStart, e: slotStart + UNTIMED_SLOT_MIN });
+        slotStart = findFreeSlot(busy, slotStart + UNTIMED_SLOT_MIN);
+        inRow = 0;
+      }
+      untimedRaw.push({ task, startMin: slotStart, endMin: slotStart + UNTIMED_SLOT_MIN, untimed: true });
+      inRow++;
     }
-    untimedRaw.push({ task, startMin: slotStart, endMin: slotStart + UNTIMED_SLOT_MIN, untimed: true });
-    inRow++;
   }
 
   return assignColumns([...timedRaw, ...untimedRaw]);

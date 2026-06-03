@@ -737,6 +737,9 @@ function ChatView({
               category: args.category || 'none',
               // Время предложено агентом → 'agent' (можно пересчитывать). Без времени — не ставим.
               timeSource: args.time ? 'agent' : undefined,
+              // Гибкая задача без жёсткого времени — рекомендованный агентом слот.
+              suggestedTime: args.suggestedTime || undefined,
+              suggestedEndTime: args.suggestedEndTime || undefined,
             };
             setTasks(prev => [...(Array.isArray(prev) ? prev : []), newTask]);
             db.saveTask(newTask);

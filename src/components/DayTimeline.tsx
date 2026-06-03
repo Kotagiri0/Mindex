@@ -11,8 +11,10 @@ import {
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 
-/** Высота одного часа в px. Чем больше — тем «воздушнее» сетка. */
-const HOUR_H = 88;
+/** Высота одного часа в px по умолчанию. Меняется щипком (pinch-zoom). */
+const HOUR_H_DEFAULT = 88;
+const HOUR_H_MIN = 40;   // плотно — обзор всего дня
+const HOUR_H_MAX = 160;  // воздушно — детально
 /** Левый отступ под колонку часов. */
 const GUTTER = 48;
 /** Внутренний горизонтальный отступ блоков от правого края. */
@@ -51,6 +53,9 @@ export default function DayTimeline({
   onUntimedClick,
   onTaskMove,
 }: DayTimelineProps) {
+  // Высота часа — управляется щипком/Ctrl+колесом. Зум вокруг центра вьюпорта.
+  const [hourH, setHourH] = useState(HOUR_H_DEFAULT);
+
   // Текущее время — обновляем раз в минуту для движения красной линии.
   const [now, setNow] = useState(nowMinutes());
   useEffect(() => {
@@ -72,7 +77,7 @@ export default function DayTimeline({
   const hours = useMemo(() => Array.from({ length: 24 }, (_, i) => i), []);
 
   const topOffset = startHour * 60;
-  const gridHeight = (endHour - startHour) * HOUR_H;
+  const gridHeight = (endHour - startHour) * hourH;
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -84,12 +89,68 @@ export default function DayTimeline({
     if (isToday) target = now;
     else if (placed.length) target = Math.min(...placed.map((p) => p.startMin));
     else target = 9 * 60;
-    const y = ((target - topOffset) / 60) * HOUR_H - 120;
+    const y = ((target - topOffset) / 60) * hourH - 120;
     el.scrollTo({ top: Math.max(0, y), behavior: 'auto' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
-  const minToY = (min: number) => ((min - topOffset) / 60) * HOUR_H;
+  const minToY = (min: number) => ((min - topOffset) / 60) * hourH;
+
+  // ─── Pinch-to-zoom (мобиль) + Ctrl/⌘+колесо (десктоп) ──────────────────────
+  const pinch = useRef<{ startDist: number; startHourH: number; centerMin: number } | null>(null);
+
+  // Меняет высоту часа, сохраняя точку `anchorMin` под тем же экранным Y (зум вокруг точки).
+  const applyZoom = (nextHourH: number, anchorMin: number) => {
+    const el = scrollRef.current;
+    const clamped = Math.max(HOUR_H_MIN, Math.min(HOUR_H_MAX, nextHourH));
+    if (!el) { setHourH(clamped); return; }
+    const anchorY = ((anchorMin - topOffset) / 60) * hourH;
+    const viewportOffset = anchorY - el.scrollTop; // где якорь был на экране
+    setHourH(clamped);
+    // после ререндера вернём якорь на то же место
+    requestAnimationFrame(() => {
+      const newAnchorY = ((anchorMin - topOffset) / 60) * clamped;
+      el.scrollTop = newAnchorY - viewportOffset;
+    });
+  };
+
+  const dist2 = (t: React.TouchList) =>
+    Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+
+  const handleTouchStartZoom = (e: React.TouchEvent) => {
+    if (e.touches.length !== 2) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top + el.scrollTop;
+    pinch.current = {
+      startDist: dist2(e.touches),
+      startHourH: hourH,
+      centerMin: topOffset + (midY / hourH) * 60,
+    };
+  };
+
+  const handleTouchMoveZoom = (e: React.TouchEvent) => {
+    const p = pinch.current;
+    if (!p || e.touches.length !== 2) return;
+    e.preventDefault();
+    const ratio = dist2(e.touches) / p.startDist;
+    applyZoom(p.startHourH * ratio, p.centerMin);
+  };
+
+  const handleTouchEndZoom = (e: React.TouchEvent) => {
+    if (e.touches.length < 2) pinch.current = null;
+  };
+
+  const handleWheelZoom = (e: React.WheelEvent) => {
+    if (!e.ctrlKey && !e.metaKey) return; // обычное колесо — скролл; с Ctrl/⌘ — зум
+    e.preventDefault();
+    const el = scrollRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const anchorMin = topOffset + ((e.clientY - rect.top + el.scrollTop) / hourH) * 60;
+    applyZoom(hourH * (e.deltaY < 0 ? 1.1 : 0.9), anchorMin);
+  };
 
   // Тап по пустому полю → создать задачу, время округляем до ближайших 15 мин.
   // Клик, исходящий из блока (в т.ч. хвост перетаскивания), отсекается closest().
@@ -97,7 +158,7 @@ export default function DayTimeline({
     if ((e.target as HTMLElement).closest('[data-task-block]')) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const y = e.clientY - rect.top;
-    const min = topOffset + (y / HOUR_H) * 60;
+    const min = topOffset + (y / hourH) * 60;
     const rounded = Math.round(min / 15) * 15;
     onCreateAt(formatTime(rounded));
   };
@@ -105,14 +166,21 @@ export default function DayTimeline({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       {/* Скроллируемая сетка времени */}
-      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', touchAction: 'pan-y' }}>
+      <div
+        ref={scrollRef}
+        onTouchStart={handleTouchStartZoom}
+        onTouchMove={handleTouchMoveZoom}
+        onTouchEnd={handleTouchEndZoom}
+        onWheel={handleWheelZoom}
+        style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', touchAction: 'pan-y' }}
+      >
         <div
           onClick={handleGridTap}
           style={{ position: 'relative', height: gridHeight, margin: '0 20px 120px' }}
         >
           {/* Часовые линии и подписи */}
           {hours.map((h) => {
-            const y = (h * 60 - topOffset) / 60 * HOUR_H;
+            const y = (h * 60 - topOffset) / 60 * hourH;
             return (
               <div key={h} style={{ position: 'absolute', left: 0, right: 0, top: y }}>
                 <div
@@ -147,8 +215,8 @@ export default function DayTimeline({
               key={p.task.id}
               placed={p}
               top={minToY(p.startMin)}
-              height={Math.max(p.untimed ? 30 : 34, ((p.endMin - p.startMin) / 60) * HOUR_H - 4)}
-              hourH={HOUR_H}
+              height={Math.max(p.untimed ? 30 : 34, ((p.endMin - p.startMin) / 60) * hourH - 4)}
+              hourH={hourH}
               minStart={topOffset}
               maxEnd={endHour * 60}
               onClick={() => (p.untimed ? onUntimedClick(p.task) : onTaskClick(p.task))}
