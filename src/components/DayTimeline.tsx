@@ -281,6 +281,19 @@ function TimelineBlock({
   } | null>(null);
   // Гасит click, который браузер генерит сразу после pointerup завершившегося drag.
   const suppressClick = useRef(false);
+  const blockRef = useRef<HTMLDivElement>(null);
+
+  // Нативный non-passive touchmove: React-обработчики passive, их preventDefault
+  // браузер игнорирует. Тут глушим скролл, пока активен drag по блоку.
+  useEffect(() => {
+    const el = blockRef.current;
+    if (!el) return;
+    const onTouchMove = (e: TouchEvent) => {
+      if (drag.current?.active) e.preventDefault();
+    };
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => el.removeEventListener('touchmove', onTouchMove);
+  }, []);
 
   const pxPerMin = hourH / 60;
 
@@ -299,15 +312,23 @@ function TimelineBlock({
   const compact = untimed || height < 52;
   const draggable = !!onMove && !untimed;
 
+  // Активен ли drag прямо сейчас (для переключения touch-action: пока не тащим — pan-y
+  // отдаёт вертикальный скролл; как только long-press сработал — none, чтобы браузер
+  // не перехватывал движение пальца под скролл).
+  const [dragActive, setDragActive] = useState(false);
+
   const beginDrag = (clientY: number, pointerId: number, el: HTMLElement, immediate: boolean) => {
+    // Захватываем pointer сразу — иначе на тач браузер заберёт события под скролл.
+    try { el.setPointerCapture(pointerId); } catch {}
     const startDrag = () => {
-      drag.current!.active = true;
+      if (!drag.current) return;
+      drag.current.active = true;
+      setDragActive(true);
       setDragDy(0);
-      try { el.setPointerCapture(pointerId); } catch {}
     };
     drag.current = { startY: clientY, active: false, longPressId: null, pointerId };
     if (immediate) startDrag();
-    else drag.current.longPressId = setTimeout(startDrag, 220); // long-press на тач
+    else drag.current.longPressId = setTimeout(startDrag, 200); // long-press на тач
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -319,10 +340,12 @@ function TimelineBlock({
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     if (!d) return;
-    // Палец сдвинулся до срабатывания long-press → это скролл, отменяем drag.
+    // До срабатывания long-press: заметное вертикальное движение = пользователь скроллит,
+    // отменяем подготовку drag и отпускаем pointer обратно скроллу.
     if (!d.active) {
-      if (Math.abs(e.clientY - d.startY) > 8 && d.longPressId) {
+      if (Math.abs(e.clientY - d.startY) > 10 && d.longPressId) {
         clearTimeout(d.longPressId);
+        try { e.currentTarget.releasePointerCapture(d.pointerId); } catch {}
         drag.current = null;
       }
       return;
@@ -350,6 +373,7 @@ function TimelineBlock({
     }
     drag.current = null;
     setDragDy(null);
+    setDragActive(false);
   };
 
   const handleClick = () => {
@@ -361,13 +385,14 @@ function TimelineBlock({
 
   return (
     <motion.div
+      ref={blockRef}
       data-task-block
       role="button"
       tabIndex={0}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={() => finishDrag(true)}
-      onPointerCancel={() => finishDrag(false)}
+      onPointerCancel={() => finishDrag(true)}
       onClick={handleClick}
       whileTap={!draggable ? { scale: 0.985 } : undefined}
       style={{
@@ -391,7 +416,9 @@ function TimelineBlock({
         opacity: task.done ? 0.55 : 1,
         boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,0.18)' : 'none',
         zIndex: isDragging ? 20 : 1,
-        touchAction: 'pan-y',
+        // Пока не тащим — pan-y отдаёт вертикальный скролл; при активном drag — none,
+        // чтобы браузер не перехватывал движение пальца под прокрутку.
+        touchAction: dragActive ? 'none' : 'pan-y',
         userSelect: 'none',
         transition: isDragging ? 'none' : 'box-shadow 0.15s',
       }}
