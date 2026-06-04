@@ -398,8 +398,8 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
               {weekDays[3].getFullYear()}
             </div>
           )}
-          <div style={{ fontFamily: F, fontSize: 22, color: '#222224', lineHeight: 1.1, textTransform: 'uppercase' }}>
-            {MONTHS[weekDays[3].getMonth()]}
+          <div style={{ fontFamily: F, fontSize: 22, color: '#222224', lineHeight: 1.1 }}>
+            {MONTHS[weekDays[3].getMonth()].toUpperCase()}
           </div>
         </motion.button>
 
@@ -562,7 +562,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
             transition={{ duration: 0.2 }}
             style={{
               position: 'fixed',
-              bottom: 'max(88px, calc(env(safe-area-inset-bottom, 0px) + 88px))',
+              bottom: 'max(140px, calc(env(safe-area-inset-bottom, 0px) + 140px))',
               left: 0, right: 0,
               display: 'flex', justifyContent: 'center',
               zIndex: 50,
