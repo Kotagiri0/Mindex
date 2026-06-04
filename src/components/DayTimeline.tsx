@@ -185,7 +185,9 @@ export default function DayTimeline({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, position: 'relative' }}>
+      {/* Градиент сверху — контент плавно уходит под край */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 48, background: 'linear-gradient(to bottom, #ffffff, transparent)', zIndex: 10, pointerEvents: 'none' }} />
       {/* Скроллируемая сетка времени */}
       <div
         ref={scrollRef}
