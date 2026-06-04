@@ -566,7 +566,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
               bottom: 'max(110px, calc(env(safe-area-inset-bottom, 0px) + 110px))',
               left: 0, right: 0,
               display: 'flex', justifyContent: 'center',
-              zIndex: 50,
+              zIndex: 101,
               pointerEvents: 'none',
             }}
           >
