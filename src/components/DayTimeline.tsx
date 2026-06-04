@@ -56,14 +56,17 @@ export default function DayTimeline({
   // Высота часа — управляется щипком/Ctrl+колесом. Зум вокруг центра вьюпорта.
   const [hourH, setHourH] = useState(HOUR_H_DEFAULT);
 
-  // Текущее время — обновляем раз в минуту для движения красной линии.
+  // Текущее время и дата — обновляем раз в минуту для красной линии и isToday.
   const [now, setNow] = useState(nowMinutes());
+  const [todayStr, setTodayStr] = useState(() => new Date().toISOString().split('T')[0]);
   useEffect(() => {
-    const id = setInterval(() => setNow(nowMinutes()), 60_000);
+    const id = setInterval(() => {
+      setNow(nowMinutes());
+      setTodayStr(new Date().toISOString().split('T')[0]);
+    }, 60_000);
     return () => clearInterval(id);
   }, []);
 
-  const todayStr = new Date().toISOString().split('T')[0];
   const isToday = date === todayStr;
 
   // Точка отсчёта для авто-раскладки задач без времени: текущее время (сегодня)
