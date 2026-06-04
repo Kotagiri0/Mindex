@@ -58,11 +58,12 @@ export default function DayTimeline({
 
   // Текущее время и дата — обновляем раз в минуту для красной линии и isToday.
   const [now, setNow] = useState(nowMinutes());
-  const [todayStr, setTodayStr] = useState(() => new Date().toISOString().split('T')[0]);
+  const localDateStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+  const [todayStr, setTodayStr] = useState(localDateStr);
   useEffect(() => {
     const id = setInterval(() => {
       setNow(nowMinutes());
-      setTodayStr(new Date().toISOString().split('T')[0]);
+      setTodayStr(localDateStr());
     }, 60_000);
     return () => clearInterval(id);
   }, []);

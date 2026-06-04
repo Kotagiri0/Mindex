@@ -318,13 +318,13 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
       setWeekOffset((value) => value + 1);
       const next = new Date(weekDays[0]);
       next.setDate(next.getDate() + 7);
-      setSelectedDate(next.toISOString().split('T')[0]);
+      setSelectedDate(dateToStr(next));
     } else {
       setWeekDir(-1);
       setWeekOffset((value) => value - 1);
       const prev = new Date(weekDays[0]);
       prev.setDate(prev.getDate() - 7);
-      setSelectedDate(prev.toISOString().split('T')[0]);
+      setSelectedDate(dateToStr(prev));
     }
   };
 
@@ -344,26 +344,26 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
 
     const direction = deltaX < 0 ? 1 : -1;
     const currentIndex = weekDays.findIndex(
-      (day) => day.toISOString().split('T')[0] === selectedDate,
+      (day) => dateToStr(day) === selectedDate,
     );
 
     if (direction === 1) {
       if (currentIndex < 6) {
-        setSelectedDate(weekDays[currentIndex + 1].toISOString().split('T')[0]);
+        setSelectedDate(dateToStr(weekDays[currentIndex + 1]));
       } else {
         setWeekOffset((value) => value + 1);
         const next = new Date(weekDays[0]);
         next.setDate(next.getDate() + 7);
-        setSelectedDate(next.toISOString().split('T')[0]);
+        setSelectedDate(dateToStr(next));
       }
     } else {
       if (currentIndex > 0) {
-        setSelectedDate(weekDays[currentIndex - 1].toISOString().split('T')[0]);
+        setSelectedDate(dateToStr(weekDays[currentIndex - 1]));
       } else {
         setWeekOffset((value) => value - 1);
         const prev = new Date(weekDays[0]);
         prev.setDate(prev.getDate() - 1);
-        setSelectedDate(prev.toISOString().split('T')[0]);
+        setSelectedDate(dateToStr(prev));
       }
     }
   };
