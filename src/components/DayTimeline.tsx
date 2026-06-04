@@ -429,7 +429,9 @@ function TimelineBlock({
         textAlign: 'left',
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'center',
+        // Тонкие чипы центрируем (текст в одну строку); обычные блоки — по верхнему краю,
+        // иначе у высоких блоков (3+ часа) заголовок уезжает в середину.
+        justifyContent: (untimed || compact) ? 'center' : 'flex-start',
         gap: 2,
         overflow: 'hidden',
         cursor: draggable ? 'grab' : 'pointer',
