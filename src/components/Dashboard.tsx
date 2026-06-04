@@ -26,6 +26,7 @@ interface DashboardProps {
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
+const RS = "'Russisch Sans', sans-serif";
 const MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
 const MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const DAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
@@ -443,7 +444,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '4px 0', background: 'none', border: 'none', cursor: 'pointer' }}
             >
               <span style={{
-                fontSize: 11, fontFamily: F, letterSpacing: '0.04em',
+                fontSize: 11, fontFamily: RS, fontWeight: 600, letterSpacing: '0.04em',
                 color: isWeekend ? 'rgba(34,34,36,0.22)' : 'rgba(34,34,36,0.4)',
               }}>
                 {DAYS[i]}
@@ -453,10 +454,10 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
                 background: isSel ? '#0B0D10' : isToday ? 'rgba(11,13,16,0.18)' : 'transparent',
               }}>
                 <span style={{
-                  fontFamily: isSel || isToday ? "'Helvetica Neue', Helvetica, sans-serif" : M,
+                  fontFamily: "'Helvetica Neue', Helvetica, sans-serif",
                   fontSize: 16,
-                  fontWeight: isSel || isToday ? 700 : 400,
-                  color: isSel || isToday ? '#fff' : isWeekend ? 'rgba(34,34,36,0.28)' : '#999B9E',
+                  fontWeight: isSel ? 700 : 400,
+                  color: isSel ? '#fff' : isToday ? '#0B0D10' : isWeekend ? 'rgba(34,34,36,0.28)' : '#999B9E',
                 }}>
                   {d.getDate()}
                 </span>
