@@ -594,7 +594,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
                 setSelectedDate(todayStr());
               }}
               style={{
-                background: 'rgba(34,34,36,0.1)',
+                background: '#ffffff',
                 color: '#222224',
                 border: 'none',
                 borderRadius: 999,
