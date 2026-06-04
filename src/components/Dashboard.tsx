@@ -25,7 +25,7 @@ interface DashboardProps {
 }
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
-const F = "'Random Grotesque', sans-serif";
+const F = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
 const MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const DAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
@@ -398,7 +398,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
               {weekDays[3].getFullYear()}
             </div>
           )}
-          <div style={{ fontFamily: F, fontSize: 22, color: '#222224', lineHeight: 1.1 }}>
+          <div style={{ fontFamily: F, fontWeight: 700, fontSize: 22, color: '#222224', lineHeight: 1.1 }}>
             {MONTHS[weekDays[3].getMonth()].toUpperCase()}
           </div>
         </motion.button>
@@ -562,7 +562,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
             transition={{ duration: 0.2 }}
             style={{
               position: 'fixed',
-              bottom: 'max(140px, calc(env(safe-area-inset-bottom, 0px) + 140px))',
+              bottom: 'max(110px, calc(env(safe-area-inset-bottom, 0px) + 110px))',
               left: 0, right: 0,
               display: 'flex', justifyContent: 'center',
               zIndex: 50,
