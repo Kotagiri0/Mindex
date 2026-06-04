@@ -471,7 +471,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
 
       {/* Tasks panel */}
       <div
-        style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: '#ffffff', borderRadius: '36px 36px 0 0', overflow: 'hidden', touchAction: 'none' }}
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'linear-gradient(to bottom, #f0f0f0, #ffffff 40px)', overflow: 'hidden', touchAction: 'none' }}
         onTouchStart={(e) => handleWeekSwipeStart(e.touches[0].clientX, e.touches[0].clientY)}
         onTouchEnd={(e) => handleDaySwipeEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY)}
         onTouchCancel={() => { swipeStartRef.current = null; }}
