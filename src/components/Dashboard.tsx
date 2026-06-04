@@ -393,9 +393,11 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
           onClick={() => setMiniCalOpen(true)}
           style={{ textAlign: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
         >
-          <div style={{ fontFamily: F, fontSize: 11, color: 'rgba(34,34,36,0.4)', letterSpacing: '0.06em' }}>
-            {weekDays[3].getFullYear()}
-          </div>
+          {weekDays[3].getFullYear() !== new Date().getFullYear() && (
+            <div style={{ fontFamily: F, fontSize: 11, color: 'rgba(34,34,36,0.4)', letterSpacing: '0.06em' }}>
+              {weekDays[3].getFullYear()}
+            </div>
+          )}
           <div style={{ fontFamily: F, fontSize: 22, color: '#222224', lineHeight: 1.1, textTransform: 'uppercase' }}>
             {MONTHS[weekDays[3].getMonth()]}
           </div>
