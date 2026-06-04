@@ -14,6 +14,17 @@ export default function BottomNav({ activeScreen, onNavigate, onNewThread }: Bot
   const activeTab = activeScreen === 'dash' ? 'dash' : activeScreen === 'threads' ? 'threads' : null;
 
   return (
+    <>
+      <div style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 120,
+        background: 'linear-gradient(to top, #ffffff 40%, transparent)',
+        zIndex: 99,
+        pointerEvents: 'none',
+      }} />
     <div style={{
       position: 'fixed',
       bottom: 'max(20px, env(safe-area-inset-bottom, 20px))',
@@ -91,5 +102,6 @@ export default function BottomNav({ activeScreen, onNavigate, onNewThread }: Bot
         <ComposeIcon size={25} color="#fff" />
       </motion.button>
     </div>
+    </>
   );
 }

@@ -779,7 +779,14 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
     <div className="flex flex-col h-full" style={{ background: '#f0f0f0' }}>
       <div
         className="flex items-center justify-between px-5 flex-shrink-0"
-        style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 16px))', paddingBottom: '12px' }}
+        style={{
+          paddingTop: 'max(16px, env(safe-area-inset-top, 16px))',
+          paddingBottom: '28px',
+          background: 'linear-gradient(to bottom, #f0f0f0 60%, transparent)',
+          position: 'relative',
+          zIndex: 2,
+          marginBottom: '-16px',
+        }}
       >
         <motion.button
           whileTap={{ scale: 0.88 }}
@@ -1149,7 +1156,14 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
 
       <div
         className="px-4 flex-shrink-0"
-        style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))' }}
+        style={{
+          paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))',
+          paddingTop: '16px',
+          background: 'linear-gradient(to top, #f0f0f0 60%, transparent)',
+          position: 'relative',
+          zIndex: 2,
+          marginTop: '-16px',
+        }}
       >
         <AnimatePresence>
           {replyQuote && (
