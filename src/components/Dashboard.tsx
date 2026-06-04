@@ -408,7 +408,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
           onClick={() => onNavigate('settings')}
           style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
         >
-          <SettingsIcon size={22} color="rgba(34,34,36,0.6)" />
+          <SettingsIcon size={26} color="rgba(34,34,36,0.6)" />
         </motion.button>
 
       </div>

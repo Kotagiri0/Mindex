@@ -20,8 +20,8 @@ export default function BottomNav({ activeScreen, onNavigate, onNewThread }: Bot
         bottom: 0,
         left: 0,
         right: 0,
-        height: 120,
-        background: 'linear-gradient(to top, #ffffff 40%, transparent)',
+        height: 160,
+        background: 'linear-gradient(to top, #ffffff 50%, transparent)',
         zIndex: 99,
         pointerEvents: 'none',
       }} />
