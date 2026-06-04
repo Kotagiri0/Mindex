@@ -398,7 +398,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
               {weekDays[3].getFullYear()}
             </div>
           )}
-          <div style={{ fontFamily: F, fontSize: 22, color: '#222224', lineHeight: 1.1 }}>
+          <div style={{ fontFamily: F, fontSize: 22, color: '#222224', lineHeight: 1.1, opacity: 0.7 }}>
             {MONTHS[weekDays[3].getMonth()]}
           </div>
         </motion.button>
