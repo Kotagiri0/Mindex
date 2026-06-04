@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Plus, ArrowUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Task, Screen } from '../types';
@@ -162,7 +162,23 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
   const [view, setView] = useState<DashView>(readView);
   // Время, по которому тапнули на таймлайне для создания задачи (null — попровер закрыт).
   const [createAt, setCreateAt] = useState<string | null>(null);
-  const today = todayStr();
+  const [today, setToday] = useState(todayStr);
+
+  // Обновляем "сегодня" при смене суток — без перезагрузки страницы.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const newToday = todayStr();
+      setToday(prev => {
+        if (prev !== newToday) {
+          // Если пользователь смотрит на "старый сегодня" — переключаем его на новый.
+          setSelectedDate(sd => sd === prev ? newToday : sd);
+          setWeekOffset(0);
+        }
+        return newToday;
+      });
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const toggleView = () => {
     setView(prev => {
