@@ -26,6 +26,7 @@ interface DashboardProps {
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const RG = "'Random Grotesque', 'Muller', sans-serif";
 const MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
 const MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const DAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
@@ -398,7 +399,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
               {weekDays[3].getFullYear()}
             </div>
           )}
-          <div style={{ fontFamily: F, fontWeight: 700, fontSize: 22, color: '#222224', lineHeight: 1.1 }}>
+          <div style={{ fontFamily: RG, fontWeight: 400, fontSize: 22, color: '#222224', lineHeight: 1.1 }}>
             {MONTHS[weekDays[3].getMonth()].toUpperCase()}
           </div>
         </motion.button>
