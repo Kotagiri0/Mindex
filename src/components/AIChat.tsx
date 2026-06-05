@@ -781,11 +781,9 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         className="flex items-center justify-between px-5 flex-shrink-0"
         style={{
           paddingTop: 'max(16px, env(safe-area-inset-top, 16px))',
-          paddingBottom: '28px',
-          background: 'linear-gradient(to bottom, #f0f0f0 60%, transparent)',
+          paddingBottom: '16px',
           position: 'relative',
           zIndex: 6,
-          marginBottom: '-16px',
         }}
       >
         <motion.button
@@ -793,7 +791,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           onClick={handleClose}
           className="w-11 h-11 flex items-center justify-center"
         >
-          <ChevronLeft size={24} strokeWidth={1.75} color="#222224" />
+          <ChevronLeft size={28} strokeWidth={1.75} color="#222224" />
         </motion.button>
 
         <div className="flex items-center gap-0.5 rounded-full p-1" style={{ background: '#ffffff', position: 'relative' }}>
@@ -831,7 +829,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           onClick={() => onNavigate('settings')}
           className="w-11 h-11 flex items-center justify-center"
         >
-          <SettingsIcon size={22} color="rgba(34,34,36,0.5)" />
+          <SettingsIcon size={26} color="rgba(34,34,36,0.5)" />
         </motion.button>
       </div>
 
@@ -841,7 +839,8 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         </div>
       ) : null}
 
-      {!noteMode && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 100, background: 'linear-gradient(to bottom, #f0f0f0 50%, transparent)', zIndex: 5, pointerEvents: 'none' }} />}
+      {!noteMode && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 120, background: 'linear-gradient(to bottom, #f0f0f0 40%, transparent)', zIndex: 5, pointerEvents: 'none' }} />}
+      {!noteMode && <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 140, background: 'linear-gradient(to top, #f0f0f0 40%, transparent)', zIndex: 1, pointerEvents: 'none' }} />}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-[20px_16px_8px] flex flex-col gap-3 scrollbar-hide min-h-0" style={{ display: noteMode ? 'none' : undefined }}>
         {(() => {
           const visibleMsgs = thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls);
@@ -1160,10 +1159,8 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         style={{
           paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))',
           paddingTop: '16px',
-          background: 'linear-gradient(to top, #f0f0f0 60%, transparent)',
           position: 'relative',
           zIndex: 2,
-          marginTop: '-16px',
         }}
       >
         <AnimatePresence>
