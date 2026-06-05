@@ -78,6 +78,8 @@ interface DesktopAppProps {
   setCurTh: (id: string | null) => void;
   startNewThread: () => void;
   handleLogout: () => void;
+  initialPendingMessage?: string;
+  onInitialPendingConsumed?: () => void;
 }
 
 // ─── Markdown renderer ────────────────────────────────────────────────────────
@@ -2142,6 +2144,7 @@ function Sidebar({
 export default function DesktopApp({
   tasks, setTasks, threads, setThreads, settings, setSettings,
   screen, setScreen, curTh, setCurTh, startNewThread, handleLogout,
+  initialPendingMessage, onInitialPendingConsumed,
 }: DesktopAppProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [calActive, setCalActive] = useState(false);
@@ -2154,7 +2157,13 @@ export default function DesktopApp({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(initialPendingMessage ?? null);
+  useEffect(() => {
+    if (initialPendingMessage) {
+      setPendingMessage(initialPendingMessage);
+      onInitialPendingConsumed?.();
+    }
+  }, [initialPendingMessage]);
   const [noInternet, setNoInternet] = useState(false);
 
   const addTask = async (name: string, time: string, date: string) => {
