@@ -524,7 +524,6 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
               </div>
             </div>
 
-            <div style={{ height: 1, background: 'rgba(34,34,36,0.07)', margin: '12px 20px 0' }} />
 
             {/* Task list */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 120px', touchAction: 'pan-y' }}>
