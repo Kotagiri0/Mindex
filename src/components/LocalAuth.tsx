@@ -32,11 +32,13 @@ const loadGoogleIdentityScript = () => {
   if (googleScriptPromise) return googleScriptPromise;
 
   googleScriptPromise = new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('Google Sign-In недоступен. Попробуй войти через email.')), 5000);
+
     const existingScript = document.querySelector<HTMLScriptElement>('script[data-google-gsi="true"]');
     if (existingScript) {
-      if (window.google?.accounts?.id) { resolve(); return; }
-      existingScript.addEventListener('load', () => resolve(), { once: true });
-      existingScript.addEventListener('error', () => reject(new Error('Не удалось загрузить Google Sign-In.')), { once: true });
+      if (window.google?.accounts?.id) { clearTimeout(timeout); resolve(); return; }
+      existingScript.addEventListener('load', () => { clearTimeout(timeout); resolve(); }, { once: true });
+      existingScript.addEventListener('error', () => { clearTimeout(timeout); reject(new Error('Не удалось загрузить Google Sign-In.')); }, { once: true });
       return;
     }
     const script = document.createElement('script');
@@ -44,8 +46,8 @@ const loadGoogleIdentityScript = () => {
     script.async = true;
     script.defer = true;
     script.dataset.googleGsi = 'true';
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Не удалось загрузить Google Sign-In.'));
+    script.onload = () => { clearTimeout(timeout); resolve(); };
+    script.onerror = () => { clearTimeout(timeout); reject(new Error('Не удалось загрузить Google Sign-In.')); };
     document.head.appendChild(script);
   }).catch((error) => { googleScriptPromise = null; throw error; });
 
@@ -133,52 +135,46 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
     }).catch(() => {});
   }, [googleClientId]);
 
-  // Инициализируем Google Identity заранее (на маунте), чтобы кастомная кнопка по клику
-  // вызывала готовый prompt() без задержки и без iframe-рендера.
-  useEffect(() => {
-    if (!googleClientId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        await loadGoogleIdentityScript();
-        if (cancelled || !window.google?.accounts?.id) return;
-        window.google.accounts.id.initialize({
-          client_id: googleClientId,
-          callback: async ({ credential }) => {
-            if (!credential) { setError('Google не вернул токен авторизации.'); return; }
-            setError('');
-            setGoogleLoading(true);
-            try {
-              const user = await loginGoogleUser(credential);
-              onAuthenticated(user);
-            } catch (e) {
-              setError(e instanceof Error ? e.message : 'Не удалось войти через Google.');
-            } finally { setGoogleLoading(false); }
-          },
-        });
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Не удалось загрузить Google вход.');
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [googleClientId, onAuthenticated]);
+  // Google Identity инициализируется лениво — только по клику на кнопку.
+  // Это предотвращает зависание страницы в странах с ограниченным доступом к Google.
 
-  const handleGoogleClick = () => {
+  const handleGoogleClick = async () => {
     if (!googleClientId) { setError('Google вход не настроен.'); return; }
-    if (!window.google?.accounts?.id) { setError('Google ещё не загрузился, попробуй через секунду.'); return; }
     setError('');
-    // Скрытый button-рендер через невидимый контейнер — единственный способ запустить
-    // настоящий OAuth-консент в один клик без FedCM-предупреждений
-    if (googleButtonRef.current) {
-      googleButtonRef.current.innerHTML = '';
-      window.google.accounts.id.renderButton(googleButtonRef.current, {
-        theme: 'filled_black', size: 'large', shape: 'pill', width: 320,
+    setGoogleLoading(true);
+    try {
+      await loadGoogleIdentityScript();
+      if (!window.google?.accounts?.id) throw new Error('Google Sign-In недоступен.');
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: async ({ credential }) => {
+          if (!credential) { setError('Google не вернул токен авторизации.'); setGoogleLoading(false); return; }
+          try {
+            const user = await loginGoogleUser(credential);
+            onAuthenticated(user);
+          } catch (e) {
+            setError(e instanceof Error ? e.message : 'Не удалось войти через Google.');
+            setGoogleLoading(false);
+          }
+        },
       });
-      // Эмулируем клик по только что вырендеренной кнопке Google
-      setTimeout(() => {
-        const btn = googleButtonRef.current?.querySelector('div[role="button"]') as HTMLElement | null;
-        btn?.click();
-      }, 50);
+      // Скрытый button-рендер — единственный способ запустить OAuth без FedCM-предупреждений
+      if (googleButtonRef.current) {
+        googleButtonRef.current.innerHTML = '';
+        window.google.accounts.id.renderButton(googleButtonRef.current, {
+          theme: 'filled_black', size: 'large', shape: 'pill', width: 320,
+        });
+        setTimeout(() => {
+          const btn = googleButtonRef.current?.querySelector('div[role="button"]') as HTMLElement | null;
+          btn?.click();
+          setGoogleLoading(false);
+        }, 50);
+      } else {
+        setGoogleLoading(false);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Google Sign-In недоступен. Используй вход через email.');
+      setGoogleLoading(false);
     }
   };
 
