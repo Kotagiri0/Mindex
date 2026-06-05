@@ -18,7 +18,7 @@ export default function TaskItem({ task, onToggle, onClick, onToggleSubtask }: T
   const hasSubtasks = task.subtasks && task.subtasks.length > 0;
 
   return (
-    <div style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+    <div>
       <div
         style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 0', cursor: 'pointer' }}
         onClick={onClick}
@@ -57,7 +57,7 @@ export default function TaskItem({ task, onToggle, onClick, onToggleSubtask }: T
 
         {task.time && (
           <span style={{ fontFamily: M, fontSize: 13, color: 'rgba(34,34,36,0.4)', flexShrink: 0 }}>
-            {task.time}
+            {task.time}{task.endTime ? ` – ${task.endTime}` : ''}
           </span>
         )}
 
