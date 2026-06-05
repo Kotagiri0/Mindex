@@ -495,7 +495,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
         {view === 'list' ? (
           <>
             {/* Inline add-task input */}
-            <div style={{ padding: '20px 20px 0', flexShrink: 0 }}>
+            <div style={{ padding: '20px 20px 8px', flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#f5f5f5', borderRadius: 40, padding: '10px 16px' }}>
                 <Plus size={18} strokeWidth={1.75} color="rgba(34,34,36,0.3)" style={{ flexShrink: 0 }} />
                 <input
