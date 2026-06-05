@@ -776,7 +776,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   }
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#f0f0f0' }}>
+    <div className="flex flex-col h-full" style={{ background: '#f0f0f0', position: 'relative' }}>
       <div
         className="flex items-center justify-between px-5 flex-shrink-0"
         style={{
@@ -784,7 +784,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           paddingBottom: '28px',
           background: 'linear-gradient(to bottom, #f0f0f0 60%, transparent)',
           position: 'relative',
-          zIndex: 2,
+          zIndex: 6,
           marginBottom: '-16px',
         }}
       >
@@ -841,6 +841,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         </div>
       ) : null}
 
+      {!noteMode && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 100, background: 'linear-gradient(to bottom, #f0f0f0 50%, transparent)', zIndex: 5, pointerEvents: 'none' }} />}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-[20px_16px_8px] flex flex-col gap-3 scrollbar-hide min-h-0" style={{ display: noteMode ? 'none' : undefined }}>
         {(() => {
           const visibleMsgs = thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls);
