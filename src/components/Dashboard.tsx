@@ -467,13 +467,13 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
               </span>
               <div style={{
                 width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: isSel ? '#0B0D10' : isToday ? 'rgba(11,13,16,0.18)' : 'transparent',
+                background: isSel || isToday ? '#0B0D10' : 'transparent',
               }}>
                 <span style={{
                   fontFamily: "'Helvetica Neue', Helvetica, sans-serif",
                   fontSize: 16,
                   fontWeight: isSel ? 700 : 400,
-                  color: isSel ? '#fff' : isToday ? '#0B0D10' : isWeekend ? 'rgba(34,34,36,0.28)' : '#999B9E',
+                  color: isSel || isToday ? '#fff' : isWeekend ? 'rgba(34,34,36,0.28)' : '#999B9E',
                 }}>
                   {d.getDate()}
                 </span>
