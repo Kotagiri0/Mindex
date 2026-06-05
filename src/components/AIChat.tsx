@@ -782,6 +782,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         style={{
           paddingTop: 'max(16px, env(safe-area-inset-top, 16px))',
           paddingBottom: '16px',
+          background: '#f0f0f0',
           position: 'relative',
           zIndex: 6,
         }}
@@ -839,8 +840,8 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         </div>
       ) : null}
 
-      {!noteMode && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 120, background: 'linear-gradient(to bottom, #f0f0f0 40%, transparent)', zIndex: 5, pointerEvents: 'none' }} />}
-      {!noteMode && <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 140, background: 'linear-gradient(to top, #f0f0f0 40%, transparent)', zIndex: 1, pointerEvents: 'none' }} />}
+      {!noteMode && <div style={{ position: 'absolute', top: 72, left: 0, right: 0, height: 48, background: 'linear-gradient(to bottom, #f0f0f0, transparent)', zIndex: 5, pointerEvents: 'none' }} />}
+      {!noteMode && <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 140, background: 'linear-gradient(to top, #f0f0f0, transparent)', zIndex: 1, pointerEvents: 'none' }} />}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-[20px_16px_8px] flex flex-col gap-3 scrollbar-hide min-h-0" style={{ display: noteMode ? 'none' : undefined }}>
         {(() => {
           const visibleMsgs = thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls);
@@ -1159,6 +1160,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         style={{
           paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))',
           paddingTop: '16px',
+          background: '#f0f0f0',
           position: 'relative',
           zIndex: 2,
         }}
