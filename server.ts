@@ -1420,7 +1420,10 @@ app.post("/api/data/profile", requireAuth, dataRateLimit, async (req, res) => {
   }
 
   const userId = (req as any).userId;
-  const settings = req.body?.settings || { agent: true, confirm: true, notifs: true };
+  const rawSettings = req.body?.settings || { agent: true, confirm: true, notifs: true };
+  const settings = rawSettings && typeof rawSettings === 'object'
+    ? Object.fromEntries(Object.entries(rawSettings).filter(([key]) => key !== 'googleWorkspace'))
+    : { agent: true, confirm: true, notifs: true };
   const onboardingComplete = Boolean(req.body?.onboarding_complete);
 
   try {
