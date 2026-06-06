@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useVoiceInput, isMobileDevice } from '../lib/useVoiceInput';
 
 const THINKING_PHRASES = ['Думаю...', 'Анализирую...', 'Ищу в архиве...', 'Формулирую...', 'Пишу ответ...'];
+const GOOGLE_WORKSPACE_DOCS_TOOLS = new Set(['createDocument', 'fillTemplate', 'appendContent', 'exportAsPdf', 'generateAIDocument']);
 
 function ThinkingPhrase() {
   const [idx, setIdx] = useState(0);
@@ -353,6 +354,16 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
               body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId }),
             }).catch(() => {});
             result = { status: 'success', noteId };
+          } else if (GOOGLE_WORKSPACE_DOCS_TOOLS.has(name)) {
+            const toolResponse = await apiFetch('/api/chat/workspace-tool', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name, args }),
+            });
+            const toolData = await toolResponse.json().catch(() => ({ error: 'Не удалось разобрать ответ Google Workspace инструмента.' }));
+            result = toolResponse.ok ? toolData : { success: false, error: toolData.error || 'Ошибка Google Workspace инструмента.' };
+          } else {
+            result = { success: false, error: `Неизвестный инструмент: ${name}` };
           }
 
           toolResults.push({

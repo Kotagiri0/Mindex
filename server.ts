@@ -20,6 +20,7 @@ import { verifyGoogleIdToken } from './src/lib/google-auth.ts';
 import { Resend } from 'resend';
 import { GoogleWorkspaceAuth } from './src/integrations/google/oauth';
 import { GoogleWorkspaceTokenStore } from './src/integrations/google/token-store';
+import { GoogleWorkspaceAdapter } from './src/integrations/google';
 
 dotenv.config();
 
@@ -37,6 +38,13 @@ const db = DATABASE_URL ? new Pool({
 const getGoogleWorkspaceAuth = () => {
   if (!db) return null;
   return new GoogleWorkspaceAuth(new GoogleWorkspaceTokenStore(db));
+};
+
+let googleWorkspaceAdapter: GoogleWorkspaceAdapter | null = null;
+const getGoogleWorkspaceAdapter = () => {
+  if (!db) return null;
+  if (!googleWorkspaceAdapter) googleWorkspaceAdapter = new GoogleWorkspaceAdapter(db);
+  return googleWorkspaceAdapter;
 };
 
 // Кэш для троттлинга обновления last_active_at — раз в 60 сек на юзера, чтоб не молотить БД
@@ -380,7 +388,19 @@ const SYSTEM_INSTRUCTION = `Ты — Мысль, личный ассистент
 GOOGLE КАЛЕНДАРЬ
 Если пользователь подключил Google Календарь в настройках, задачи с датой автоматически появляются в его Google Календаре при создании или обновлении через add_task / update_task. Если в настройках включён Google Meet и у задачи есть время, для события автоматически создаётся Meet-ссылка и добавляется в описание задачи. Никогда не говори пользователю, что ты не можешь добавить событие в Google Календарь или создать Meet-ссылку — просто создай или обнови задачу как обычно, и синхронизация сделает остальное. При создании задачи можно передать поля description (описание) и location (место/адрес) — они тоже отобразятся в Google Календаре.
 
+GOOGLE DOCS
+Если подключён Google Workspace, ты умеешь работать с Google Docs через инструменты createDocument, fillTemplate, appendContent, exportAsPdf, generateAIDocument.
+Если инструмент Google Workspace вернул ошибку авторизации — прямо скажи, что нужна авторизация в Настройки → Интеграции.
+
 Текущие дата и время: DATETIME_PLACEHOLDER`;
+
+const GOOGLE_DOCS_TOOL_NAMES = new Set([
+  'createDocument',
+  'fillTemplate',
+  'appendContent',
+  'exportAsPdf',
+  'generateAIDocument',
+]);
 
 const CHAT_TOOLS = [
   { type: "function", function: { name: "get_tasks", description: "Получить список всех задач пользователя или задач на конкретную дату.", parameters: { type: "object", properties: { date: { type: "string", description: "Дата в формате YYYY-MM-DD. Если не указана, вернуть все задачи." } } } } },
@@ -391,6 +411,7 @@ const CHAT_TOOLS = [
   { type: "function", function: { name: "get_notes", description: "Получить список заметок пользователя с их ID и названиями. Используй перед delete_note чтобы найти нужную заметку.", parameters: { type: "object", properties: {} } } },
   { type: "function", function: { name: "delete_note", description: "Удалить заметку из архива по её ID. Используй только если пользователь явно просит удалить заметку.", parameters: { type: "object", properties: { id: { type: "string", description: "ID заметки для удаления." } }, required: ["id"] } } },
   { type: "function", function: { name: "start_planning", description: "Запускает опросник для составления плана. Используй ТОЛЬКО если пользователь явно попросил составить план или разбить на шаги.", parameters: { type: "object", properties: { questions: { type: "array", items: { type: "object", properties: { id: { type: "string" }, question: { type: "string" }, options: { type: "array", items: { type: "string" } } }, required: ["id", "question", "options"] } } }, required: ["questions"] } } },
+  ...GoogleWorkspaceAdapter.toolDefinitions().filter((tool) => GOOGLE_DOCS_TOOL_NAMES.has(tool.function.name)),
 ];
 
 const SELF_KNOWLEDGE_TEXT = `Твоё имя — Мысль. Ты — личный ассистент по организации мышления и дел. Не универсальный чат-бот — фокус на личной эффективности: мысли, заметки и задачи в одном месте.
@@ -406,9 +427,9 @@ const SELF_KNOWLEDGE_TEXT = `Твоё имя — Мысль. Ты — личны
 
 Память: у тебя есть доступ к архиву прошлых разговоров и заметок пользователя. Если в системном блоке "Из архива пользователя" есть данные — ты их видишь и используешь. Если блок пустой — подходящего контекста пока нет.
 
-Чего пока не умеешь: работать с файлами и искать в интернете.
+Чего пока не умеешь: искать в интернете и работать с произвольными файлами вне поддерживаемых интеграций.
 
-Интеграции: при подключённом Google Календаре ты умеешь создавать и обновлять события через задачи. Если в настройках включён Google Meet и у задачи есть время — в событие добавляется Meet-ссылка.
+Интеграции: при подключённом Google Календаре ты умеешь создавать и обновлять события через задачи. Если в настройках включён Google Meet и у задачи есть время — в событие добавляется Meet-ссылка. При подключённом Google Workspace ты умеешь работать с Google Docs: создавать документы, заполнять шаблоны, дописывать контент и экспортировать в PDF.
 
 Конфиденциальность: данные пользователя хранятся только у него. Работаешь на мощной современной модели.`;
 
@@ -1286,6 +1307,30 @@ app.post('/api/integrations/google-workspace/disconnect', requireAuth, dataRateL
   const store = new GoogleWorkspaceTokenStore(db);
   await store.clearTokens(userId);
   return res.json({ connected: false });
+});
+
+app.post('/api/chat/workspace-tool', requireAuth, aiRateLimit, async (req, res) => {
+  const adapter = getGoogleWorkspaceAdapter();
+  if (!adapter) return res.status(500).json({ error: 'База данных не настроена.' });
+
+  const userId = (req as any).userId as string;
+  if (!checkCustomRateLimit(`gw:chat:${userId}:${req.ip || 'unknown'}`, 40, 60_000)) {
+    return res.status(429).json({ error: 'Слишком много Google Workspace запросов. Подожди минуту.' });
+  }
+
+  const name = String(req.body?.name || '').trim();
+  const args = req.body?.args ?? {};
+  if (!GOOGLE_DOCS_TOOL_NAMES.has(name) || !adapter.canHandle(name)) {
+    return res.status(400).json({ error: 'Инструмент Google Docs не поддерживается в веб-чате.' });
+  }
+
+  try {
+    const result = await adapter.execute(name, args, userId);
+    return res.json(result);
+  } catch (error: any) {
+    console.error('[CHAT][workspace-tool] error:', error?.message || error);
+    return res.status(500).json({ error: error?.message || 'Ошибка выполнения Google Workspace инструмента.' });
+  }
 });
 
 app.get("/api/data/bootstrap", requireAuth, async (req, res) => {

@@ -24,6 +24,7 @@ const F = "'Random Grotesque', sans-serif";
 const DAY_NAMES_RU = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
 const WEEK_DAYS = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 const MONTH_SHORT = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+const GOOGLE_WORKSPACE_DOCS_TOOLS = new Set(['createDocument', 'fillTemplate', 'appendContent', 'exportAsPdf', 'generateAIDocument']);
 
 function dateToStr(d: Date) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function todayStr() { return dateToStr(new Date()); }
@@ -774,6 +775,16 @@ function ChatView({
             }));
             setIsTyping(false);
             return;
+          } else if (GOOGLE_WORKSPACE_DOCS_TOOLS.has(name)) {
+            const toolResponse = await apiFetch('/api/chat/workspace-tool', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name, args }),
+            });
+            const toolData = await toolResponse.json().catch(() => ({ error: 'Не удалось разобрать ответ Google Workspace инструмента.' }));
+            result = toolResponse.ok ? toolData : { success: false, error: toolData.error || 'Ошибка Google Workspace инструмента.' };
+          } else {
+            result = { success: false, error: `Неизвестный инструмент: ${name}` };
           }
 
           toolResults.push({ role: 'tool' as const, tool_call_id: call.id, content: JSON.stringify(result ?? { status: 'ok' }), time: nowTime() });
