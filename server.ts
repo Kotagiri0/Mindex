@@ -1430,7 +1430,7 @@ app.post("/api/data/profile", requireAuth, dataRateLimit, async (req, res) => {
         VALUES ($1, $2::jsonb, $3, NOW())
         ON CONFLICT (user_id)
         DO UPDATE SET
-          settings = EXCLUDED.settings,
+          settings = COALESCE(user_profiles.settings, '{}'::jsonb) || EXCLUDED.settings,
           onboarding_complete = EXCLUDED.onboarding_complete,
           updated_at = NOW()
       `,
