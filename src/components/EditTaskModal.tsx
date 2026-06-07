@@ -112,26 +112,35 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
 
             {/* Time row */}
             <div style={{ display: 'flex', gap: 13, marginBottom: 17 }}>
-              <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={valueStyle(!!time)}>{time || 'Начало'}</span>
+              <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  style={nativeInputStyle(!!time, 'Начало')}
+                />
                 <img src={taskTimeIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
-                <input type="time" value={time} onChange={(e) => setTime(e.target.value)}
-                  style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
               </FieldBox>
-              <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={valueStyle(!!endTime)}>{endTime || 'Конец'}</span>
+              <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  style={nativeInputStyle(!!endTime, 'Конец')}
+                />
                 <img src={taskTimeIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
-                <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
-                  style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
               </FieldBox>
             </div>
 
             {/* Date */}
-            <FieldBox style={{ marginBottom: 17, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={valueStyle(!!date)}>{date ? formatDateRu(date) : 'В какой день?'}</span>
+            <FieldBox style={{ marginBottom: 17, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                style={nativeInputStyle(!!date, 'В какой день?')}
+              />
               <img src={taskDateIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-                style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
             </FieldBox>
 
             {/* Location */}
@@ -325,4 +334,21 @@ const valueStyle = (hasValue: boolean): React.CSSProperties => ({
   fontSize: 15,
   fontWeight: hasValue ? 500 : 400,
   color: hasValue ? '#0B0D10' : 'rgba(11,13,16,0.3)',
+});
+
+// Нативный input type=time/date — полностью видимый, но с обнулённым системным видом.
+// Плейсхолдер эмулируем через color когда значение пустое.
+const nativeInputStyle = (hasValue: boolean, _placeholder: string): React.CSSProperties => ({
+  flex: 1,
+  border: 'none',
+  outline: 'none',
+  background: 'transparent',
+  fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+  fontSize: 15,
+  fontWeight: hasValue ? 500 : 400,
+  color: hasValue ? '#0B0D10' : 'rgba(11,13,16,0.3)',
+  // Убираем системное оформление (стрелки, спиннеры, нативный хром)
+  WebkitAppearance: 'none',
+  appearance: 'none' as any,
+  minWidth: 0,
 });
