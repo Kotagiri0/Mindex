@@ -4,9 +4,19 @@ export interface SubTask {
   done: boolean;
 }
 
+// Категории задачи — существуют ТОЛЬКО в календарном виде, в списке не показываются.
+// 'none' — серый, для задач без времени / нераспределённых.
+export type TaskCategory = 'work' | 'personal' | 'event' | 'study' | 'none';
+
+// Кто поставил время задаче. От этого зависит, можно ли двигать её автоматически:
+// 'user' — человек поставил руками (свято, агент не двигает),
+// 'agent' — агент предложил слот (можно пересчитывать).
+export type TimeSource = 'user' | 'agent';
+
 export interface Task {
   id: string;
   name: string;
+  /** Время начала ("HH:MM"). Пусто — задача без времени (точка-чип в календаре, обычная строка в списке). */
   time: string;
   date: string;
   done: boolean;
@@ -16,6 +26,20 @@ export interface Task {
   calendarEventId?: string;
   description?: string;
   location?: string;
+  /** Время конца ("HH:MM"). Есть и time, и endTime → диапазон "от и до". Нет → точка с дефолтной длительностью. */
+  endTime?: string;
+  /** Сфера задачи. Управляет цветом блока в календаре. Дефолт — 'none' (серый). */
+  category?: TaskCategory;
+  /** Источник времени. Дефолт при ручном создании — 'user'. */
+  timeSource?: TimeSource;
+  /**
+   * Скрытое предложение агента "когда лучше сделать" для задачи БЕЗ явного времени.
+   * Задача остаётся без времени (`time` пуст, в списке — обычная строка), но в календаре
+   * показывается тонким серым чипом в этом слоте. Если пусто — слот считает алгоритм-fallback.
+   */
+  suggestedTime?: string;
+  /** Конец предложенного агентом слота ("HH:MM"). */
+  suggestedEndTime?: string;
 }
 
 export interface Message {

@@ -1,6 +1,6 @@
-import { CalendarDays, MessageCircle, PenLine, Plus } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Screen } from '../types';
+import { CalendarIcon, ChatIcon, ComposeIcon } from './icons';
 
 interface BottomNavProps {
   activeScreen: Screen;
@@ -14,6 +14,17 @@ export default function BottomNav({ activeScreen, onNavigate, onNewThread }: Bot
   const activeTab = activeScreen === 'dash' ? 'dash' : activeScreen === 'threads' ? 'threads' : null;
 
   return (
+    <>
+      <div style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 160,
+        background: 'linear-gradient(to top, #ffffff 50%, transparent)',
+        zIndex: 99,
+        pointerEvents: 'none',
+      }} />
     <div style={{
       position: 'fixed',
       bottom: 'max(20px, env(safe-area-inset-bottom, 20px))',
@@ -28,9 +39,9 @@ export default function BottomNav({ activeScreen, onNavigate, onNewThread }: Bot
         flex: 1,
         display: 'flex',
         alignItems: 'center',
-        background: '#e8e8e8',
+        background: '#ececec',
         borderRadius: 999,
-        padding: 6,
+        padding: 5,
         boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
       }}>
         {(['dash', 'threads'] as const).map(tab => {
@@ -44,7 +55,7 @@ export default function BottomNav({ activeScreen, onNavigate, onNewThread }: Bot
                 position: 'relative',
                 flex: 1,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                padding: '12px 12px',
+                padding: '15px 12px',
                 borderRadius: 999,
                 border: 'none',
                 cursor: 'pointer',
@@ -58,14 +69,15 @@ export default function BottomNav({ activeScreen, onNavigate, onNewThread }: Bot
                     position: 'absolute', inset: 0,
                     background: '#ffffff',
                     borderRadius: 999,
+                    boxShadow: '0 1px 5px rgba(0,0,0,0.08)',
                   }}
                   transition={{ type: 'spring', stiffness: 420, damping: 36 }}
                 />
               )}
               <span style={{ position: 'relative', zIndex: 1, display: 'flex' }}>
                 {tab === 'dash'
-                  ? <CalendarDays size={22} strokeWidth={1.75} color={isActive ? '#111' : '#bbb'} />
-                  : <MessageCircle size={22} strokeWidth={1.75} color={isActive ? '#111' : '#bbb'} />
+                  ? <CalendarIcon size={26} color={isActive ? '#0B0D10' : '#9a9a9a'} />
+                  : <ChatIcon size={26} color={isActive ? '#0B0D10' : '#9a9a9a'} />
                 }
               </span>
             </motion.button>
@@ -77,20 +89,19 @@ export default function BottomNav({ activeScreen, onNavigate, onNewThread }: Bot
         onClick={() => onNavigate('today')}
         whileTap={{ scale: 0.92 }}
         style={{
-          width: 54, height: 54,
+          width: 58, height: 58,
           borderRadius: '50%',
-          background: '#111',
+          background: '#0B0D10',
           border: 'none',
           cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          gap: 2,
           flexShrink: 0,
-          boxShadow: '0 2px 12px rgba(0,0,0,0.18)',
+          boxShadow: '0 2px 12px rgba(0,0,0,0.2)',
         }}
       >
-        <PenLine size={17} color="#fff" strokeWidth={1.75} />
-        <Plus size={12} color="#fff" strokeWidth={2.5} />
+        <ComposeIcon size={25} color="#fff" />
       </motion.button>
     </div>
+    </>
   );
 }

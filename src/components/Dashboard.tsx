@@ -1,11 +1,19 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { CalendarDays, Settings, ChevronLeft, ChevronRight, X, Plus, ArrowUp } from 'lucide-react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, Plus, ArrowUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Task, Screen } from '../types';
+import { Task, Screen, TaskCategory } from '../types';
 import TaskItem from './TaskItem';
-import EditTaskModal from './EditTaskModal';
+import EditTaskModal, { TaskEditPatch } from './EditTaskModal';
+import DayTimeline from './DayTimeline';
+import TimelineCreatePopover from './TimelineCreatePopover';
+import { CalendarGridIcon, TodoIcon, SettingsIcon } from './icons';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
+
+// Вид панели задач: список (как было) или таймлайн (календарь дня). Запоминается навсегда.
+type DashView = 'list' | 'timeline';
+const VIEW_KEY = 'mx_dash_view';
+const readView = (): DashView => (localStorage.getItem(VIEW_KEY) === 'timeline' ? 'timeline' : 'list');
 
 interface DashboardProps {
   tasks: Task[];
@@ -18,6 +26,7 @@ interface DashboardProps {
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
+const RS = "'Russisch Sans', sans-serif";
 const MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
 const MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const DAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
@@ -150,7 +159,34 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
   const suppressClickRef = useRef(false);
   const [miniCalOpen, setMiniCalOpen] = useState(false);
   const [addInput, setAddInput] = useState('');
-  const today = todayStr();
+  const [view, setView] = useState<DashView>(readView);
+  // Время, по которому тапнули на таймлайне для создания задачи (null — попровер закрыт).
+  const [createAt, setCreateAt] = useState<string | null>(null);
+  const [today, setToday] = useState(todayStr);
+
+  // Обновляем "сегодня" при смене суток — без перезагрузки страницы.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const newToday = todayStr();
+      setToday(prev => {
+        if (prev !== newToday) {
+          // Если пользователь смотрит на "старый сегодня" — переключаем его на новый.
+          setSelectedDate(sd => sd === prev ? newToday : sd);
+          setWeekOffset(0);
+        }
+        return newToday;
+      });
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const toggleView = () => {
+    setView(prev => {
+      const next = prev === 'list' ? 'timeline' : 'list';
+      localStorage.setItem(VIEW_KEY, next);
+      return next;
+    });
+  };
 
   const weekDays = useMemo(() => getWeekDays(weekOffset), [weekOffset]);
 
@@ -198,10 +234,33 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
   const addTask = async () => {
     const name = addInput.trim();
     if (!name) return;
-    const newTask: Task = { id: uuid(), name, time: '', date: selectedDate, done: false };
+    const newTask: Task = { id: uuid(), name, time: '', date: selectedDate, done: false, category: 'none' };
     setTasks(prev => (Array.isArray(prev) ? [...prev, newTask] : [newTask]));
     await db.saveTask(newTask);
     setAddInput('');
+  };
+
+  // Перетаскивание блока по таймлайну: человек явно переместил → timeSource: 'user'.
+  const moveTask = (taskId: string, time: string, endTime: string) => {
+    setTasks(prev => prev.map(t => {
+      if (t.id !== taskId) return t;
+      const u: Task = { ...t, time, endTime, timeSource: 'user' };
+      db.saveTask(u);
+      return u;
+    }));
+  };
+
+  // Создание задачи тапом по таймлайну: человек явно указал время → timeSource: 'user'.
+  const createTimedTask = async (name: string, time: string, endTime: string, category: TaskCategory = 'none') => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const newTask: Task = {
+      id: uuid(), name: trimmed, time, endTime, date: selectedDate,
+      done: false, category, timeSource: 'user',
+    };
+    setTasks(prev => (Array.isArray(prev) ? [...prev, newTask] : [newTask]));
+    await db.saveTask(newTask);
+    setCreateAt(null);
   };
 
   const toggleTask = async (id: string) => {
@@ -222,10 +281,26 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
     }));
   };
 
-  const updateTask = async (id: string, name: string, time: string, date: string, description: string, location: string) => {
+  const updateTask = async (id: string, patch: TaskEditPatch) => {
     setTasks(prev => prev.map(t => {
-      if (t.id === id) { const u = { ...t, name, time, date, description, location }; db.saveTask(u); return u; }
-      return t;
+      if (t.id !== id) return t;
+      const u: Task = {
+        ...t,
+        name: patch.name,
+        time: patch.time,
+        endTime: patch.endTime || undefined,
+        date: patch.date,
+        description: patch.description,
+        location: patch.location,
+        category: patch.category,
+        // Если время правил человек руками — фиксируем источник как 'user'.
+        timeSource: patch.timeChangedByUser ? 'user' : t.timeSource,
+        // Появилось реальное время — предложение агента больше не нужно.
+        suggestedTime: patch.time ? undefined : t.suggestedTime,
+        suggestedEndTime: patch.time ? undefined : t.suggestedEndTime,
+      };
+      db.saveTask(u);
+      return u;
     }));
     setEditingTask(null);
   };
@@ -259,13 +334,13 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
       setWeekOffset((value) => value + 1);
       const next = new Date(weekDays[0]);
       next.setDate(next.getDate() + 7);
-      setSelectedDate(next.toISOString().split('T')[0]);
+      setSelectedDate(dateToStr(next));
     } else {
       setWeekDir(-1);
       setWeekOffset((value) => value - 1);
       const prev = new Date(weekDays[0]);
       prev.setDate(prev.getDate() - 7);
-      setSelectedDate(prev.toISOString().split('T')[0]);
+      setSelectedDate(dateToStr(prev));
     }
   };
 
@@ -285,26 +360,26 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
 
     const direction = deltaX < 0 ? 1 : -1;
     const currentIndex = weekDays.findIndex(
-      (day) => day.toISOString().split('T')[0] === selectedDate,
+      (day) => dateToStr(day) === selectedDate,
     );
 
     if (direction === 1) {
       if (currentIndex < 6) {
-        setSelectedDate(weekDays[currentIndex + 1].toISOString().split('T')[0]);
+        setSelectedDate(dateToStr(weekDays[currentIndex + 1]));
       } else {
         setWeekOffset((value) => value + 1);
         const next = new Date(weekDays[0]);
         next.setDate(next.getDate() + 7);
-        setSelectedDate(next.toISOString().split('T')[0]);
+        setSelectedDate(dateToStr(next));
       }
     } else {
       if (currentIndex > 0) {
-        setSelectedDate(weekDays[currentIndex - 1].toISOString().split('T')[0]);
+        setSelectedDate(dateToStr(weekDays[currentIndex - 1]));
       } else {
         setWeekOffset((value) => value - 1);
         const prev = new Date(weekDays[0]);
         prev.setDate(prev.getDate() - 1);
-        setSelectedDate(prev.toISOString().split('T')[0]);
+        setSelectedDate(dateToStr(prev));
       }
     }
   };
@@ -315,29 +390,42 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px 8px' }}>
+        {/* Левая иконка — переключатель список ⇄ таймлайн.
+            Открыт список → иконка календаря (перейти в таймлайн).
+            Открыт таймлайн → иконка to-do (вернуть список). */}
         <motion.button
           whileTap={{ scale: 0.88 }}
-          onClick={() => setMiniCalOpen(true)}
+          onClick={toggleView}
+          aria-label={view === 'list' ? 'Календарь' : 'Список'}
           style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
         >
-          <CalendarDays size={22} strokeWidth={1.75} color="rgba(34,34,36,0.6)" />
+          {view === 'list'
+            ? <CalendarGridIcon size={22} color="rgba(34,34,36,0.6)" />
+            : <TodoIcon size={22} color="rgba(34,34,36,0.6)" />}
         </motion.button>
 
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontFamily: F, fontSize: 11, color: 'rgba(34,34,36,0.4)', letterSpacing: '0.06em' }}>
-            {weekDays[3].getFullYear()}
-          </div>
-          <div style={{ fontFamily: F, fontSize: 22, color: '#222224', lineHeight: 1.1 }}>
+        {/* Заголовок месяца — тап открывает мини-календарь для прыжка по датам */}
+        <motion.button
+          whileTap={{ scale: 0.96 }}
+          onClick={() => setMiniCalOpen(true)}
+          style={{ textAlign: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        >
+          {weekDays[3].getFullYear() !== new Date().getFullYear() && (
+            <div style={{ fontFamily: F, fontSize: 11, color: 'rgba(34,34,36,0.4)', letterSpacing: '0.06em' }}>
+              {weekDays[3].getFullYear()}
+            </div>
+          )}
+          <div style={{ fontFamily: F, fontSize: 22, color: '#222224', lineHeight: 1.1, opacity: 0.7 }}>
             {MONTHS[weekDays[3].getMonth()]}
           </div>
-        </div>
+        </motion.button>
 
         <motion.button
           whileTap={{ scale: 0.88 }}
           onClick={() => onNavigate('settings')}
           style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
         >
-          <Settings size={22} strokeWidth={1.75} color="rgba(34,34,36,0.6)" />
+          <SettingsIcon size={26} color="rgba(34,34,36,0.6)" />
         </motion.button>
 
       </div>
@@ -372,20 +460,20 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '4px 0', background: 'none', border: 'none', cursor: 'pointer' }}
             >
               <span style={{
-                fontSize: 11, fontFamily: F, letterSpacing: '0.04em',
+                fontSize: 11, fontFamily: RS, fontWeight: 600, letterSpacing: '0.04em',
                 color: isWeekend ? 'rgba(34,34,36,0.22)' : 'rgba(34,34,36,0.4)',
               }}>
                 {DAYS[i]}
               </span>
               <div style={{
                 width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: isSel ? '#0B0D10' : isToday ? 'rgba(11,13,16,0.18)' : 'transparent',
+                background: isSel ? '#0B0D10' : isToday ? 'rgba(11,13,16,0.15)' : 'transparent',
               }}>
                 <span style={{
-                  fontFamily: isSel || isToday ? "'Helvetica Neue', Helvetica, sans-serif" : M,
+                  fontFamily: "'Helvetica Neue', Helvetica, sans-serif",
                   fontSize: 16,
-                  fontWeight: isSel || isToday ? 700 : 400,
-                  color: isSel || isToday ? '#fff' : isWeekend ? 'rgba(34,34,36,0.28)' : '#999B9E',
+                  fontWeight: isSel ? 700 : 400,
+                  color: isSel ? '#fff' : isToday ? '#0B0D10' : isWeekend ? 'rgba(34,34,36,0.28)' : '#999B9E',
                 }}>
                   {d.getDate()}
                 </span>
@@ -399,71 +487,85 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
 
       {/* Tasks panel */}
       <div
-        style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: '#ffffff', borderRadius: '24px 24px 0 0', overflow: 'hidden', touchAction: 'none' }}
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: '#ffffff', borderRadius: '36px 36px 0 0', overflow: 'hidden', touchAction: 'none' }}
         onTouchStart={(e) => handleWeekSwipeStart(e.touches[0].clientX, e.touches[0].clientY)}
         onTouchEnd={(e) => handleDaySwipeEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY)}
         onTouchCancel={() => { swipeStartRef.current = null; }}
       >
-        {/* Inline add-task input */}
-        <div style={{ padding: '20px 20px 0', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#f5f5f5', borderRadius: 40, padding: '10px 16px' }}>
-            <Plus size={18} strokeWidth={1.75} color="rgba(34,34,36,0.3)" style={{ flexShrink: 0 }} />
-            <input
-              value={addInput}
-              onChange={e => setAddInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addTask()}
-              placeholder="Добавить задачу"
-              style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 15, color: '#222224' }}
-            />
-            <AnimatePresence>
-              {addInput.trim() && (
-                <motion.button
-                  key="add-btn"
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0, opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={addTask}
-                  style={{ width: 32, height: 32, borderRadius: '50%', background: '#0B0D10', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                >
-                  <ArrowUp size={16} color="#fff" strokeWidth={2} />
-                </motion.button>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
+        {view === 'list' ? (
+          <>
+            {/* Inline add-task input */}
+            <div style={{ padding: '20px 20px 8px', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#f5f5f5', borderRadius: 40, padding: '10px 16px' }}>
+                <Plus size={18} strokeWidth={1.75} color="rgba(34,34,36,0.3)" style={{ flexShrink: 0 }} />
+                <input
+                  value={addInput}
+                  onChange={e => setAddInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addTask()}
+                  placeholder="Добавить задачу"
+                  style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: M, fontSize: 15, color: '#222224' }}
+                />
+                <AnimatePresence>
+                  {addInput.trim() && (
+                    <motion.button
+                      key="add-btn"
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      transition={{ duration: 0.15 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={addTask}
+                      style={{ width: 32, height: 32, borderRadius: '50%', background: '#0B0D10', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                    >
+                      <ArrowUp size={16} color="#fff" strokeWidth={2} />
+                    </motion.button>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
 
-        <div style={{ height: 1, background: 'rgba(34,34,36,0.07)', margin: '12px 20px 0' }} />
 
-        {/* Task list */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 120px', touchAction: 'pan-y' }}>
-          {filteredTasks.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              style={{ textAlign: 'center', marginTop: 40, color: '#bbb', fontFamily: M, fontSize: 15 }}
-            >
-              Нет задач на этот день
-            </motion.div>
-          ) : (
-            <AnimatePresence mode="popLayout">
-              {filteredTasks.map((t, idx) => (
+            {/* Task list */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 120px', touchAction: 'pan-y' }}>
+              {filteredTasks.length === 0 ? (
                 <motion.div
-                  key={t.id}
-                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                  transition={{ delay: idx * 0.04 }}
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  style={{ textAlign: 'center', marginTop: 40, color: '#bbb', fontFamily: M, fontSize: 15 }}
                 >
-                  <TaskItem
-                    task={t}
-                    onToggle={() => toggleTask(t.id)}
-                    onToggleSubtask={toggleSubtask}
-                    onClick={() => setEditingTask(t)}
-                  />
+                  Нет задач на этот день
                 </motion.div>
-              ))}
-            </AnimatePresence>
-          )}
-        </div>
+              ) : (
+                <AnimatePresence mode="popLayout">
+                  {filteredTasks.map((t, idx) => (
+                    <motion.div
+                      key={t.id}
+                      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                      transition={{ delay: idx * 0.04 }}
+                    >
+                      <TaskItem
+                        task={t}
+                        onToggle={() => toggleTask(t.id)}
+                        onToggleSubtask={toggleSubtask}
+                        onClick={() => setEditingTask(t)}
+                      />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              )}
+            </div>
+          </>
+        ) : (
+          <div style={{ flex: 1, minHeight: 0, paddingTop: 12 }}>
+            <DayTimeline
+              date={selectedDate}
+              tasks={filteredTasks}
+              onTaskClick={(t) => setEditingTask(t)}
+              onUntimedClick={(t) => setEditingTask(t)}
+              onCreateAt={(time) => setCreateAt(time)}
+              onTaskMove={moveTask}
+            />
+          </div>
+        )}
       </div>
 
       {/* "Сегодня" button — появляется когда не на текущей неделе */}
@@ -476,10 +578,10 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
             transition={{ duration: 0.2 }}
             style={{
               position: 'fixed',
-              bottom: 'max(88px, calc(env(safe-area-inset-bottom, 0px) + 88px))',
+              bottom: 'max(110px, calc(env(safe-area-inset-bottom, 0px) + 110px))',
               left: 0, right: 0,
               display: 'flex', justifyContent: 'center',
-              zIndex: 50,
+              zIndex: 101,
               pointerEvents: 'none',
             }}
           >
@@ -491,7 +593,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
                 setSelectedDate(todayStr());
               }}
               style={{
-                background: 'rgba(34,34,36,0.1)',
+                background: '#ffffff',
                 color: '#222224',
                 border: 'none',
                 borderRadius: 999,
@@ -518,6 +620,17 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
         onDelete={deleteTask}
         onOpenThread={onOpenThread}
       />
+
+      {/* Создание задачи тапом по таймлайну */}
+      <AnimatePresence>
+        {createAt && (
+          <TimelineCreatePopover
+            startTime={createAt}
+            onCancel={() => setCreateAt(null)}
+            onCreate={createTimedTask}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {miniCalOpen && (

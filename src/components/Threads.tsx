@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Settings, MoreVertical, ChevronLeft, Plus, Pencil } from 'lucide-react';
+import { Search, MoreVertical, ChevronLeft, Plus, Pencil } from 'lucide-react';
+import { SettingsIcon } from './icons';
 import { motion, AnimatePresence } from 'motion/react';
 import { Thread, Screen, Task } from '../types';
 import { db } from '../lib/db';
@@ -192,7 +193,7 @@ export default function Threads({ threads, setThreads, tasks, onNavigate, onOpen
             onClick={() => onNavigate('settings')}
             style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
           >
-            <Settings size={24} strokeWidth={1.75} color="#111" />
+            <SettingsIcon size={24} color="#111" />
           </motion.button>
         )}
       </div>

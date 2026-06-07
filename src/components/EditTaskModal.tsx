@@ -1,146 +1,353 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MessageSquare } from 'lucide-react';
-import { Task } from '../types';
+import { Task, TaskCategory } from '../types';
+import { CATEGORY_COLORS, CATEGORY_LABELS, ORDERED_CATEGORIES } from '../lib/taskCategories';
+import { useSquircle } from '../hooks/useSquircle';
+
+const taskTimeIcon = `data:image/svg+xml,%3Csvg width='55' height='55' viewBox='0 0 55 55' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M27.5 2.75C41.169 2.75 52.25 13.831 52.25 27.5C52.25 41.169 41.169 52.25 27.5 52.25C13.831 52.25 2.75 41.169 2.75 27.5C2.75 13.831 13.831 2.75 27.5 2.75Z' stroke='%237E7F80' stroke-width='5.5'/%3E%3Cpath d='M27.5 15.7812L27.5 28.0035' stroke='%237E7F80' stroke-width='5.5' stroke-linecap='round'/%3E%3Cpath d='M27.5 28.6094L37.2216 38.331' stroke='%237E7F80' stroke-width='5.5' stroke-linecap='round'/%3E%3C/svg%3E`;
+const taskDateIcon = `data:image/svg+xml,%3Csvg width='50' height='56' viewBox='0 0 50 56' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M34.375 0C35.8938 2.06051e-08 37.125 1.23122 37.125 2.75V6.74414C44.0268 8.60239 49.1073 14.9039 49.1074 22.3926V39.0889L49.1016 39.5078C48.8829 48.1251 41.9376 55.0706 33.3203 55.2891L32.9014 55.2949H16.2051L15.7871 55.2891C7.0306 55.0672 0.000257744 47.8988 0 39.0889V22.3926C0.000117721 15.0824 4.84063 8.90273 11.4912 6.88379V2.75C11.4912 1.23122 12.7224 5.61746e-08 14.2412 0C15.7599 7.52798e-05 16.9912 1.23126 16.9912 2.75V6.1875H31.625V2.75C31.625 1.23122 32.8562 5.61746e-08 34.375 0ZM5.5 39.0889C5.50026 45.001 10.293 49.7948 16.2051 49.7949H32.9014C38.8136 49.7949 43.6072 45.001 43.6074 39.0889V23.1777H5.5V39.0889ZM16.2051 11.6875C11.9849 11.6876 8.33625 14.1297 6.59277 17.6777H42.5146C40.7709 14.1296 37.1217 11.6875 32.9014 11.6875H16.2051Z' fill='%237E7F80'/%3E%3C/svg%3E`;
+const taskPlaceIcon = `data:image/svg+xml,%3Csvg width='45' height='55' viewBox='0 0 45 55' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2.75 21.865C2.75 35.2617 14.4696 46.3401 19.6571 50.5875C20.3995 51.1954 20.7751 51.503 21.329 51.6589C21.7603 51.7804 22.395 51.7804 22.8263 51.6589C23.3812 51.5027 23.7543 51.1981 24.4995 50.588C29.6869 46.3405 41.4059 35.2629 41.4059 21.8663C41.4059 16.7965 39.3697 11.9337 35.745 8.34885C32.1202 4.76397 27.2044 2.75 22.0783 2.75C16.9522 2.75 12.0358 4.76427 8.41106 8.34915C4.78634 11.934 2.75 16.7953 2.75 21.865Z' stroke='%237E7F80' stroke-width='5.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M15.5786 20.7098C15.5786 24.3238 18.5621 27.2536 22.2424 27.2536C25.9227 27.2536 28.9061 24.3238 28.9061 20.7098C28.9061 17.0958 25.9227 14.166 22.2424 14.166C18.5621 14.166 15.5786 17.0958 15.5786 20.7098Z' stroke='%237E7F80' stroke-width='5.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E`;
+
+export interface TaskEditPatch {
+  name: string;
+  time: string;
+  endTime: string;
+  date: string;
+  description: string;
+  location: string;
+  category: TaskCategory;
+  timeChangedByUser: boolean;
+}
 
 interface EditTaskModalProps {
   task: Task | null;
+  isCreate?: boolean;
+  initialDate?: string;
   onClose: () => void;
-  onUpdate: (id: string, name: string, time: string, date: string, description: string, location: string) => void;
+  onUpdate: (id: string, patch: TaskEditPatch) => void;
   onDelete: (id: string) => void;
   onOpenThread?: (id: string) => void;
 }
 
-export default function EditTaskModal({ task, onClose, onUpdate, onDelete, onOpenThread }: EditTaskModalProps) {
+const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+
+export default function EditTaskModal({ task, isCreate, initialDate, onClose, onUpdate, onDelete }: EditTaskModalProps) {
   const [name, setName] = useState('');
   const [time, setTime] = useState('');
+  const [endTime, setEndTime] = useState('');
   const [date, setDate] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
+  const [category, setCategory] = useState<TaskCategory>('none');
+  const [initialTime, setInitialTime] = useState('');
+  const [initialEnd, setInitialEnd] = useState('');
+  const { ref: squircleRef, clipPath } = useSquircle({ cornerRadius: 36, cornerSmoothing: 0.6 });
 
   useEffect(() => {
     if (task) {
       setName(task.name);
       setTime(task.time || '');
-      setDate(task.date || '');
+      setEndTime(task.endTime || '');
+      setDate(task.date || initialDate || '');
       setDescription(task.description || '');
       setLocation(task.location || '');
+      setCategory(task.category || 'none');
+      setInitialTime(task.time || '');
+      setInitialEnd(task.endTime || '');
+    } else if (isCreate) {
+      setName(''); setTime(''); setEndTime('');
+      setDate(initialDate || ''); setDescription(''); setLocation('');
+      setCategory('none'); setInitialTime(''); setInitialEnd('');
     }
-  }, [task]);
+  }, [task, isCreate, initialDate]);
 
-  const handleUpdate = () => {
+  const handleSave = () => {
     if (!task || !name.trim()) return;
-    onUpdate(task.id, name, time, date, description, location);
-  };
-
-  const handleGoToChat = () => {
-    if (task?.threadId && onOpenThread) {
-      onOpenThread(task.threadId);
-      onClose();
-    }
+    const timeChangedByUser = time !== initialTime || endTime !== initialEnd;
+    onUpdate(task.id, { name, time, endTime, date, description, location, category, timeChangedByUser });
   };
 
   return (
     <AnimatePresence>
       {task && (
-        <div className="fixed inset-0 z-[300] flex items-end">
+        <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', alignItems: 'flex-end' }}>
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/40"
+            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }}
           />
           <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="relative w-full bg-surface rounded-t-[22px] p-[18px_18px_calc(32px+env(safe-area-inset-bottom,0px))]"
+            ref={squircleRef}
+            initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+            style={{
+              position: 'relative',
+              width: '100%',
+              background: '#ffffff',
+              clipPath: clipPath || undefined,
+              borderRadius: clipPath ? 0 : '36px 36px 0 0',
+              padding: '18px 23px 0',
+              maxHeight: '92vh',
+              overflowY: 'auto',
+            }}
           >
-            <div className="w-9 h-1 bg-border rounded-full mx-auto mb-4" />
-            
-            <div className="flex items-center justify-between mb-3.5">
-              <h3 className="text-[17px] font-bold">Редактировать</h3>
-              {task.threadId && (
-                <button 
-                  onClick={handleGoToChat}
-                  className="flex items-center gap-1.5 text-accent text-[13px] font-bold bg-accent-light p-[6px_12px] rounded-full active:scale-95 transition-transform"
-                >
-                  <MessageSquare size={14} />
-                  В чат
-                </button>
-              )}
-            </div>
-            
-            <div className="mb-3">
-              <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Название</label>
+            {/* Drag handle */}
+            <div style={{ width: 36, height: 4, background: 'rgba(34,34,36,0.12)', borderRadius: 2, margin: '0 auto 12px' }} />
+
+            {/* Title */}
+            <h3 style={{ fontFamily: M, fontSize: 17, fontWeight: 500, color: '#0B0D10', textAlign: 'center', marginBottom: 14 }}>
+              Поменять
+            </h3>
+
+            {/* Name */}
+            <FieldBox style={{ marginBottom: 17 }}>
               <input
-                className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary"
+                autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                placeholder="Что на повестке дня?"
+                style={inputStyle(!!name)}
               />
-            </div>
+            </FieldBox>
 
-            <div className="flex gap-2.5 mb-3">
-              <div className="flex-1">
-                <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Время</label>
+            {/* Time row */}
+            <div style={{ display: 'flex', gap: 13, marginBottom: 17 }}>
+              <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <input
                   type="time"
-                  className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary"
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
+                  style={nativeInputStyle(!!time, 'Начало')}
                 />
-              </div>
-              <div className="flex-1">
-                <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Дата</label>
+                <img src={taskTimeIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
+              </FieldBox>
+              <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <input
-                  type="date"
-                  className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  style={nativeInputStyle(!!endTime, 'Конец')}
                 />
-              </div>
+                <img src={taskTimeIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
+              </FieldBox>
             </div>
 
-            <div className="mb-3">
-              <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Место</label>
+            {/* Date */}
+            <FieldBox style={{ marginBottom: 17, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
               <input
-                className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary"
-                placeholder="Адрес или название места"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                style={nativeInputStyle(!!date, 'В какой день?')}
+              />
+              <img src={taskDateIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
+            </FieldBox>
+
+            {/* Location */}
+            <FieldBox style={{ marginBottom: 17, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <input
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
+                placeholder="Где будет проходить?"
+                style={{ ...inputStyle(!!location), flex: 1 }}
               />
-            </div>
+              <img src={taskPlaceIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
+            </FieldBox>
 
-            <div className="mb-3">
-              <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Описание</label>
+            {/* Description */}
+            <FieldBox style={{ marginBottom: 17 }}>
               <textarea
-                className="w-full bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 py-3 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary resize-none"
-                placeholder="Доп. информация о задаче"
-                rows={3}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
+                placeholder="Описание, если нужно подробнее"
+                rows={3}
+                style={{
+                  width: '100%', border: 'none', outline: 'none', background: 'transparent',
+                  fontFamily: M, fontSize: 15,
+                  fontWeight: description ? 500 : 400,
+                  color: description ? '#0B0D10' : 'rgba(11,13,16,0.3)',
+                  resize: 'none', lineHeight: 1.5,
+                }}
               />
-            </div>
+            </FieldBox>
 
-            <div className="flex gap-2.5 mt-2">
+            <CategoryPicker value={category} onChange={setCategory} />
+
+            {/* Buttons */}
+            <div style={{ display: 'flex', gap: 13, marginTop: 17 }}>
               <button
                 onClick={() => onDelete(task.id)}
-                className="flex-1 h-[48px] bg-gradient-to-r from-danger/20 to-danger/10 text-danger rounded-[12px] font-semibold text-[15px] active:opacity-85 transition-opacity border border-danger/30 hover:from-danger/30 hover:to-danger/20"
+                style={{
+                  flex: 1, height: 52, background: '#FFF0F0', color: '#E53935',
+                  border: 'none', borderRadius: 999, fontFamily: M, fontSize: 16,
+                  fontWeight: 700, cursor: 'pointer',
+                }}
               >
-                Удалить
+                Убрать
               </button>
               <button
-                onClick={handleUpdate}
-                className="flex-[2] h-[48px] bg-accent text-white rounded-[12px] font-bold text-[15px] active:opacity-85 transition-opacity"
+                onClick={handleSave}
+                disabled={!name.trim()}
+                style={{
+                  flex: 2, height: 52,
+                  background: name.trim() ? '#0B0D10' : 'rgba(11,13,16,0.18)',
+                  color: '#ffffff', border: 'none', borderRadius: 999,
+                  fontFamily: M, fontSize: 16, fontWeight: 700,
+                  cursor: name.trim() ? 'pointer' : 'default',
+                  transition: 'background 0.2s',
+                }}
               >
                 Сохранить
               </button>
             </div>
+            {/* Safe area bottom spacer — внутри clip-path чтобы не вылезало */}
+            <div style={{ height: 'max(20px, env(safe-area-inset-bottom, 20px))' }} />
           </motion.div>
         </div>
       )}
     </AnimatePresence>
   );
 }
+
+// ─── Category Picker ────────────────────────────────────────────────────────
+
+const CIRCLE_H = 36;
+const PILL_H = 52;
+
+function CategoryPicker({ value, onChange }: { value: TaskCategory; onChange: (c: TaskCategory) => void }) {
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      height: PILL_H,
+    }}>
+      {ORDERED_CATEGORIES.map((cat) => {
+        const c = CATEGORY_COLORS[cat];
+        const active = value === cat;
+        return (
+          <motion.button
+            key={cat}
+            layout
+            onClick={() => onChange(cat)}
+            transition={{ type: 'spring', stiffness: 500, damping: 38 }}
+            style={{
+              background: c.bg,
+              border: 'none',
+              borderRadius: 999,
+              cursor: 'pointer',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              padding: 0,
+            }}
+            animate={{
+              width: active ? 140 : CIRCLE_H,
+              height: active ? PILL_H : CIRCLE_H,
+            }}
+          >
+            <AnimatePresence mode="wait">
+              {active ? (
+                <motion.div
+                  key="label"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    gap: 2, pointerEvents: 'none',
+                  }}
+                >
+                  <span style={{
+                    fontFamily: M,
+                    fontSize: 11,
+                    fontWeight: 400,
+                    color: c.textMuted,
+                    lineHeight: 1.2,
+                  }}>
+                    категория
+                  </span>
+                  <span style={{
+                    fontFamily: M,
+                    fontSize: 15,
+                    fontWeight: 500,
+                    color: c.text,
+                    whiteSpace: 'nowrap',
+                    lineHeight: 1.2,
+                  }}>
+                    {CATEGORY_LABELS[cat].toLowerCase()}
+                  </span>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="dot"
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  transition={{ duration: 0.1 }}
+                />
+              )}
+            </AnimatePresence>
+          </motion.button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function formatDateRu(dateStr: string): string {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return `${String(d).padStart(2, '0')}.${String(m).padStart(2, '0')}.${y}`;
+}
+
+function FieldBox({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <div style={{
+      position: 'relative',
+      background: '#f5f5f5',
+      borderRadius: 20,
+      padding: '14px 17px',
+      ...style,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+const inputStyle = (hasValue: boolean): React.CSSProperties => ({
+  width: '100%', border: 'none', outline: 'none', background: 'transparent',
+  fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+  fontSize: 15,
+  fontWeight: hasValue ? 500 : 400,
+  color: hasValue ? '#0B0D10' : 'rgba(11,13,16,0.3)',
+});
+
+const valueStyle = (hasValue: boolean): React.CSSProperties => ({
+  fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+  fontSize: 15,
+  fontWeight: hasValue ? 500 : 400,
+  color: hasValue ? '#0B0D10' : 'rgba(11,13,16,0.3)',
+});
+
+// Нативный input type=time/date — полностью видимый, но с обнулённым системным видом.
+// Плейсхолдер эмулируем через color когда значение пустое.
+const nativeInputStyle = (hasValue: boolean, _placeholder: string): React.CSSProperties => ({
+  flex: 1,
+  border: 'none',
+  outline: 'none',
+  background: 'transparent',
+  fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+  fontSize: 15,
+  fontWeight: hasValue ? 500 : 400,
+  color: hasValue ? '#0B0D10' : 'rgba(11,13,16,0.3)',
+  // Убираем системное оформление (стрелки, спиннеры, нативный хром)
+  WebkitAppearance: 'none',
+  appearance: 'none' as any,
+  minWidth: 0,
+});

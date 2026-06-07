@@ -5,10 +5,15 @@ import {
   Sun, Calendar, MessageCircle, Settings as SettingsIcon,
   Plus, ChevronDown, ArrowUp, Search, Check, Mic, Loader,
   PanelLeftOpen, PanelLeftClose, Pencil, Copy, MoreHorizontal, X, StickyNote, BookOpen, ChevronRight,
+  LayoutList, CalendarRange,
 } from 'lucide-react';
-import { Task, Thread, Message, Settings as SettingsType, Screen } from '../types';
+import { Task, Thread, Message, Settings as SettingsType, Screen, TaskCategory } from '../types';
 import AddTaskModal from './AddTaskModal';
-import TaskDetailPanel from './TaskDetailPanel';
+import TaskDetailPanel, { TaskCreatePatch } from './TaskDetailPanel';
+import { TaskEditPatch } from './EditTaskModal';
+import DayTimeline from './DayTimeline';
+import TimelineCreatePopover from './TimelineCreatePopover';
+import * as MxIcon from './icons';
 import SettingsScreen from './Settings';
 import NoteView from './NoteView';
 import NoteEditor from './NoteEditor';
@@ -73,6 +78,8 @@ interface DesktopAppProps {
   setCurTh: (id: string | null) => void;
   startNewThread: () => void;
   handleLogout: () => void;
+  initialPendingMessage?: string;
+  onInitialPendingConsumed?: () => void;
 }
 
 // ─── Markdown renderer ────────────────────────────────────────────────────────
@@ -726,13 +733,37 @@ function ChatView({
             const filtered = args.date ? tasks.filter(t => t.date === args.date) : tasks;
             result = filtered.length > 0 ? filtered : 'Задач не найдено.';
           } else if (name === 'add_task') {
-            const newTask: Task = { id: uuid(), name: args.name, time: args.time || '', date: args.date || todayStr(), done: false, threadId };
+            const newTask: Task = {
+              id: uuid(), name: args.name, time: args.time || '', endTime: args.endTime || undefined,
+              date: args.date || todayStr(), done: false, threadId,
+              category: args.category || 'none',
+              // Время предложено агентом → 'agent' (можно пересчитывать). Без времени — не ставим.
+              timeSource: args.time ? 'agent' : undefined,
+              // Гибкая задача без жёсткого времени — рекомендованный агентом слот.
+              suggestedTime: args.suggestedTime || undefined,
+              suggestedEndTime: args.suggestedEndTime || undefined,
+            };
             setTasks(prev => [...(Array.isArray(prev) ? prev : []), newTask]);
             db.saveTask(newTask);
             result = { status: 'success', task: newTask };
           } else if (name === 'update_task') {
             setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
-              if (t.id === args.id) { const u = { ...t, done: args.done ?? t.done, name: args.name || t.name, time: args.time ?? t.time, date: args.date ?? t.date }; db.saveTask(u); return u; }
+              if (t.id === args.id) {
+                const timeChanged = args.time !== undefined && args.time !== t.time;
+                const u: Task = {
+                  ...t,
+                  done: args.done ?? t.done,
+                  name: args.name || t.name,
+                  time: args.time ?? t.time,
+                  endTime: args.endTime ?? t.endTime,
+                  date: args.date ?? t.date,
+                  category: args.category ?? t.category,
+                  // Агент сдвинул время → источник остаётся 'agent' (его предложение).
+                  timeSource: timeChanged ? 'agent' : t.timeSource,
+                };
+                db.saveTask(u);
+                return u;
+              }
               return t;
             }));
             result = { status: 'success' };
@@ -1576,7 +1607,15 @@ function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState(todayStr());
   const [slideDir, setSlideDir] = useState<1 | -1>(1);
+  const [view, setView] = useState<'list' | 'timeline'>(() => localStorage.getItem('mx_dash_view') === 'timeline' ? 'timeline' : 'list');
+  const [createAt, setCreateAt] = useState<string | null>(null);
   const [miniCalOpen, setMiniCalOpen] = useState(false);
+
+  const toggleView = () => setView(prev => {
+    const next = prev === 'list' ? 'timeline' : 'list';
+    localStorage.setItem('mx_dash_view', next);
+    return next;
+  });
   const [miniCalMonth, setMiniCalMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
   const [addInput, setAddInput] = useState('');
   const [addFocused, setAddFocused] = useState(false);
@@ -1641,10 +1680,32 @@ function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
 
   const handleAddTask = async () => {
     if (!addInput.trim()) return;
-    const t: Task = { id: uuid(), name: addInput.trim(), time: '', date: selectedDate, done: false };
+    const t: Task = { id: uuid(), name: addInput.trim(), time: '', date: selectedDate, done: false, category: 'none' };
     setTasks(prev => [...(Array.isArray(prev) ? prev : []), t]);
     await db.saveTask(t);
     setAddInput('');
+  };
+
+  // Создание задачи тапом по таймлайну: человек явно указал время → timeSource: 'user'.
+  const createTimedTask = async (name: string, time: string, endTime: string, category: TaskCategory = 'none') => {
+    if (!name.trim()) return;
+    const t: Task = {
+      id: uuid(), name: name.trim(), time, endTime, date: selectedDate,
+      done: false, category, timeSource: 'user',
+    };
+    setTasks(prev => [...(Array.isArray(prev) ? prev : []), t]);
+    await db.saveTask(t);
+    setCreateAt(null);
+  };
+
+  // Перетаскивание блока по таймлайну → timeSource: 'user'.
+  const moveTask = (taskId: string, time: string, endTime: string) => {
+    setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
+      if (t.id !== taskId) return t;
+      const u: Task = { ...t, time, endTime, timeSource: 'user' };
+      db.saveTask(u);
+      return u;
+    }));
   };
 
   const month = MONTH_SHORT[weekDays[3].getMonth()];
@@ -1726,6 +1787,16 @@ function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
                   </motion.button>
                 )}
               </AnimatePresence>
+              {/* View toggle: список ⇄ таймлайн */}
+              <button
+                onClick={toggleView}
+                title={view === 'list' ? 'Календарь по времени' : 'Список'}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 40, cursor: 'pointer', color: 'var(--text-40)', padding: '7px 12px', lineHeight: 1 }}
+              >
+                {view === 'list'
+                  ? <CalendarRange size={17} strokeWidth={1.75} />
+                  : <LayoutList size={17} strokeWidth={1.75} />}
+              </button>
               {/* Arrows capsule */}
               <div style={{ display: 'flex', alignItems: 'center', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 40, overflow: 'hidden' }}>
                 <button onClick={() => goWeek(-1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: M, fontSize: 22, color: 'var(--text-40)', padding: '6px 14px', lineHeight: 1 }}>‹</button>
@@ -1795,64 +1866,90 @@ function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
           </div>
           <div style={{ height: 1, background: 'var(--border)', marginBottom: 16 }} />
 
-          {/* Add task inline field */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, border: `1px solid ${addFocused ? 'rgba(0,0,0,0.3)' : 'var(--border)'}`, borderRadius: 40, padding: '12px 16px', marginBottom: 20, transition: 'border-color 0.15s', background: '#fff' }}>
-            <Plus size={15} strokeWidth={1.75} color="var(--text-30)" />
-            <input
-              value={addInput}
-              onChange={e => setAddInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAddTask()}
-              onFocus={() => setAddFocused(true)}
-              onBlur={() => setAddFocused(false)}
-              placeholder="Добавить задачу"
-              style={{ flex: 1, border: 'none', outline: 'none', fontFamily: M, fontSize: 14, color: 'var(--text-primary)', background: 'transparent' }}
-            />
-            <AnimatePresence>
-              {addInput.trim() && (
-                <motion.button
-                  key="add-btn"
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0, opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={handleAddTask}
-                  style={{ width: 32, height: 32, borderRadius: '50%', background: '#0B0D10', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                >
-                  <ArrowUp size={16} color="#fff" strokeWidth={2} />
-                </motion.button>
-              )}
-            </AnimatePresence>
-          </div>
+          {view === 'list' ? (
+            <>
+              {/* Add task inline field */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, border: `1px solid ${addFocused ? 'rgba(0,0,0,0.3)' : 'var(--border)'}`, borderRadius: 40, padding: '12px 16px', marginBottom: 20, transition: 'border-color 0.15s', background: '#fff' }}>
+                <Plus size={15} strokeWidth={1.75} color="var(--text-30)" />
+                <input
+                  value={addInput}
+                  onChange={e => setAddInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAddTask()}
+                  onFocus={() => setAddFocused(true)}
+                  onBlur={() => setAddFocused(false)}
+                  placeholder="Добавить задачу"
+                  style={{ flex: 1, border: 'none', outline: 'none', fontFamily: M, fontSize: 14, color: 'var(--text-primary)', background: 'transparent' }}
+                />
+                <AnimatePresence>
+                  {addInput.trim() && (
+                    <motion.button
+                      key="add-btn"
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      transition={{ duration: 0.15 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={handleAddTask}
+                      style={{ width: 32, height: 32, borderRadius: '50%', background: '#0B0D10', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                    >
+                      <ArrowUp size={16} color="#fff" strokeWidth={2} />
+                    </motion.button>
+                  )}
+                </AnimatePresence>
+              </div>
 
-          {/* Tasks with stagger animation on day change */}
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div key={selectedDate}>
-              {filteredTasks.length === 0 ? (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ padding: '32px 0', textAlign: 'center', fontFamily: M, fontSize: 14, color: 'var(--text-30)' }}>
-                  Нет задач на этот день
+              {/* Tasks with stagger animation on day change */}
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div key={selectedDate}>
+                  {filteredTasks.length === 0 ? (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ padding: '32px 0', textAlign: 'center', fontFamily: M, fontSize: 14, color: 'var(--text-30)' }}>
+                      Нет задач на этот день
+                    </motion.div>
+                  ) : filteredTasks.map((task, idx) => (
+                    <motion.div
+                      key={task.id}
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.18, delay: idx * 0.04, ease: 'easeOut' }}
+                      style={{ borderBottom: idx < filteredTasks.length - 1 ? '1px solid var(--border)' : undefined }}
+                    >
+                      <CalendarTaskRow
+                        task={task}
+                        onToggle={() => toggleTask(task.id)}
+                        onToggleSubtask={subId => toggleSubtask(task.id, subId)}
+                        onClick={() => onEditTask(task)}
+                      />
+                    </motion.div>
+                  ))}
                 </motion.div>
-              ) : filteredTasks.map((task, idx) => (
-                <motion.div
-                  key={task.id}
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.18, delay: idx * 0.04, ease: 'easeOut' }}
-                  style={{ borderBottom: idx < filteredTasks.length - 1 ? '1px solid var(--border)' : undefined }}
-                >
-                  <CalendarTaskRow
-                    task={task}
-                    onToggle={() => toggleTask(task.id)}
-                    onToggleSubtask={subId => toggleSubtask(task.id, subId)}
-                    onClick={() => onEditTask(task)}
-                  />
-                </motion.div>
-              ))}
-            </motion.div>
-          </AnimatePresence>
+              </AnimatePresence>
+            </>
+          ) : (
+            <div style={{ height: 'min(720px, calc(100vh - 320px))', minHeight: 420 }}>
+              <DayTimeline
+                date={selectedDate}
+                tasks={filteredTasks}
+                onTaskClick={onEditTask}
+                onUntimedClick={onEditTask}
+                onCreateAt={(time) => setCreateAt(time)}
+                onTaskMove={moveTask}
+              />
+            </div>
+          )}
 
         </div>
       </div>
+
+      {/* Создание задачи тапом по таймлайну (десктоп) */}
+      <AnimatePresence>
+        {createAt && (
+          <TimelineCreatePopover
+            startTime={createAt}
+            onCancel={() => setCreateAt(null)}
+            onCreate={createTimedTask}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Quick chat — висячее поле внизу */}
       <div style={{ flexShrink: 0, padding: '12px 24px 20px' }}>
@@ -1970,8 +2067,8 @@ function Sidebar({
         <NavBtn icon={<Plus size={17} strokeWidth={1.75} />} label="Новый чат" active={newChatActive} onClick={startNewThread} />
 
         <NavBtn icon={<Sun size={17} strokeWidth={1.75} />} label="Сегодня" active={screen === 'dash' && !calActive} onClick={() => { setScreen('dash'); setCalActive(false); }} />
-        <NavBtn icon={<Calendar size={17} strokeWidth={1.75} />} label="Календарь" active={screen === 'dash' && calActive} onClick={() => { setScreen('dash'); setCalActive(true); }} />
-        <NavBtn icon={<MessageCircle size={17} strokeWidth={1.75} />} label="Твои мысли" active={screen === 'threads' || (screen === 'ai' && !newChatActive)} onClick={() => setScreen('threads')} />
+        <NavBtn icon={<MxIcon.CalendarIcon size={16} />} label="Календарь" active={screen === 'dash' && calActive} onClick={() => { setScreen('dash'); setCalActive(true); }} />
+        <NavBtn icon={<MxIcon.ChatIcon size={16} />} label="Твои мысли" active={screen === 'threads' || (screen === 'ai' && !newChatActive)} onClick={() => setScreen('threads')} />
       </nav>
 
       {/* Chats section */}
@@ -2036,7 +2133,7 @@ function Sidebar({
 
       {/* Settings */}
       <div style={{ padding: '10px 8px 18px' }}>
-        <NavBtn icon={<SettingsIcon size={17} strokeWidth={1.75} />} label="Настройки" active={screen === 'settings'} onClick={() => setScreen('settings')} />
+        <NavBtn icon={<MxIcon.SettingsIcon size={16} />} label="Настройки" active={screen === 'settings'} onClick={() => setScreen('settings')} />
       </div>
     </motion.div>
   );
@@ -2047,6 +2144,7 @@ function Sidebar({
 export default function DesktopApp({
   tasks, setTasks, threads, setThreads, settings, setSettings,
   screen, setScreen, curTh, setCurTh, startNewThread, handleLogout,
+  initialPendingMessage, onInitialPendingConsumed,
 }: DesktopAppProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [calActive, setCalActive] = useState(false);
@@ -2059,7 +2157,13 @@ export default function DesktopApp({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(initialPendingMessage ?? null);
+  useEffect(() => {
+    if (initialPendingMessage) {
+      setPendingMessage(initialPendingMessage);
+      onInitialPendingConsumed?.();
+    }
+  }, [initialPendingMessage]);
   const [noInternet, setNoInternet] = useState(false);
 
   const addTask = async (name: string, time: string, date: string) => {
@@ -2069,17 +2173,38 @@ export default function DesktopApp({
     setIsAddModalOpen(false);
   };
 
-  const createTaskFromPanel = async (name: string, time: string, date: string, description: string, location: string) => {
-    const t: Task = { id: uuid(), name, time, date, done: false, description, location };
+  const createTaskFromPanel = async (patch: TaskCreatePatch) => {
+    const t: Task = {
+      id: uuid(), name: patch.name, time: patch.time, endTime: patch.endTime || undefined,
+      date: patch.date, done: false, description: patch.description, location: patch.location,
+      category: patch.category,
+      // Создание вручную с указанным временем → источник 'user'.
+      timeSource: patch.time ? 'user' : undefined,
+    };
     setTasks(prev => [...(Array.isArray(prev) ? prev : []), t]);
     await db.saveTask(t);
     setIsCreatingTask(false);
   };
 
-  const updateTask = async (id: string, name: string, time: string, date: string, description: string, location: string) => {
+  const updateTask = async (id: string, patch: TaskEditPatch) => {
     setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
-      if (t.id === id) { const u = { ...t, name, time, date, description, location }; db.saveTask(u); return u; }
-      return t;
+      if (t.id !== id) return t;
+      const u: Task = {
+        ...t,
+        name: patch.name,
+        time: patch.time,
+        endTime: patch.endTime || undefined,
+        date: patch.date,
+        description: patch.description,
+        location: patch.location,
+        category: patch.category,
+        timeSource: patch.timeChangedByUser ? 'user' : t.timeSource,
+        // Появилось реальное время — предложение агента больше не нужно.
+        suggestedTime: patch.time ? undefined : t.suggestedTime,
+        suggestedEndTime: patch.time ? undefined : t.suggestedEndTime,
+      };
+      db.saveTask(u);
+      return u;
     }));
   };
 

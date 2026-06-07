@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, Settings, Star, ArrowUp, MessageCircle, StickyNote, Mic, Loader, Copy, MoreHorizontal, X, BookOpen } from 'lucide-react';
+import { ChevronLeft, Star, ArrowUp, Mic, Loader, Copy, MoreHorizontal, X, BookOpen } from 'lucide-react';
+import { ChatIcon, NoteIcon, SettingsIcon } from './icons';
 import { MysliThinking } from './MysliThinking';
 import NoteView from './NoteView';
 import TelegramConnectBlock from './TelegramConnectBlock';
@@ -260,14 +261,21 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             const filtered = date ? tasks.filter(t => t.date === date) : tasks;
             result = filtered.length > 0 ? filtered : 'Задач не найдено.';
           } else if (name === 'add_task') {
-            const { name: taskName, time, date, description, location } = args;
+            const { name: taskName, time, endTime, suggestedTime, suggestedEndTime, date, category, description, location } = args;
             const newTask: Task = {
               id: uuid(),
               name: taskName,
               time: time || '',
+              endTime: endTime || undefined,
               date: date || new Date().toISOString().split('T')[0],
               done: false,
               threadId: threadId || undefined,
+              category: category || 'none',
+              // Время предложено агентом → 'agent'. Без времени — не ставим.
+              timeSource: time ? 'agent' : undefined,
+              // Гибкая задача без жёсткого времени — рекомендованный агентом слот.
+              suggestedTime: suggestedTime || undefined,
+              suggestedEndTime: suggestedEndTime || undefined,
               description: description || undefined,
               location: location || undefined,
             };
@@ -297,15 +305,20 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             setIsTyping(false);
             return;
           } else if (name === 'update_task') {
-            const { id: taskId, done, name: taskName, time, date, description, location } = args;
+            const { id: taskId, done, name: taskName, time, endTime, date, category, description, location } = args;
             setTasks(prev => prev.map(t => {
               if (t.id === taskId) {
-                const updated = {
+                const timeChanged = time !== undefined && time !== t.time;
+                const updated: Task = {
                   ...t,
                   done: done !== undefined ? done : t.done,
                   name: taskName || t.name,
                   time: time !== undefined ? time : t.time,
+                  endTime: endTime !== undefined ? endTime : t.endTime,
                   date: date !== undefined ? date : t.date,
+                  category: category !== undefined ? category : t.category,
+                  // Агент сдвинул время → источник 'agent' (его предложение).
+                  timeSource: timeChanged ? 'agent' : t.timeSource,
                   description: description !== undefined ? description : t.description,
                   location: location !== undefined ? location : t.location,
                 };
@@ -763,17 +776,23 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
   }
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#f0f0f0' }}>
+    <div className="flex flex-col h-full" style={{ background: '#f0f0f0', position: 'relative' }}>
       <div
         className="flex items-center justify-between px-5 flex-shrink-0"
-        style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 16px))', paddingBottom: '12px' }}
+        style={{
+          paddingTop: 'max(16px, env(safe-area-inset-top, 16px))',
+          paddingBottom: '16px',
+          background: '#f0f0f0',
+          position: 'relative',
+          zIndex: 6,
+        }}
       >
         <motion.button
           whileTap={{ scale: 0.88 }}
           onClick={handleClose}
           className="w-11 h-11 flex items-center justify-center"
         >
-          <ChevronLeft size={24} strokeWidth={1.75} color="#222224" />
+          <ChevronLeft size={28} strokeWidth={1.75} color="#222224" />
         </motion.button>
 
         <div className="flex items-center gap-0.5 rounded-full p-1" style={{ background: '#ffffff', position: 'relative' }}>
@@ -795,14 +814,14 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             onClick={() => setNoteMode(false)}
             style={{ position: 'relative', zIndex: 1, background: 'transparent' }}
           >
-            <MessageCircle size={20} strokeWidth={1.75} color={!noteMode ? '#222224' : 'rgba(34,34,36,0.3)'} />
+            <ChatIcon size={19} color={!noteMode ? '#222224' : 'rgba(34,34,36,0.3)'} />
           </button>
           <button
             className="w-10 h-10 rounded-full flex items-center justify-center"
             onClick={() => setNoteMode(true)}
             style={{ position: 'relative', zIndex: 1, background: 'transparent' }}
           >
-            <StickyNote size={20} strokeWidth={1.75} color={noteMode ? '#222224' : 'rgba(34,34,36,0.3)'} />
+            <NoteIcon size={19} color={noteMode ? '#222224' : 'rgba(34,34,36,0.3)'} />
           </button>
         </div>
 
@@ -811,7 +830,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           onClick={() => onNavigate('settings')}
           className="w-11 h-11 flex items-center justify-center"
         >
-          <Settings size={22} strokeWidth={1.75} color="rgba(34,34,36,0.5)" />
+          <SettingsIcon size={26} color="rgba(34,34,36,0.5)" />
         </motion.button>
       </div>
 
@@ -821,7 +840,11 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
         </div>
       ) : null}
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-[20px_16px_8px] flex flex-col gap-3 scrollbar-hide min-h-0" style={{ display: noteMode ? 'none' : undefined }}>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-[20px_16px_8px] flex flex-col gap-3 scrollbar-hide min-h-0" style={{
+        display: noteMode ? 'none' : undefined,
+        maskImage: 'linear-gradient(to bottom, transparent 0px, black 48px, black calc(100% - 80px), transparent 100%)',
+        WebkitMaskImage: 'linear-gradient(to bottom, transparent 0px, black 48px, black calc(100% - 80px), transparent 100%)',
+      }}>
         {(() => {
           const visibleMsgs = thread.messages.filter(m => m.role !== 'tool' && !m.tool_calls);
           if (visibleMsgs.length === 0) return (
@@ -1136,7 +1159,13 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
 
       <div
         className="px-4 flex-shrink-0"
-        style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))' }}
+        style={{
+          paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))',
+          paddingTop: '16px',
+          background: '#f0f0f0',
+          position: 'relative',
+          zIndex: 2,
+        }}
       >
         <AnimatePresence>
           {replyQuote && (

@@ -311,6 +311,8 @@ export default function App() {
           setCurTh={setCurTh}
           startNewThread={startNewThread}
           handleLogout={handleLogout}
+          initialPendingMessage={pendingMsg || undefined}
+          onInitialPendingConsumed={() => setPendingMsg('')}
         />
         <AnimatePresence>
           {showEmailBanner && (

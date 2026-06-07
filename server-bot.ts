@@ -101,7 +101,7 @@ function getSystemInstruction(tz = 'Europe/Moscow'): string {
 Правильный ответ когда спрашивают про память: "Да, у меня есть контекст из твоих прошлых разговоров" — и процитируй что именно видишь в архиве. Если конкретного разговора нет в контексте — скажи "этого конкретного разговора сейчас нет в загруженном контексте".
 
 ИНСТРУМЕНТЫ
-— add_task: когда пользователь хочет добавить новую задачу
+— add_task: когда пользователь хочет добавить новую задачу. Если из названия понятна сфера — укажи category (work/personal/event/study). Жёсткое время → time/endTime. Гибкая задача без жёсткого времени → не ставь time, предложи удобный слот через suggestedTime/suggestedEndTime
 — get_tasks: когда спрашивает о планах или задачах
 — update_task: когда нужно изменить, перенести или дополнить задачу. Если не знаешь ID — сначала get_tasks
 — delete_task: когда нужно удалить задачу
@@ -144,8 +144,12 @@ const botTools: any[] = [
         type: 'object',
         properties: {
           name: { type: 'string', description: 'Название задачи.' },
-          time: { type: 'string', description: 'ЛОКАЛЬНОЕ время пользователя HH:MM (МСК). Пример: "23:00" значит 23:00 по Москве. НЕ переводить в UTC.' },
-          date: { type: 'string', description: 'ЛОКАЛЬНАЯ дата пользователя YYYY-MM-DD (МСК). По умолчанию — сегодня по МСК.' }
+          time: { type: 'string', description: 'ФИКСИРОВАННОЕ ЛОКАЛЬНОЕ время начала HH:MM (МСК) — только если время названо жёстко. НЕ переводить в UTC.' },
+          endTime: { type: 'string', description: 'ЛОКАЛЬНОЕ время окончания HH:MM (МСК), если ясна длительность. НЕ переводить в UTC.' },
+          suggestedTime: { type: 'string', description: 'РЕКОМЕНДУЕМОЕ ЛОКАЛЬНОЕ время HH:MM (МСК) для гибкой задачи без жёсткого времени — предложи удобный слот. Задача останется гибкой. НЕ переводить в UTC.' },
+          suggestedEndTime: { type: 'string', description: 'Конец рекомендуемого слота HH:MM (МСК).' },
+          date: { type: 'string', description: 'ЛОКАЛЬНАЯ дата пользователя YYYY-MM-DD (МСК). По умолчанию — сегодня по МСК.' },
+          category: { type: 'string', enum: ['work', 'personal', 'event', 'study'], description: 'Сфера задачи: work (работа), personal (личное), event (встреча/мероприятие), study (учёба). Определи по смыслу. Если непонятно — не указывай.' }
         },
         required: ['name']
       }
@@ -162,8 +166,10 @@ const botTools: any[] = [
           id: { type: 'string', description: 'ID задачи.' },
           done: { type: 'boolean', description: 'Статус выполнения.' },
           name: { type: 'string', description: 'Новое название.' },
-          time: { type: 'string', description: 'Новое ЛОКАЛЬНОЕ время HH:MM (МСК). НЕ переводить в UTC.' },
-          date: { type: 'string', description: 'Новая ЛОКАЛЬНАЯ дата YYYY-MM-DD (МСК).' }
+          time: { type: 'string', description: 'Новое ЛОКАЛЬНОЕ время начала HH:MM (МСК). НЕ переводить в UTC.' },
+          endTime: { type: 'string', description: 'Новое ЛОКАЛЬНОЕ время окончания HH:MM (МСК). НЕ переводить в UTC.' },
+          date: { type: 'string', description: 'Новая ЛОКАЛЬНАЯ дата YYYY-MM-DD (МСК).' },
+          category: { type: 'string', enum: ['work', 'personal', 'event', 'study'], description: 'Сфера задачи: work, personal, event, study.' }
         },
         required: ['id']
       }
@@ -309,11 +315,17 @@ async function executeTool(name: string, args: any, db: Pool, userId: string): P
       const id = crypto.randomUUID();
       const taskDate = String(args.date || today);
       const taskTime = String(args.time || '');
+      const taskEnd = args.endTime ? String(args.endTime) : null;
+      const taskSuggested = args.suggestedTime ? String(args.suggestedTime) : null;
+      const taskSuggestedEnd = args.suggestedEndTime ? String(args.suggestedEndTime) : null;
+      const taskCategory = args.category ? String(args.category) : null;
       const taskName = String(args.name);
+      // Время предложено агентом → time_source 'agent'. Без времени — null.
+      const taskSource = taskTime ? 'agent' : null;
       await db.query(
-        `INSERT INTO user_tasks (id, user_id, name, time, date, done, type, subtasks, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, false, 'regular', '[]'::jsonb, NOW(), NOW())`,
-        [id, userId, taskName, taskTime, taskDate]
+        `INSERT INTO user_tasks (id, user_id, name, time, date, done, type, subtasks, end_time, category, time_source, suggested_time, suggested_end_time, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, false, 'regular', '[]'::jsonb, $6, $7, $8, $9, $10, NOW(), NOW())`,
+        [id, userId, taskName, taskTime, taskDate, taskEnd, taskCategory, taskSource, taskSuggested, taskSuggestedEnd]
       );
       const warnings = await checkTaskConflicts(db, userId, { id, name: taskName, time: taskTime, date: taskDate });
       return { success: true, id, ...(warnings.length > 0 ? { warnings } : {}) };
@@ -324,7 +336,13 @@ async function executeTool(name: string, args: any, db: Pool, userId: string): P
       let idx = 1;
       if (args.done !== undefined) { updates.push(`done = $${idx++}`); params.push(Boolean(args.done)); }
       if (args.name) { updates.push(`name = $${idx++}`); params.push(String(args.name)); }
-      if (args.time !== undefined) { updates.push(`time = $${idx++}`); params.push(String(args.time || '')); }
+      if (args.time !== undefined) {
+        updates.push(`time = $${idx++}`); params.push(String(args.time || ''));
+        // Агент сдвинул время → источник 'agent'.
+        updates.push(`time_source = $${idx++}`); params.push('agent');
+      }
+      if (args.endTime !== undefined) { updates.push(`end_time = $${idx++}`); params.push(args.endTime ? String(args.endTime) : null); }
+      if (args.category !== undefined) { updates.push(`category = $${idx++}`); params.push(args.category ? String(args.category) : null); }
       if (args.date) { updates.push(`date = $${idx++}`); params.push(String(args.date)); }
       if (updates.length === 0) return { error: 'Нет полей для обновления' };
       updates.push(`updated_at = NOW()`);
@@ -1358,6 +1376,13 @@ export async function startBot(db: Pool): Promise<void> {
     console.error('[Bot] Бот не запущен из-за ошибки токена.');
     return;
   }
+
+  // Календарный вид: аддитивно гарантируем колонки (бот — отдельный контейнер от веб-сервера).
+  await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS end_time TEXT`).catch(() => {});
+  await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS category TEXT`).catch(() => {});
+  await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS time_source TEXT`).catch(() => {});
+  await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS suggested_time TEXT`).catch(() => {});
+  await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS suggested_end_time TEXT`).catch(() => {});
 
   const appUrl = process.env.APP_URL || null;
 

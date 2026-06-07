@@ -328,7 +328,15 @@ const buildEventPayload = (task: Task, options?: { includeMeet?: boolean }) => {
   const [hour, minute] = task.time.split(':').map(Number);
   const [year, month, day] = task.date.split('-').map(Number);
   const endDate = new Date(year, month - 1, day, hour, minute, 0, 0);
-  endDate.setMinutes(endDate.getMinutes() + DEFAULT_EVENT_DURATION_MINUTES);
+  // Уважаем явное время конца задачи (endTime), иначе — дефолтная длительность.
+  const [endH, endM] = (task.endTime || '').split(':').map(Number);
+  const hasValidEnd =
+    Number.isFinite(endH) && Number.isFinite(endM) && (endH * 60 + endM) > (hour * 60 + minute);
+  if (hasValidEnd) {
+    endDate.setHours(endH, endM, 0, 0);
+  } else {
+    endDate.setMinutes(endDate.getMinutes() + DEFAULT_EVENT_DURATION_MINUTES);
+  }
   const end = buildDateTime(
     `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`,
     `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`,

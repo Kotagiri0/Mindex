@@ -361,7 +361,7 @@ const SYSTEM_INSTRUCTION = `Ты — Мысль, личный ассистент
 ИНСТРУМЕНТЫ
 Используй только предоставленные инструменты через стандартный механизм tool_calls. Не выдумывай форматы
 
-— add_task: когда пользователь хочет добавить новую задачу
+— add_task: когда пользователь хочет добавить новую задачу. Если из названия понятна сфера — укажи category (work/personal/event/study). Если время названо жёстко ('в 15:00') — time/endTime. Если задача гибкая, без жёсткого времени — НЕ ставь time, а предложи удобный слот через suggestedTime/suggestedEndTime (с учётом типа задачи и обычной загрузки дня). Это раскрашивает и аккуратно размещает задачу в календаре
 — get_tasks: когда спрашивает о планах или задачах
 — update_task: когда нужно изменить, перенести или дополнить задачу. Если не знаешь ID — сначала get_tasks
 — delete_task: когда нужно удалить задачу
@@ -377,8 +377,8 @@ GOOGLE КАЛЕНДАРЬ
 
 const CHAT_TOOLS = [
   { type: "function", function: { name: "get_tasks", description: "Получить список всех задач пользователя или задач на конкретную дату.", parameters: { type: "object", properties: { date: { type: "string", description: "Дата в формате YYYY-MM-DD. Если не указана, вернуть все задачи." } } } } },
-  { type: "function", function: { name: "add_task", description: "Добавить новую задачу в планировщик. Если подключён Google Календарь — задача автоматически появится там.", parameters: { type: "object", properties: { name: { type: "string", description: "Название задачи." }, time: { type: "string", description: "Время задачи в формате HH:MM (необязательно)." }, date: { type: "string", description: "Дата задачи в формате YYYY-MM-DD. По умолчанию — сегодня." }, description: { type: "string", description: "Описание задачи (необязательно). Отображается в Google Календаре." }, location: { type: "string", description: "Место или адрес (необязательно). Отображается в Google Календаре." } }, required: ["name"] } } },
-  { type: "function", function: { name: "update_task", description: "Обновить существующую задачу. Изменения автоматически синхронизируются с Google Календарём если он подключён.", parameters: { type: "object", properties: { id: { type: "string", description: "ID задачи." }, done: { type: "boolean", description: "Статус выполнения." }, name: { type: "string", description: "Новое название задачи." }, time: { type: "string", description: "Новое время задачи в формате HH:MM." }, date: { type: "string", description: "Новая дата задачи в формате YYYY-MM-DD." }, description: { type: "string", description: "Описание задачи. Отображается в Google Календаре." }, location: { type: "string", description: "Место или адрес. Отображается в Google Календаре." } }, required: ["id"] } } },
+  { type: "function", function: { name: "add_task", description: "Добавить новую задачу в планировщик. Если подключён Google Календарь — задача автоматически появится там.", parameters: { type: "object", properties: { name: { type: "string", description: "Название задачи." }, time: { type: "string", description: "ФИКСИРОВАННОЕ время начала HH:MM — только если пользователь назвал конкретное время встречи/события ('созвон в 15:00'). Если время не задано жёстко — НЕ указывай, используй suggestedTime." }, endTime: { type: "string", description: "Время окончания HH:MM (для фиксированного времени, если знаешь длительность)." }, suggestedTime: { type: "string", description: "РЕКОМЕНДУЕМОЕ время начала HH:MM для гибкой задачи без жёсткого времени ('сделать уроки' → предложи удобный слот с учётом типа задачи и обычной загрузки дня). Задача останется гибкой, это лишь подсказка где её удобно сделать." }, suggestedEndTime: { type: "string", description: "Конец рекомендуемого слота HH:MM (оцени длительность)." }, date: { type: "string", description: "Дата задачи в формате YYYY-MM-DD. По умолчанию — сегодня." }, category: { type: "string", enum: ["work", "personal", "event", "study"], description: "Сфера задачи: work (работа), personal (личное), event (встреча/мероприятие), study (учёба). Определи по смыслу названия. Если непонятно — не указывай." }, description: { type: "string", description: "Описание задачи (необязательно). Отображается в Google Календаре." }, location: { type: "string", description: "Место или адрес (необязательно). Отображается в Google Календаре." } }, required: ["name"] } } },
+  { type: "function", function: { name: "update_task", description: "Обновить существующую задачу. Изменения автоматически синхронизируются с Google Календарём если он подключён.", parameters: { type: "object", properties: { id: { type: "string", description: "ID задачи." }, done: { type: "boolean", description: "Статус выполнения." }, name: { type: "string", description: "Новое название задачи." }, time: { type: "string", description: "Новое время начала в формате HH:MM." }, endTime: { type: "string", description: "Новое время окончания в формате HH:MM." }, date: { type: "string", description: "Новая дата задачи в формате YYYY-MM-DD." }, category: { type: "string", enum: ["work", "personal", "event", "study"], description: "Сфера задачи: work, personal, event, study." }, description: { type: "string", description: "Описание задачи. Отображается в Google Календаре." }, location: { type: "string", description: "Место или адрес. Отображается в Google Календаре." } }, required: ["id"] } } },
   { type: "function", function: { name: "delete_task", description: "Удалить задачу из календаря.", parameters: { type: "object", properties: { id: { type: "string", description: "ID задачи." } }, required: ["id"] } } },
   { type: "function", function: { name: "save_as_note", description: "Сохранить текст как отдельную заметку в архив.", parameters: { type: "object", properties: { content: { type: "string", description: "Текст заметки для сохранения." }, title: { type: "string", description: "Название заметки (3-5 слов)." } }, required: ["content", "title"] } } },
   { type: "function", function: { name: "get_notes", description: "Получить список заметок пользователя с их ID и названиями. Используй перед delete_note чтобы найти нужную заметку.", parameters: { type: "object", properties: {} } } },
@@ -514,6 +514,13 @@ const ensureAuthSchema = async () => {
   await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS thread_id TEXT;`);
   await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS description TEXT;`);
   await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS location TEXT;`);
+  // Календарный вид: время конца, категория (цвет), источник времени (user/agent).
+  await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS end_time TEXT;`);
+  await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS category TEXT;`);
+  await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS time_source TEXT;`);
+  // Скрытое предложение агента "когда лучше" для гибких задач без жёсткого времени.
+  await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS suggested_time TEXT;`);
+  await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS suggested_end_time TEXT;`);
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS user_threads (
@@ -1226,7 +1233,9 @@ app.get("/api/data/bootstrap", requireAuth, async (req, res) => {
       ),
       db.query(
         `
-          SELECT id, name, time, date, done, type, calendar_event_id, subtasks
+          SELECT id, name, time, date, done, type, calendar_event_id, subtasks,
+                 thread_id, description, location, end_time, category, time_source,
+                 suggested_time, suggested_end_time
           FROM user_tasks
           WHERE user_id = $1
           ORDER BY updated_at DESC, created_at DESC
@@ -1267,6 +1276,11 @@ app.get("/api/data/bootstrap", requireAuth, async (req, res) => {
         threadId: row.thread_id || undefined,
         description: row.description || undefined,
         location: row.location || undefined,
+        endTime: row.end_time || undefined,
+        category: row.category || undefined,
+        timeSource: row.time_source || undefined,
+        suggestedTime: row.suggested_time || undefined,
+        suggestedEndTime: row.suggested_end_time || undefined,
       })),
       threads: threadsRes.rows.map((row) => ({
         id: row.id,
@@ -1347,8 +1361,8 @@ app.post("/api/data/task", requireAuth, dataRateLimit, async (req, res) => {
   try {
       await db.query(
         `
-        INSERT INTO user_tasks (id, user_id, name, time, date, done, type, calendar_event_id, subtasks, thread_id, description, location, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, NOW())
+        INSERT INTO user_tasks (id, user_id, name, time, date, done, type, calendar_event_id, subtasks, thread_id, description, location, end_time, category, time_source, suggested_time, suggested_end_time, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14, $15, $16, $17, NOW())
         ON CONFLICT (id)
         DO UPDATE SET
           user_id = EXCLUDED.user_id,
@@ -1362,6 +1376,11 @@ app.post("/api/data/task", requireAuth, dataRateLimit, async (req, res) => {
           thread_id = EXCLUDED.thread_id,
           description = EXCLUDED.description,
           location = EXCLUDED.location,
+          end_time = EXCLUDED.end_time,
+          category = EXCLUDED.category,
+          time_source = EXCLUDED.time_source,
+          suggested_time = EXCLUDED.suggested_time,
+          suggested_end_time = EXCLUDED.suggested_end_time,
           updated_at = NOW()
       `,
       [
@@ -1377,6 +1396,11 @@ app.post("/api/data/task", requireAuth, dataRateLimit, async (req, res) => {
         task.threadId ? String(task.threadId) : null,
         task.description ? String(task.description) : null,
         task.location ? String(task.location) : null,
+        task.endTime ? String(task.endTime) : null,
+        task.category ? String(task.category) : null,
+        task.timeSource ? String(task.timeSource) : null,
+        task.suggestedTime ? String(task.suggestedTime) : null,
+        task.suggestedEndTime ? String(task.suggestedEndTime) : null,
       ]
     );
     return res.status(200).json({ success: true });

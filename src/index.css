@@ -81,6 +81,21 @@
   --color-danger: #c0392b;
 }
 
+/* ─── Native input[type=time/date] — убираем системный хром ─────────────── */
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator {
+  display: none;
+  -webkit-appearance: none;
+}
+input[type="time"]::-webkit-inner-spin-button,
+input[type="date"]::-webkit-inner-spin-button {
+  display: none;
+}
+input[type="time"]::-webkit-clear-button,
+input[type="date"]::-webkit-clear-button {
+  display: none;
+}
+
 /* ─── Base ───────────────────────────────────────────────────────────────── */
 
 *, *::before, *::after {
@@ -138,6 +153,9 @@ input, textarea, button {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.1); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.18); }
+
+.hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.hide-scrollbar::-webkit-scrollbar { display: none; }
 
 /* ─── Content container ──────────────────────────────────────────────────── */
 
