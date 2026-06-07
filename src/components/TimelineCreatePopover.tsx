@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { formatTime, parseTime, DEFAULT_DURATION_MIN } from '../lib/timeline';
 import { useSquircle } from '../hooks/useSquircle';
+import taskTimeIcon from '../assets/icons/task_time.svg';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
-const H = "'Helvetica Neue', Helvetica, sans-serif";
 
 interface Props {
   startTime: string;
@@ -88,30 +88,22 @@ export default function TimelineCreatePopover({ startTime, onCancel, onCreate }:
         </FieldBox>
 
         {/* Time row */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-          <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+          <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 16 }}>
             <span style={{ fontFamily: M, fontSize: 15, fontWeight: start ? 500 : 400, color: start ? '#0B0D10' : 'rgba(11,13,16,0.3)' }}>
               {start || 'Начало'}
             </span>
-            <ClockIcon />
-            <input
-              type="time"
-              value={start}
-              onChange={(e) => setStart(e.target.value)}
-              style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-            />
+            <img src={taskTimeIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
+            <input type="time" value={start} onChange={(e) => setStart(e.target.value)}
+              style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
           </FieldBox>
-          <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 16 }}>
             <span style={{ fontFamily: M, fontSize: 15, fontWeight: end ? 500 : 400, color: end ? '#0B0D10' : 'rgba(11,13,16,0.3)' }}>
               {end || 'Конец'}
             </span>
-            <ClockIcon />
-            <input
-              type="time"
-              value={end}
-              onChange={(e) => setEnd(e.target.value)}
-              style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-            />
+            <img src={taskTimeIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
+            <input type="time" value={end} onChange={(e) => setEnd(e.target.value)}
+              style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
           </FieldBox>
         </div>
 
@@ -145,20 +137,11 @@ function FieldBox({ children, style }: { children: React.ReactNode; style?: Reac
     <div style={{
       position: 'relative',
       background: '#f5f5f5',
-      borderRadius: 14,
-      padding: '14px 16px',
+      borderRadius: 18,
+      padding: '12px 16px',
       ...style,
     }}>
       {children}
     </div>
-  );
-}
-
-function ClockIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(11,13,16,0.35)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
   );
 }

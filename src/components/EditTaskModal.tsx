@@ -1,8 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Task, TaskCategory } from '../types';
 import { CATEGORY_COLORS, CATEGORY_LABELS, ORDERED_CATEGORIES } from '../lib/taskCategories';
 import { useSquircle } from '../hooks/useSquircle';
+
+import taskTimeIcon from '../assets/icons/task_time.svg';
+import taskDateIcon from '../assets/icons/task_date.svg';
+import taskPlaceIcon from '../assets/icons/task_place.svg';
 
 export interface TaskEditPatch {
   name: string;
@@ -26,9 +30,8 @@ interface EditTaskModalProps {
 }
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
-const H = "'Helvetica Neue', Helvetica, sans-serif";
 
-export default function EditTaskModal({ task, isCreate, initialDate, onClose, onUpdate, onDelete, onOpenThread }: EditTaskModalProps) {
+export default function EditTaskModal({ task, isCreate, initialDate, onClose, onUpdate, onDelete }: EditTaskModalProps) {
   const [name, setName] = useState('');
   const [time, setTime] = useState('');
   const [endTime, setEndTime] = useState('');
@@ -52,15 +55,9 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
       setInitialTime(task.time || '');
       setInitialEnd(task.endTime || '');
     } else if (isCreate) {
-      setName('');
-      setTime('');
-      setEndTime('');
-      setDate(initialDate || '');
-      setDescription('');
-      setLocation('');
-      setCategory('none');
-      setInitialTime('');
-      setInitialEnd('');
+      setName(''); setTime(''); setEndTime('');
+      setDate(initialDate || ''); setDescription(''); setLocation('');
+      setCategory('none'); setInitialTime(''); setInitialEnd('');
     }
   }, [task, isCreate, initialDate]);
 
@@ -74,21 +71,14 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
     <AnimatePresence>
       {task && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', alignItems: 'flex-end' }}>
-          {/* Backdrop */}
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={onClose}
             style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }}
           />
-
-          {/* Sheet */}
           <motion.div
             ref={squircleRef}
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
+            initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
             style={{
               position: 'relative',
@@ -110,89 +100,53 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
               Поменять
             </h3>
 
-            {/* Name field */}
-            <FieldBox style={{ marginBottom: 10 }}>
+            {/* Name */}
+            <FieldBox style={{ marginBottom: 8 }}>
               <input
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Что на повестке дня?"
-                style={{
-                  width: '100%',
-                  border: 'none',
-                  outline: 'none',
-                  background: 'transparent',
-                  fontFamily: M,
-                  fontSize: 15,
-                  fontWeight: name ? 500 : 400,
-                  color: name ? '#0B0D10' : 'rgba(11,13,16,0.3)',
-                }}
+                style={inputStyle(!!name)}
               />
             </FieldBox>
 
             {/* Time row */}
-            <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-              <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontFamily: M, fontSize: 15, fontWeight: time ? 500 : 400, color: time ? '#0B0D10' : 'rgba(11,13,16,0.3)' }}>
-                  {time || 'Начало'}
-                </span>
-                <ClockIcon />
-                <input
-                  type="time"
-                  value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                  style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-                />
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 16 }}>
+                <span style={valueStyle(!!time)}>{time || 'Начало'}</span>
+                <img src={taskTimeIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
+                <input type="time" value={time} onChange={(e) => setTime(e.target.value)}
+                  style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
               </FieldBox>
-              <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontFamily: M, fontSize: 15, fontWeight: endTime ? 500 : 400, color: endTime ? '#0B0D10' : 'rgba(11,13,16,0.3)' }}>
-                  {endTime || 'Конец'}
-                </span>
-                <ClockIcon />
-                <input
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-                />
+              <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 16 }}>
+                <span style={valueStyle(!!endTime)}>{endTime || 'Конец'}</span>
+                <img src={taskTimeIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
+                <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
+                  style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
               </FieldBox>
             </div>
 
-            {/* Date field */}
-            <FieldBox style={{ marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontFamily: M, fontSize: 15, fontWeight: date ? 500 : 400, color: date ? '#0B0D10' : 'rgba(11,13,16,0.3)' }}>
-                {date ? formatDateRu(date) : 'В какой день?'}
-              </span>
-              <CalendarIcon />
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-              />
+            {/* Date */}
+            <FieldBox style={{ marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 16 }}>
+              <span style={valueStyle(!!date)}>{date ? formatDateRu(date) : 'В какой день?'}</span>
+              <img src={taskDateIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+                style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
             </FieldBox>
 
-            {/* Location field */}
-            <FieldBox style={{ marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            {/* Location */}
+            <FieldBox style={{ marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 16 }}>
               <input
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 placeholder="Где будет проходить?"
-                style={{
-                  flex: 1,
-                  border: 'none',
-                  outline: 'none',
-                  background: 'transparent',
-                  fontFamily: M,
-                  fontSize: 15,
-                  fontWeight: location ? 500 : 400,
-                  color: location ? '#0B0D10' : 'rgba(11,13,16,0.3)',
-                }}
+                style={{ ...inputStyle(!!location), flex: 1 }}
               />
-              <LocationIcon />
+              <img src={taskPlaceIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
             </FieldBox>
 
-            {/* Description field */}
+            {/* Description */}
             <FieldBox style={{ marginBottom: 20 }}>
               <textarea
                 value={description}
@@ -200,16 +154,11 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
                 placeholder="Описание, если нужно подробнее"
                 rows={3}
                 style={{
-                  width: '100%',
-                  border: 'none',
-                  outline: 'none',
-                  background: 'transparent',
-                  fontFamily: M,
-                  fontSize: 15,
+                  width: '100%', border: 'none', outline: 'none', background: 'transparent',
+                  fontFamily: M, fontSize: 15,
                   fontWeight: description ? 500 : 400,
                   color: description ? '#0B0D10' : 'rgba(11,13,16,0.3)',
-                  resize: 'none',
-                  lineHeight: 1.5,
+                  resize: 'none', lineHeight: 1.5,
                 }}
               />
             </FieldBox>
@@ -222,16 +171,9 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
               <button
                 onClick={() => onDelete(task.id)}
                 style={{
-                  flex: 1,
-                  height: 52,
-                  background: '#FFF0F0',
-                  color: '#E53935',
-                  border: 'none',
-                  borderRadius: 999,
-                  fontFamily: M,
-                  fontSize: 16,
-                  fontWeight: 700,
-                  cursor: 'pointer',
+                  flex: 1, height: 52, background: '#FFF0F0', color: '#E53935',
+                  border: 'none', borderRadius: 999, fontFamily: M, fontSize: 16,
+                  fontWeight: 700, cursor: 'pointer',
                 }}
               >
                 Убрать
@@ -240,15 +182,10 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
                 onClick={handleSave}
                 disabled={!name.trim()}
                 style={{
-                  flex: 2,
-                  height: 52,
+                  flex: 2, height: 52,
                   background: name.trim() ? '#0B0D10' : 'rgba(11,13,16,0.18)',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: 999,
-                  fontFamily: M,
-                  fontSize: 16,
-                  fontWeight: 700,
+                  color: '#ffffff', border: 'none', borderRadius: 999,
+                  fontFamily: M, fontSize: 16, fontWeight: 700,
                   cursor: name.trim() ? 'pointer' : 'default',
                   transition: 'background 0.2s',
                 }}
@@ -265,9 +202,20 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
 
 // ─── Category Picker ────────────────────────────────────────────────────────
 
+const CIRCLE_H = 36;
+const PILL_H = 52;
+
 function CategoryPicker({ value, onChange }: { value: TaskCategory; onChange: (c: TaskCategory) => void }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, height: 52 }}>
+    <div style={{
+      background: '#f5f5f5',
+      borderRadius: 18,
+      padding: '12px 16px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8,
+    }}>
       {ORDERED_CATEGORIES.map((cat) => {
         const c = CATEGORY_COLORS[cat];
         const active = value === cat;
@@ -278,7 +226,6 @@ function CategoryPicker({ value, onChange }: { value: TaskCategory; onChange: (c
             onClick={() => onChange(cat)}
             transition={{ type: 'spring', stiffness: 500, damping: 38 }}
             style={{
-              height: 52,
               background: c.bg,
               border: 'none',
               borderRadius: 999,
@@ -289,9 +236,11 @@ function CategoryPicker({ value, onChange }: { value: TaskCategory; onChange: (c
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
+              padding: 0,
             }}
             animate={{
-              width: active ? 160 : 52,
+              width: active ? 160 : CIRCLE_H,
+              height: active ? PILL_H : CIRCLE_H,
             }}
           >
             <AnimatePresence mode="wait">
@@ -302,33 +251,36 @@ function CategoryPicker({ value, onChange }: { value: TaskCategory; onChange: (c
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.15 }}
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, pointerEvents: 'none' }}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    gap: 1, pointerEvents: 'none',
+                  }}
                 >
                   <span style={{
                     fontFamily: "'Helvetica Neue', Helvetica, sans-serif",
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 400,
                     color: c.textMuted,
                     letterSpacing: '0.01em',
+                    lineHeight: 1.2,
                   }}>
                     категория
                   </span>
                   <span style={{
                     fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
-                    fontSize: 13,
+                    fontSize: 16,
                     fontWeight: 500,
                     color: c.text,
                     whiteSpace: 'nowrap',
+                    lineHeight: 1.2,
                   }}>
-                    {CATEGORY_LABELS[cat]}
+                    {CATEGORY_LABELS[cat].toLowerCase()}
                   </span>
                 </motion.div>
               ) : (
                 <motion.div
                   key="dot"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   transition={{ duration: 0.1 }}
                 />
               )}
@@ -353,8 +305,8 @@ function FieldBox({ children, style }: { children: React.ReactNode; style?: Reac
     <div style={{
       position: 'relative',
       background: '#f5f5f5',
-      borderRadius: 14,
-      padding: '14px 16px',
+      borderRadius: 18,
+      padding: '12px 16px',
       ...style,
     }}>
       {children}
@@ -362,31 +314,17 @@ function FieldBox({ children, style }: { children: React.ReactNode; style?: Reac
   );
 }
 
-function ClockIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(11,13,16,0.35)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  );
-}
+const inputStyle = (hasValue: boolean): React.CSSProperties => ({
+  width: '100%', border: 'none', outline: 'none', background: 'transparent',
+  fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+  fontSize: 15,
+  fontWeight: hasValue ? 500 : 400,
+  color: hasValue ? '#0B0D10' : 'rgba(11,13,16,0.3)',
+});
 
-function CalendarIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(11,13,16,0.35)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
-  );
-}
-
-function LocationIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(11,13,16,0.35)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-      <circle cx="12" cy="10" r="3" />
-    </svg>
-  );
-}
+const valueStyle = (hasValue: boolean): React.CSSProperties => ({
+  fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+  fontSize: 15,
+  fontWeight: hasValue ? 500 : 400,
+  color: hasValue ? '#0B0D10' : 'rgba(11,13,16,0.3)',
+});
