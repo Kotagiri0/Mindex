@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Plus, ArrowUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Task, Screen } from '../types';
+import { Task, Screen, TaskCategory } from '../types';
 import TaskItem from './TaskItem';
 import EditTaskModal, { TaskEditPatch } from './EditTaskModal';
 import DayTimeline from './DayTimeline';
@@ -251,12 +251,12 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
   };
 
   // Создание задачи тапом по таймлайну: человек явно указал время → timeSource: 'user'.
-  const createTimedTask = async (name: string, time: string, endTime: string) => {
+  const createTimedTask = async (name: string, time: string, endTime: string, category: TaskCategory = 'none') => {
     const trimmed = name.trim();
     if (!trimmed) return;
     const newTask: Task = {
       id: uuid(), name: trimmed, time, endTime, date: selectedDate,
-      done: false, category: 'none', timeSource: 'user',
+      done: false, category, timeSource: 'user',
     };
     setTasks(prev => (Array.isArray(prev) ? [...prev, newTask] : [newTask]));
     await db.saveTask(newTask);

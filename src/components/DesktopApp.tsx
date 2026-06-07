@@ -7,7 +7,7 @@ import {
   PanelLeftOpen, PanelLeftClose, Pencil, Copy, MoreHorizontal, X, StickyNote, BookOpen, ChevronRight,
   LayoutList, CalendarRange,
 } from 'lucide-react';
-import { Task, Thread, Message, Settings as SettingsType, Screen } from '../types';
+import { Task, Thread, Message, Settings as SettingsType, Screen, TaskCategory } from '../types';
 import AddTaskModal from './AddTaskModal';
 import TaskDetailPanel, { TaskCreatePatch } from './TaskDetailPanel';
 import { TaskEditPatch } from './EditTaskModal';
@@ -1687,11 +1687,11 @@ function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
   };
 
   // Создание задачи тапом по таймлайну: человек явно указал время → timeSource: 'user'.
-  const createTimedTask = async (name: string, time: string, endTime: string) => {
+  const createTimedTask = async (name: string, time: string, endTime: string, category: TaskCategory = 'none') => {
     if (!name.trim()) return;
     const t: Task = {
       id: uuid(), name: name.trim(), time, endTime, date: selectedDate,
-      done: false, category: 'none', timeSource: 'user',
+      done: false, category, timeSource: 'user',
     };
     setTasks(prev => [...(Array.isArray(prev) ? prev : []), t]);
     await db.saveTask(t);
