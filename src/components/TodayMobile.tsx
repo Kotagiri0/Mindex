@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, Loader } from 'lucide-react';
+import { ChevronLeft, Mic, Loader, ArrowUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Task, Screen } from '../types';
 import { db } from '../lib/db';
@@ -25,7 +25,6 @@ interface TodayMobileProps {
 
 export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWithMessage }: TodayMobileProps) {
   const [input, setInput] = useState('');
-  const [collapsed, setCollapsed] = useState(false);
   const [justDone, setJustDone] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const touchStartX = useRef(0);
@@ -80,8 +79,6 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
     onNewThreadWithMessage(msg);
   };
 
-  const hasTasks = todayTasks.length > 0;
-
   return (
     <div
       style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f0f0f0' }}
@@ -116,81 +113,31 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
       {/* Spacer */}
       <div style={{ flex: 1 }} />
 
-      {/* Bottom card */}
-      <div style={{ flexShrink: 0, background: '#ffffff', borderRadius: '28px 28px 0 0', overflow: 'hidden' }}>
-
-        {/* Tasks section */}
+      {/* Task list — над карточкой, на сером фоне */}
+      <div style={{ padding: '0 16px', flexShrink: 0, maxHeight: '45vh', overflowY: 'auto' }}>
         <AnimatePresence initial={false}>
-          {hasTasks && (
+          {todayTasks.map(t => (
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
+              key={t.id}
+              initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+              animate={{ opacity: 1, height: 'auto', marginBottom: 0 }}
               exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              style={{ overflow: 'hidden' }}
             >
-              {/* Collapse header */}
-              <div
-                onClick={() => setCollapsed(v => !v)}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '16px 20px 12px', cursor: 'pointer',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <motion.div
-                    animate={{ rotate: collapsed ? -90 : 0 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <ChevronLeft
-                      size={18}
-                      strokeWidth={2}
-                      color="rgba(11,13,16,0.4)"
-                      style={{ transform: 'rotate(-90deg)' }}
-                    />
-                  </motion.div>
-                  <span style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: 'rgba(11,13,16,0.5)' }}>
-                    Ещё {todayTasks.length} {plural(todayTasks.length)}
-                  </span>
-                </div>
-                <motion.button
-                  whileTap={{ scale: 0.85 }}
-                  onClick={e => { e.stopPropagation(); onNavigate('dash'); }}
-                  style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
-                >
-                  <PlusIcon />
-                </motion.button>
-              </div>
-
-              {/* Task list */}
-              <AnimatePresence initial={false}>
-                {!collapsed && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.18 }}
-                    style={{ maxHeight: '40vh', overflowY: 'auto' }}
-                  >
-                    {todayTasks.map(t => (
-                      <TaskRow
-                        key={t.id}
-                        task={t}
-                        onToggle={() => toggleTask(t.id)}
-                        onClick={() => onNavigate('dash')}
-                      />
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Divider */}
-              <div style={{ height: 1, background: 'rgba(11,13,16,0.06)', margin: '0 20px' }} />
+              <TaskRow
+                task={t}
+                onToggle={() => toggleTask(t.id)}
+                onClick={() => onNavigate('dash')}
+              />
             </motion.div>
-          )}
+          ))}
         </AnimatePresence>
+      </div>
 
-        {/* Chat input */}
-        <div style={{ padding: '16px 20px' }}>
+      {/* Input card — точная копия AIChat */}
+      <div style={{ flexShrink: 0, padding: '8px 16px', paddingBottom: 'calc(8px + env(safe-area-inset-bottom, 0px))' }}>
+        <div style={{ background: '#ffffff', borderRadius: 20, padding: 16 }}>
           <textarea
             ref={inputRef}
             rows={1}
@@ -200,69 +147,44 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
             placeholder="Есть мысли?"
             style={{
               width: '100%', background: 'transparent', border: 'none', outline: 'none',
-              fontFamily: M, fontSize: 15, color: '#0B0D10',
-              marginBottom: 12, display: 'block', resize: 'none', lineHeight: 1.55,
+              fontFamily: M, fontSize: 15, color: '#222224',
+              display: 'block', resize: 'none', lineHeight: 1.55,
               maxHeight: '120px', overflowY: 'auto',
             }}
           />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            {/* Add task shortcut */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginTop: 12, gap: 8 }}>
             <motion.button
-              whileTap={{ scale: 0.85 }}
-              onClick={() => onNavigate('dash')}
-              style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
+              onPointerDown={startRecording}
+              onPointerUp={stopRecording}
+              onPointerCancel={stopRecording}
+              disabled={voiceState === 'processing'}
+              style={{
+                width: 32, height: 32, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: voiceState === 'recording' ? '#c0392b' : voiceState === 'processing' ? 'rgba(34,34,36,0.15)' : 'rgba(34,34,36,0.08)',
+                transition: 'background 0.15s',
+              }}
             >
-              <PlusIcon size={22} color="rgba(11,13,16,0.35)" />
+              {voiceState === 'processing'
+                ? <Loader size={15} strokeWidth={2} color="#222224" className="animate-spin" />
+                : <Mic size={15} strokeWidth={1.75} color={voiceState === 'recording' ? '#fff' : 'rgba(34,34,36,0.5)'} />
+              }
             </motion.button>
-
-            {/* Send / Voice */}
-            <AnimatePresence mode="wait">
-              {input.trim() ? (
-                <motion.button
-                  key="send"
-                  initial={{ scale: 0.7, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.7, opacity: 0 }}
-                  transition={{ duration: 0.12 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={handleSubmit}
-                  style={{
-                    width: 36, height: 36, borderRadius: '50%', background: '#0B0D10',
-                    border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
-                >
-                  <SendIcon />
-                </motion.button>
-              ) : (
-                <motion.button
-                  key="mic"
-                  initial={{ scale: 0.7, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.7, opacity: 0 }}
-                  transition={{ duration: 0.12 }}
-                  onPointerDown={startRecording}
-                  onPointerUp={stopRecording}
-                  onPointerCancel={stopRecording}
-                  disabled={voiceState === 'processing'}
-                  style={{
-                    width: 36, height: 36, borderRadius: '50%', border: 'none', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: voiceState === 'recording' ? '#c0392b' : 'rgba(11,13,16,0.08)',
-                    transition: 'background 0.15s',
-                  }}
-                >
-                  {voiceState === 'processing'
-                    ? <Loader size={15} strokeWidth={2} color="#0B0D10" style={{ animation: 'spin 1s linear infinite' }} />
-                    : <MicIcon color={voiceState === 'recording' ? '#fff' : 'rgba(11,13,16,0.4)'} />
-                  }
-                </motion.button>
-              )}
-            </AnimatePresence>
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={handleSubmit}
+              style={{
+                width: 44, height: 44, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: input.trim() ? '#222224' : 'rgba(34,34,36,0.15)',
+                transition: 'background 0.15s',
+              }}
+            >
+              <ArrowUp size={20} strokeWidth={2} color="#ffffff" />
+            </motion.button>
           </div>
         </div>
-
       </div>
-      <div style={{ height: 'env(safe-area-inset-bottom, 0px)', background: '#ffffff', flexShrink: 0 }} />
     </div>
   );
 }
@@ -273,38 +195,41 @@ function TaskRow({ task, onToggle, onClick }: { task: Task; onToggle: () => void
   return (
     <div
       onClick={onClick}
-      style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 20px', cursor: 'pointer' }}
+      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', cursor: 'pointer' }}
     >
       <motion.button
         whileTap={{ scale: 0.85 }}
         onClick={e => { e.stopPropagation(); onToggle(); }}
         style={{
-          flexShrink: 0, width: 28, height: 28, borderRadius: 14,
-          border: `1.5px solid ${task.done ? '#0B0D10' : 'rgba(11,13,16,0.22)'}`,
-          background: task.done ? '#0B0D10' : 'transparent',
+          flexShrink: 0, width: 26, height: 26, borderRadius: 13,
+          border: `1.5px solid ${task.done ? '#222224' : 'rgba(34,34,36,0.25)'}`,
+          background: task.done ? '#222224' : 'transparent',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: 'pointer', overflow: 'hidden',
         }}
       >
-        {task.done && (
-          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ duration: 0.15 }}>
-            <CheckIcon />
-          </motion.div>
-        )}
+        <AnimatePresence>
+          {task.done && (
+            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}>
+              <CheckIcon />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.button>
 
       <span style={{
-        flex: 1, fontFamily: M, fontSize: 16, fontWeight: 400,
-        color: task.done ? 'rgba(11,13,16,0.3)' : '#0B0D10',
+        flex: 1, fontFamily: M, fontSize: 15, fontWeight: 400,
+        color: task.done ? 'rgba(34,34,36,0.35)' : '#222224',
         textDecoration: task.done ? 'line-through' : 'none',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        transition: 'color 0.15s',
       }}>
         {task.name}
       </span>
 
       {task.time && (
-        <span style={{ fontFamily: M, fontSize: 14, color: 'rgba(11,13,16,0.35)', flexShrink: 0 }}>
-          {task.time}
+        <span style={{ fontFamily: M, fontSize: 13, color: 'rgba(34,34,36,0.4)', flexShrink: 0 }}>
+          {task.time}{task.endTime ? ` – ${task.endTime}` : ''}
         </span>
       )}
     </div>
@@ -313,47 +238,10 @@ function TaskRow({ task, onToggle, onClick }: { task: Task; onToggle: () => void
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
-function PlusIcon({ size = 20, color = 'rgba(11,13,16,0.4)' }: { size?: number; color?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round">
-      <line x1="12" y1="5" x2="12" y2="19" />
-      <line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  );
-}
-
-function SendIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="12" y1="19" x2="12" y2="5" />
-      <polyline points="5 12 12 5 19 12" />
-    </svg>
-  );
-}
-
-function MicIcon({ color = 'rgba(11,13,16,0.4)' }: { color?: string }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-      <line x1="12" y1="19" x2="12" y2="23" />
-      <line x1="8" y1="23" x2="16" y2="23" />
-    </svg>
-  );
-}
-
 function CheckIcon() {
   return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="20 6 9 17 4 12" />
     </svg>
   );
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function plural(n: number): string {
-  if (n % 10 === 1 && n % 100 !== 11) return 'дело';
-  if ([2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100)) return 'дела';
-  return 'дел';
 }
