@@ -92,10 +92,10 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
             }}
           >
             {/* Drag handle */}
-            <div style={{ width: 36, height: 4, background: 'rgba(34,34,36,0.12)', borderRadius: 2, margin: '0 auto 20px' }} />
+            <div style={{ width: 36, height: 4, background: 'rgba(34,34,36,0.12)', borderRadius: 2, margin: '0 auto 12px' }} />
 
             {/* Title */}
-            <h3 style={{ fontFamily: M, fontSize: 20, fontWeight: 500, color: '#0B0D10', textAlign: 'center', marginBottom: 20 }}>
+            <h3 style={{ fontFamily: M, fontSize: 17, fontWeight: 500, color: '#0B0D10', textAlign: 'center', marginBottom: 14 }}>
               Поменять
             </h3>
 
@@ -220,7 +220,7 @@ function CategoryPicker({ value, onChange }: { value: TaskCategory; onChange: (c
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 8,
+      gap: 6,
       height: PILL_H,
     }}>
       {ORDERED_CATEGORIES.map((cat) => {
@@ -246,7 +246,7 @@ function CategoryPicker({ value, onChange }: { value: TaskCategory; onChange: (c
               padding: 0,
             }}
             animate={{
-              width: active ? 160 : CIRCLE_H,
+              width: active ? 140 : CIRCLE_H,
               height: active ? PILL_H : CIRCLE_H,
             }}
           >

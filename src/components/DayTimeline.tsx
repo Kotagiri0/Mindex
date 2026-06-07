@@ -193,6 +193,7 @@ export default function DayTimeline({
       <div
         ref={scrollRef}
         onWheel={handleWheelZoom}
+        className="hide-scrollbar"
         style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', touchAction: 'pan-y' }}
       >
         <div
