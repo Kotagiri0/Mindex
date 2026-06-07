@@ -171,7 +171,6 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
               />
             </FieldBox>
 
-            {/* Category picker */}
             <CategoryPicker value={category} onChange={setCategory} />
 
             {/* Buttons */}
@@ -220,7 +219,7 @@ function CategoryPicker({ value, onChange }: { value: TaskCategory; onChange: (c
     <div style={{
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'space-between',
+      justifyContent: 'center',
       gap: 8,
       height: PILL_H,
     }}>
