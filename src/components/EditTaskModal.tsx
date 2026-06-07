@@ -209,13 +209,11 @@ const PILL_H = 52;
 function CategoryPicker({ value, onChange }: { value: TaskCategory; onChange: (c: TaskCategory) => void }) {
   return (
     <div style={{
-      background: '#f5f5f5',
-      borderRadius: 18,
-      padding: '12px 16px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 8,
+      height: PILL_H,
     }}>
       {ORDERED_CATEGORIES.map((cat) => {
         const c = CATEGORY_COLORS[cat];
@@ -254,22 +252,21 @@ function CategoryPicker({ value, onChange }: { value: TaskCategory; onChange: (c
                   transition={{ duration: 0.15 }}
                   style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'center',
-                    gap: 1, pointerEvents: 'none',
+                    gap: 2, pointerEvents: 'none',
                   }}
                 >
                   <span style={{
-                    fontFamily: "'Helvetica Neue', Helvetica, sans-serif",
-                    fontSize: 12,
+                    fontFamily: M,
+                    fontSize: 11,
                     fontWeight: 400,
                     color: c.textMuted,
-                    letterSpacing: '0.01em',
                     lineHeight: 1.2,
                   }}>
                     категория
                   </span>
                   <span style={{
-                    fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
-                    fontSize: 16,
+                    fontFamily: M,
+                    fontSize: 15,
                     fontWeight: 500,
                     color: c.text,
                     whiteSpace: 'nowrap',
