@@ -86,7 +86,7 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
               background: '#ffffff',
               clipPath: clipPath || undefined,
               borderRadius: clipPath ? 0 : '36px 36px 0 0',
-              padding: '18px 20px 0',
+              padding: '18px 23px 0',
               maxHeight: '92vh',
               overflowY: 'auto',
             }}
@@ -100,7 +100,7 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
             </h3>
 
             {/* Name */}
-            <FieldBox style={{ marginBottom: 8 }}>
+            <FieldBox style={{ marginBottom: 17 }}>
               <input
                 autoFocus
                 value={name}
@@ -111,14 +111,14 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
             </FieldBox>
 
             {/* Time row */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-              <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 16 }}>
+            <div style={{ display: 'flex', gap: 13, marginBottom: 17 }}>
+              <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={valueStyle(!!time)}>{time || 'Начало'}</span>
                 <img src={taskTimeIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
                 <input type="time" value={time} onChange={(e) => setTime(e.target.value)}
                   style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
               </FieldBox>
-              <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 16 }}>
+              <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={valueStyle(!!endTime)}>{endTime || 'Конец'}</span>
                 <img src={taskTimeIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
                 <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
@@ -127,7 +127,7 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
             </div>
 
             {/* Date */}
-            <FieldBox style={{ marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 16 }}>
+            <FieldBox style={{ marginBottom: 17, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={valueStyle(!!date)}>{date ? formatDateRu(date) : 'В какой день?'}</span>
               <img src={taskDateIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
@@ -135,7 +135,7 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
             </FieldBox>
 
             {/* Location */}
-            <FieldBox style={{ marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 16 }}>
+            <FieldBox style={{ marginBottom: 17, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <input
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
@@ -146,7 +146,7 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
             </FieldBox>
 
             {/* Description */}
-            <FieldBox style={{ marginBottom: 20 }}>
+            <FieldBox style={{ marginBottom: 17 }}>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -166,7 +166,7 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
             <CategoryPicker value={category} onChange={setCategory} />
 
             {/* Buttons */}
-            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+            <div style={{ display: 'flex', gap: 13, marginTop: 17 }}>
               <button
                 onClick={() => onDelete(task.id)}
                 style={{
@@ -306,8 +306,8 @@ function FieldBox({ children, style }: { children: React.ReactNode; style?: Reac
     <div style={{
       position: 'relative',
       background: '#f5f5f5',
-      borderRadius: 18,
-      padding: '12px 16px',
+      borderRadius: 20,
+      padding: '14px 17px',
       ...style,
     }}>
       {children}
