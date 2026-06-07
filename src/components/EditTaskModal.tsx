@@ -86,8 +86,7 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
               background: '#ffffff',
               clipPath: clipPath || undefined,
               borderRadius: clipPath ? 0 : '36px 36px 0 0',
-              padding: '18px 20px',
-              paddingBottom: 'calc(32px + env(safe-area-inset-bottom, 0px))',
+              padding: '18px 20px 0',
               maxHeight: '92vh',
               overflowY: 'auto',
             }}
@@ -193,6 +192,8 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
                 Сохранить
               </button>
             </div>
+            {/* Safe area bottom spacer — внутри clip-path чтобы не вылезало */}
+            <div style={{ height: 'max(20px, env(safe-area-inset-bottom, 20px))' }} />
           </motion.div>
         </div>
       )}
