@@ -26,6 +26,7 @@ interface TodayMobileProps {
 export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWithMessage }: TodayMobileProps) {
   const [input, setInput] = useState('');
   const [collapsed, setCollapsed] = useState(false);
+  const [justDone, setJustDone] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const touchStartX = useRef(0);
   const { state: voiceState, startRecording, stopRecording } = useVoiceInput((text: string) => {
@@ -43,7 +44,7 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
   const dayName = DAY_NAMES[new Date().getDay()];
 
   const todayTasks = tasks
-    .filter(t => (t.date || today) === today && !t.done)
+    .filter(t => (t.date || today) === today && (!t.done || justDone.has(t.id)))
     .sort((a, b) => {
       if (!a.time && !b.time) return 0;
       if (!a.time) return 1;
@@ -57,11 +58,19 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
     if (dx > 60) onNavigate('dash');
   };
 
-  const toggleTask = async (id: string) => {
+  const toggleTask = (id: string) => {
+    const task = tasks.find(t => t.id === id);
+    const completing = task && !task.done;
     setTasks(tasks.map(t => {
       if (t.id === id) { const u = { ...t, done: !t.done }; db.saveTask(u); return u; }
       return t;
     }));
+    if (completing) {
+      setJustDone(prev => new Set(prev).add(id));
+      setTimeout(() => {
+        setJustDone(prev => { const s = new Set(prev); s.delete(id); return s; });
+      }, 800);
+    }
   };
 
   const handleSubmit = () => {
@@ -270,11 +279,11 @@ function TaskRow({ task, onToggle, onClick }: { task: Task; onToggle: () => void
         whileTap={{ scale: 0.85 }}
         onClick={e => { e.stopPropagation(); onToggle(); }}
         style={{
-          flexShrink: 0, width: 28, height: 28, borderRadius: '50%',
+          flexShrink: 0, width: 28, height: 28, borderRadius: 14,
           border: `1.5px solid ${task.done ? '#0B0D10' : 'rgba(11,13,16,0.22)'}`,
           background: task.done ? '#0B0D10' : 'transparent',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer',
+          cursor: 'pointer', overflow: 'hidden',
         }}
       >
         {task.done && (
