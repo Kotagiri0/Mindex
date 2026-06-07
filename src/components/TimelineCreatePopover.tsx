@@ -1,37 +1,32 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { formatTime, parseTime, DEFAULT_DURATION_MIN } from '../lib/timeline';
+import { useSquircle } from '../hooks/useSquircle';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const H = "'Helvetica Neue', Helvetica, sans-serif";
 
 interface Props {
-  /** Время начала ("HH:MM"), по которому тапнули. */
   startTime: string;
   onCancel: () => void;
   onCreate: (name: string, time: string, endTime: string) => void;
 }
 
-/**
- * Лёгкое мини-меню создания задачи тапом по таймлайну (ТЗ п.7):
- * название + время начала/окончания (дефолт +1ч). Без лишних полей —
- * категорию и детали человек докрутит позже, либо проставит агент.
- */
 export default function TimelineCreatePopover({ startTime, onCancel, onCreate }: Props) {
   const defaultEnd = formatTime((parseTime(startTime) ?? 0) + DEFAULT_DURATION_MIN);
   const [name, setName] = useState('');
   const [start, setStart] = useState(startTime);
   const [end, setEnd] = useState(defaultEnd);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { ref: squircleRef, clipPath } = useSquircle({ cornerRadius: 36, cornerSmoothing: 0.6 });
 
   useEffect(() => {
-    // Автофокус на названии — главное, что нужно ввести.
     const id = setTimeout(() => inputRef.current?.focus(), 80);
     return () => clearTimeout(id);
   }, []);
 
   const submit = () => {
     if (!name.trim()) return;
-    // Гарантируем, что конец позже начала — иначе сбрасываем на +1ч.
     const s = parseTime(start) ?? 0;
     const e = parseTime(end);
     const safeEnd = e !== null && e > s ? end : formatTime(s + DEFAULT_DURATION_MIN);
@@ -48,56 +43,122 @@ export default function TimelineCreatePopover({ startTime, onCancel, onCreate }:
         className="absolute inset-0 bg-black/40"
       />
       <motion.div
+        ref={squircleRef}
         initial={{ y: '100%' }}
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-        className="relative w-full bg-surface rounded-t-[22px]"
-        style={{ padding: '18px 18px calc(28px + env(safe-area-inset-bottom, 0px))' }}
+        style={{
+          position: 'relative',
+          width: '100%',
+          background: '#ffffff',
+          clipPath: clipPath || undefined,
+          borderRadius: clipPath ? 0 : '36px 36px 0 0',
+          padding: '18px 20px',
+          paddingBottom: 'calc(28px + env(safe-area-inset-bottom, 0px))',
+        }}
       >
-        <div className="w-9 h-1 bg-border rounded-full mx-auto mb-4" />
+        {/* Drag handle */}
+        <div style={{ width: 36, height: 4, background: 'rgba(34,34,36,0.12)', borderRadius: 2, margin: '0 auto 20px' }} />
 
-        <h3 className="text-[17px] font-bold mb-3.5" style={{ fontFamily: M }}>Новая задача</h3>
+        {/* Title */}
+        <h3 style={{ fontFamily: M, fontSize: 20, fontWeight: 500, color: '#0B0D10', textAlign: 'center', marginBottom: 20 }}>
+          Новое событие
+        </h3>
 
-        <input
-          ref={inputRef}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && submit()}
-          placeholder="Что нужно сделать?"
-          className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary mb-3"
-          style={{ fontFamily: M }}
-        />
+        {/* Name field */}
+        <FieldBox style={{ marginBottom: 10 }}>
+          <input
+            ref={inputRef}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submit()}
+            placeholder="Что на повестке дня?"
+            style={{
+              width: '100%',
+              border: 'none',
+              outline: 'none',
+              background: 'transparent',
+              fontFamily: M,
+              fontSize: 15,
+              fontWeight: name ? 500 : 400,
+              color: name ? '#0B0D10' : 'rgba(11,13,16,0.3)',
+            }}
+          />
+        </FieldBox>
 
-        <div className="flex gap-2.5 mb-4">
-          <div className="flex-1">
-            <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Начало</label>
+        {/* Time row */}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+          <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontFamily: M, fontSize: 15, fontWeight: start ? 500 : 400, color: start ? '#0B0D10' : 'rgba(11,13,16,0.3)' }}>
+              {start || 'Начало'}
+            </span>
+            <ClockIcon />
             <input
               type="time"
               value={start}
               onChange={(e) => setStart(e.target.value)}
-              className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary"
+              style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
             />
-          </div>
-          <div className="flex-1">
-            <label className="block text-[11px] font-bold text-text-tertiary mb-1 uppercase tracking-wider">Конец</label>
+          </FieldBox>
+          <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontFamily: M, fontSize: 15, fontWeight: end ? 500 : 400, color: end ? '#0B0D10' : 'rgba(11,13,16,0.3)' }}>
+              {end || 'Конец'}
+            </span>
+            <ClockIcon />
             <input
               type="time"
               value={end}
               onChange={(e) => setEnd(e.target.value)}
-              className="w-full h-[46px] bg-surface2 border-[1.5px] border-transparent rounded-[12px] px-3.5 text-[15px] outline-none focus:border-accent focus:bg-surface transition-all text-text-primary"
+              style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
             />
-          </div>
+          </FieldBox>
         </div>
 
+        {/* Add button */}
         <button
           onClick={submit}
           disabled={!name.trim()}
-          className="w-full h-[48px] bg-accent text-white rounded-[12px] font-bold text-[15px] active:opacity-85 transition-opacity disabled:opacity-40"
+          style={{
+            width: '100%',
+            height: 52,
+            background: name.trim() ? '#0B0D10' : 'rgba(11,13,16,0.18)',
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: 999,
+            fontFamily: M,
+            fontSize: 16,
+            fontWeight: 700,
+            cursor: name.trim() ? 'pointer' : 'default',
+            transition: 'background 0.2s',
+          }}
         >
-          Создать
+          Добавить
         </button>
       </motion.div>
     </div>
+  );
+}
+
+function FieldBox({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <div style={{
+      position: 'relative',
+      background: '#f5f5f5',
+      borderRadius: 14,
+      padding: '14px 16px',
+      ...style,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(11,13,16,0.35)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
   );
 }
