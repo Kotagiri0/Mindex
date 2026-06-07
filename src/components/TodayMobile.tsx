@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Settings, ChevronLeft, ArrowUp, Mic, Loader } from 'lucide-react';
-import { motion } from 'motion/react';
+import { ChevronLeft, Loader } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Task, Screen } from '../types';
-import TaskItem from './TaskItem';
 import { db } from '../lib/db';
 import { useVoiceInput } from '../lib/useVoiceInput';
+import { SettingsIcon } from './icons';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
@@ -25,6 +25,7 @@ interface TodayMobileProps {
 
 export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWithMessage }: TodayMobileProps) {
   const [input, setInput] = useState('');
+  const [collapsed, setCollapsed] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const touchStartX = useRef(0);
   const { state: voiceState, startRecording, stopRecording } = useVoiceInput((text: string) => {
@@ -87,10 +88,10 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
           onClick={() => onNavigate('dash')}
           style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
         >
-          <ChevronLeft size={22} strokeWidth={1.75} color="rgba(34,34,36,0.5)" />
+          <ChevronLeft size={24} strokeWidth={1.75} color="rgba(11,13,16,0.45)" />
         </motion.button>
 
-        <span style={{ fontFamily: F, fontSize: 18, color: 'rgba(34,34,36,0.75)', letterSpacing: '0em' }}>
+        <span style={{ fontFamily: F, fontSize: 18, color: 'rgba(11,13,16,0.75)' }}>
           {dayName}
         </span>
 
@@ -99,97 +100,251 @@ export default function TodayMobile({ tasks, setTasks, onNavigate, onNewThreadWi
           onClick={() => onNavigate('settings')}
           style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
         >
-          <Settings size={22} strokeWidth={1.75} color="rgba(34,34,36,0.5)" />
+          <SettingsIcon size={24} color="rgba(11,13,16,0.45)" />
         </motion.button>
       </div>
 
       {/* Spacer */}
       <div style={{ flex: 1 }} />
 
-      {/* Bottom card — unified tasks + input */}
-      <div style={{ flexShrink: 0, background: '#ffffff', borderRadius: '20px 20px 0 0' }}>
+      {/* Bottom card */}
+      <div style={{ flexShrink: 0, background: '#ffffff', borderRadius: '28px 28px 0 0', overflow: 'hidden' }}>
 
         {/* Tasks section */}
-        {hasTasks && (
-          <>
-            <div style={{ maxHeight: '40vh', overflowY: 'auto', padding: '14px 20px 0' }}>
-              {todayTasks.map(t => (
-                <TaskItem
-                  key={t.id}
-                  task={t}
-                  onToggle={() => toggleTask(t.id)}
-                  onToggleSubtask={(taskId, subtaskId) => {
-                    setTasks(tasks.map(task => {
-                      if (task.id === taskId && task.subtasks) {
-                        const u = { ...task, subtasks: task.subtasks.map(st => st.id === subtaskId ? { ...st, done: !st.done } : st) };
-                        db.saveTask(u);
-                        return u;
-                      }
-                      return task;
-                    }));
-                  }}
-                  onClick={() => onNavigate('dash')}
-                />
-              ))}
-            </div>
+        <AnimatePresence initial={false}>
+          {hasTasks && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              {/* Collapse header */}
+              <div
+                onClick={() => setCollapsed(v => !v)}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '16px 20px 12px', cursor: 'pointer',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <motion.div
+                    animate={{ rotate: collapsed ? -90 : 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <ChevronLeft
+                      size={18}
+                      strokeWidth={2}
+                      color="rgba(11,13,16,0.4)"
+                      style={{ transform: 'rotate(-90deg)' }}
+                    />
+                  </motion.div>
+                  <span style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: 'rgba(11,13,16,0.5)' }}>
+                    Ещё {todayTasks.length} {plural(todayTasks.length)}
+                  </span>
+                </div>
+                <motion.button
+                  whileTap={{ scale: 0.85 }}
+                  onClick={e => { e.stopPropagation(); onNavigate('dash'); }}
+                  style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                  <PlusIcon />
+                </motion.button>
+              </div>
 
-            {/* Divider */}
-            <div style={{ height: 1, background: 'rgba(0,0,0,0.05)', margin: '0' }} />
-          </>
-        )}
+              {/* Task list */}
+              <AnimatePresence initial={false}>
+                {!collapsed && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.18 }}
+                    style={{ maxHeight: '40vh', overflowY: 'auto' }}
+                  >
+                    {todayTasks.map(t => (
+                      <TaskRow
+                        key={t.id}
+                        task={t}
+                        onToggle={() => toggleTask(t.id)}
+                        onClick={() => onNavigate('dash')}
+                      />
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-        {/* Chat input area */}
-        <div style={{ padding: '14px 20px', background: hasTasks ? 'rgba(0,0,0,0.02)' : 'transparent' }}>
+              {/* Divider */}
+              <div style={{ height: 1, background: 'rgba(11,13,16,0.06)', margin: '0 20px' }} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Chat input */}
+        <div style={{ padding: '16px 20px' }}>
           <textarea
             ref={inputRef}
             rows={1}
             value={input}
             onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
             placeholder="Есть мысли?"
             style={{
               width: '100%', background: 'transparent', border: 'none', outline: 'none',
-              fontFamily: M, fontSize: 15, color: '#222224',
-              marginBottom: 10, display: 'block', resize: 'none', lineHeight: 1.55,
+              fontFamily: M, fontSize: 15, color: '#0B0D10',
+              marginBottom: 12, display: 'block', resize: 'none', lineHeight: 1.55,
               maxHeight: '120px', overflowY: 'auto',
             }}
           />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-            {input.trim() ? (
-              <motion.button
-                whileTap={{ scale: 0.9 }}
-                onClick={handleSubmit}
-                style={{
-                  width: 36, height: 36, borderRadius: '50%', background: '#111',
-                  border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}
-              >
-                <ArrowUp size={16} color="#fff" strokeWidth={2} />
-              </motion.button>
-            ) : (
-              <motion.button
-                onPointerDown={startRecording}
-                onPointerUp={stopRecording}
-                onPointerCancel={stopRecording}
-                disabled={voiceState === 'processing'}
-                style={{
-                  width: 36, height: 36, borderRadius: '50%', border: 'none', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: voiceState === 'recording' ? '#c0392b' : 'rgba(34,34,36,0.1)',
-                  transition: 'background 0.15s',
-                }}
-              >
-                {voiceState === 'processing'
-                  ? <Loader size={15} strokeWidth={2} color="#222224" className="animate-spin" />
-                  : <Mic size={15} strokeWidth={1.75} color={voiceState === 'recording' ? '#fff' : 'rgba(34,34,36,0.35)'} />
-                }
-              </motion.button>
-            )}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            {/* Add task shortcut */}
+            <motion.button
+              whileTap={{ scale: 0.85 }}
+              onClick={() => onNavigate('dash')}
+              style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
+            >
+              <PlusIcon size={22} color="rgba(11,13,16,0.35)" />
+            </motion.button>
+
+            {/* Send / Voice */}
+            <AnimatePresence mode="wait">
+              {input.trim() ? (
+                <motion.button
+                  key="send"
+                  initial={{ scale: 0.7, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.7, opacity: 0 }}
+                  transition={{ duration: 0.12 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={handleSubmit}
+                  style={{
+                    width: 36, height: 36, borderRadius: '50%', background: '#0B0D10',
+                    border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  <SendIcon />
+                </motion.button>
+              ) : (
+                <motion.button
+                  key="mic"
+                  initial={{ scale: 0.7, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.7, opacity: 0 }}
+                  transition={{ duration: 0.12 }}
+                  onPointerDown={startRecording}
+                  onPointerUp={stopRecording}
+                  onPointerCancel={stopRecording}
+                  disabled={voiceState === 'processing'}
+                  style={{
+                    width: 36, height: 36, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: voiceState === 'recording' ? '#c0392b' : 'rgba(11,13,16,0.08)',
+                    transition: 'background 0.15s',
+                  }}
+                >
+                  {voiceState === 'processing'
+                    ? <Loader size={15} strokeWidth={2} color="#0B0D10" style={{ animation: 'spin 1s linear infinite' }} />
+                    : <MicIcon color={voiceState === 'recording' ? '#fff' : 'rgba(11,13,16,0.4)'} />
+                  }
+                </motion.button>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
       </div>
-
       <div style={{ height: 'env(safe-area-inset-bottom, 0px)', background: '#ffffff', flexShrink: 0 }} />
     </div>
   );
+}
+
+// ─── Task Row ────────────────────────────────────────────────────────────────
+
+function TaskRow({ task, onToggle, onClick }: { task: Task; onToggle: () => void; onClick: () => void }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 20px', cursor: 'pointer' }}
+    >
+      <motion.button
+        whileTap={{ scale: 0.85 }}
+        onClick={e => { e.stopPropagation(); onToggle(); }}
+        style={{
+          flexShrink: 0, width: 28, height: 28, borderRadius: '50%',
+          border: `1.5px solid ${task.done ? '#0B0D10' : 'rgba(11,13,16,0.22)'}`,
+          background: task.done ? '#0B0D10' : 'transparent',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer',
+        }}
+      >
+        {task.done && (
+          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ duration: 0.15 }}>
+            <CheckIcon />
+          </motion.div>
+        )}
+      </motion.button>
+
+      <span style={{
+        flex: 1, fontFamily: M, fontSize: 16, fontWeight: 400,
+        color: task.done ? 'rgba(11,13,16,0.3)' : '#0B0D10',
+        textDecoration: task.done ? 'line-through' : 'none',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}>
+        {task.name}
+      </span>
+
+      {task.time && (
+        <span style={{ fontFamily: M, fontSize: 14, color: 'rgba(11,13,16,0.35)', flexShrink: 0 }}>
+          {task.time}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ─── Icons ───────────────────────────────────────────────────────────────────
+
+function PlusIcon({ size = 20, color = 'rgba(11,13,16,0.4)' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
+
+function SendIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="19" x2="12" y2="5" />
+      <polyline points="5 12 12 5 19 12" />
+    </svg>
+  );
+}
+
+function MicIcon({ color = 'rgba(11,13,16,0.4)' }: { color?: string }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <line x1="12" y1="19" x2="12" y2="23" />
+      <line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function plural(n: number): string {
+  if (n % 10 === 1 && n % 100 !== 11) return 'дело';
+  if ([2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100)) return 'дела';
+  return 'дел';
 }
