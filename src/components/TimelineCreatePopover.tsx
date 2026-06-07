@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { formatTime, parseTime, DEFAULT_DURATION_MIN } from '../lib/timeline';
 import { useSquircle } from '../hooks/useSquircle';
-import taskTimeIcon from '../assets/icons/task_time.svg';
+const taskTimeIcon = `data:image/svg+xml,%3Csvg width='55' height='55' viewBox='0 0 55 55' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M27.5 2.75C41.169 2.75 52.25 13.831 52.25 27.5C52.25 41.169 41.169 52.25 27.5 52.25C13.831 52.25 2.75 41.169 2.75 27.5C2.75 13.831 13.831 2.75 27.5 2.75Z' stroke='%237E7F80' stroke-width='5.5'/%3E%3Cpath d='M27.5 15.7812L27.5 28.0035' stroke='%237E7F80' stroke-width='5.5' stroke-linecap='round'/%3E%3Cpath d='M27.5 28.6094L37.2216 38.331' stroke='%237E7F80' stroke-width='5.5' stroke-linecap='round'/%3E%3C/svg%3E`;
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 
