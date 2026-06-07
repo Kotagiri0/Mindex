@@ -386,16 +386,16 @@ function TimelineBlock({
     if (!d) return;
     if (d.longPressId) clearTimeout(d.longPressId);
     if (d.active) {
-      // Был реальный drag → гасим следующий click (детали не открываем).
-      suppressClick.current = true;
-      if (commit && onMove) {
-        const deltaMin = Math.round(dyRef.current / pxPerMin / SNAP_MIN) * SNAP_MIN;
-        let newStart = startMin + deltaMin;
-        // Не выпускаем за границы видимого диапазона.
-        newStart = Math.max(minStart, Math.min(maxEnd - duration, newStart));
-        if (newStart !== startMin) {
-          onMove(task.id, formatTime(newStart), formatTime(newStart + duration));
-        }
+      const deltaMin = Math.round(dyRef.current / pxPerMin / SNAP_MIN) * SNAP_MIN;
+      let newStart = startMin + deltaMin;
+      // Не выпускаем за границы видимого диапазона.
+      newStart = Math.max(minStart, Math.min(maxEnd - duration, newStart));
+      const moved = newStart !== startMin;
+      // Гасим следующий click ТОЛЬКО если блок реально сдвинулся. Просто долгое
+      // удержание без перемещения должно открыть детали как обычный тап.
+      if (moved) suppressClick.current = true;
+      if (commit && onMove && moved) {
+        onMove(task.id, formatTime(newStart), formatTime(newStart + duration));
       }
     }
     drag.current = null;
