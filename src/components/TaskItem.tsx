@@ -20,7 +20,7 @@ export default function TaskItem({ task, onToggle, onClick, onToggleSubtask }: T
   return (
     <div>
       <div
-        style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 0', cursor: 'pointer' }}
+        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 0', cursor: 'pointer' }}
         onClick={onClick}
       >
         <motion.button
@@ -28,9 +28,9 @@ export default function TaskItem({ task, onToggle, onClick, onToggleSubtask }: T
           onClick={e => { e.stopPropagation(); onToggle(); }}
           style={{
             flexShrink: 0,
-            width: 32, height: 32,
+            width: 26, height: 26,
             borderRadius: '50%',
-            border: `1.5px solid ${task.done ? '#222224' : 'rgba(34,34,36,0.22)'}`,
+            border: `1.5px solid ${task.done ? '#222224' : 'rgba(34,34,36,0.25)'}`,
             background: task.done ? '#222224' : 'transparent',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             transition: 'all 0.15s',
@@ -38,7 +38,7 @@ export default function TaskItem({ task, onToggle, onClick, onToggleSubtask }: T
         >
           {task.done && (
             <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ duration: 0.15 }}>
-              <Check size={13} color="#ffffff" strokeWidth={2.5} />
+              <Check size={11} color="#ffffff" strokeWidth={2.5} />
             </motion.div>
           )}
         </motion.button>
@@ -46,7 +46,7 @@ export default function TaskItem({ task, onToggle, onClick, onToggleSubtask }: T
         <span
           style={{
             flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            fontFamily: M, fontSize: 17, fontWeight: 400,
+            fontFamily: M, fontSize: 15, fontWeight: 400,
             color: task.done ? 'rgba(34,34,36,0.35)' : '#222224',
             textDecoration: task.done ? 'line-through' : 'none',
             transition: 'color 0.15s',
