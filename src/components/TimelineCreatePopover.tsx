@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatTime, parseTime, DEFAULT_DURATION_MIN } from '../lib/timeline';
 import { useSquircle } from '../hooks/useSquircle';
+import { useKeyboardInset } from '../hooks/useKeyboardInset';
 import { TaskCategory } from '../types';
 import { CATEGORY_COLORS, CATEGORY_LABELS, ORDERED_CATEGORIES } from '../lib/taskCategories';
 
@@ -30,6 +31,7 @@ export default function TimelineCreatePopover({ startTime, onCancel, onCreate }:
   const [category, setCategory] = useState<TaskCategory>('none');
   const inputRef = useRef<HTMLInputElement>(null);
   const { ref: squircleRef, clipPath } = useSquircle({ cornerRadius: 36, cornerSmoothing: 0.6 });
+  const keyboardInset = useKeyboardInset();
 
   useEffect(() => {
     const id = setTimeout(() => inputRef.current?.focus(), 80);
@@ -45,7 +47,7 @@ export default function TimelineCreatePopover({ startTime, onCancel, onCreate }:
   };
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-end">
+    <div className="fixed inset-0 z-[300] flex items-end" style={{ paddingBottom: keyboardInset, transition: 'padding-bottom 0.2s ease-out' }}>
       <motion.div
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         onClick={onCancel}
@@ -78,6 +80,10 @@ export default function TimelineCreatePopover({ startTime, onCancel, onCreate }:
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && submit()}
             placeholder="Что на повестке дня?"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
             style={inputStyle(!!name)}
           />
         </FieldBox>
@@ -132,6 +138,10 @@ export default function TimelineCreatePopover({ startTime, onCancel, onCreate }:
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   placeholder="Где будет проходить?"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
                   style={{ ...inputStyle(!!location), flex: 1 }}
                 />
                 <img src={taskPlaceIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
