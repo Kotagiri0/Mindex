@@ -124,7 +124,7 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
                   type="time"
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
-                  style={nativeInputStyle(!!time, 'Начало')}
+                  style={nativeTimeStyle(!!time)}
                 />
                 <img src={taskTimeIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
               </FieldBox>
@@ -133,7 +133,7 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
                   type="time"
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
-                  style={nativeInputStyle(!!endTime, 'Конец')}
+                  style={nativeTimeStyle(!!endTime)}
                 />
                 <img src={taskTimeIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
               </FieldBox>
@@ -334,6 +334,16 @@ function FieldBox({ children, style }: { children: React.ReactNode; style?: Reac
     </div>
   );
 }
+
+const nativeTimeStyle = (hasValue: boolean): React.CSSProperties => ({
+  width: 0, flex: 1, border: 'none', outline: 'none', background: 'transparent',
+  fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 15,
+  fontWeight: hasValue ? 500 : 400,
+  color: hasValue ? '#0B0D10' : 'rgba(11,13,16,0.3)',
+  WebkitAppearance: 'none',
+  appearance: 'none' as any,
+  minWidth: 0,
+});
 
 const inputStyle = (hasValue: boolean): React.CSSProperties => ({
   width: '100%', border: 'none', outline: 'none', background: 'transparent',
