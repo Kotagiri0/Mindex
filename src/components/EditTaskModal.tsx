@@ -88,11 +88,12 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
               background: '#ffffff',
               clipPath: clipPath || undefined,
               borderRadius: clipPath ? 0 : '36px 36px 0 0',
-              padding: '18px 23px 0',
               maxHeight: '92vh',
-              overflowY: 'auto',
+              marginBottom: -50,
+              paddingBottom: 50,
             }}
           >
+            <div style={{ overflowY: 'auto', maxHeight: '92vh', padding: '18px 23px 0' }}>
             {/* Drag handle */}
             <div style={{ width: 36, height: 4, background: 'rgba(34,34,36,0.12)', borderRadius: 2, margin: '0 auto 12px' }} />
 
@@ -215,6 +216,7 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
             </div>
             {/* Safe area bottom spacer — внутри clip-path чтобы не вылезало */}
             <div style={{ height: 'max(20px, env(safe-area-inset-bottom, 20px))' }} />
+            </div>{/* end scroll inner */}
           </motion.div>
         </div>
       )}
