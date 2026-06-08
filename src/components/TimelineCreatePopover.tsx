@@ -92,19 +92,33 @@ export default function TimelineCreatePopover({ startTime, onCancel, onCreate }:
         <div style={{ display: 'flex', gap: 13, marginBottom: 17 }}>
           <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <input
-              type="time"
+              type="text"
+              inputMode="numeric"
               value={start}
-              onChange={(e) => setStart(e.target.value)}
-              style={nativeTimeStyle(!!start)}
+              onChange={(e) => setStart(formatTimeInput(e.target.value))}
+              placeholder="00:00"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              maxLength={5}
+              style={nativeTimeStyle(isCompleteTime(start))}
             />
             <img src={taskTimeIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
           </FieldBox>
           <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <input
-              type="time"
+              type="text"
+              inputMode="numeric"
               value={end}
-              onChange={(e) => setEnd(e.target.value)}
-              style={nativeTimeStyle(!!end)}
+              onChange={(e) => setEnd(formatTimeInput(e.target.value))}
+              placeholder="00:00"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              maxLength={5}
+              style={nativeTimeStyle(isCompleteTime(end))}
             />
             <img src={taskTimeIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
           </FieldBox>
@@ -250,3 +264,14 @@ const nativeTimeStyle = (hasValue: boolean): React.CSSProperties => ({
   appearance: 'none' as any,
   minWidth: 0,
 });
+
+// Форматирует сырой ввод пользователя в HH:MM по мере набора
+function formatTimeInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return digits.slice(0, 2) + ':' + digits.slice(2);
+}
+
+function isCompleteTime(val: string): boolean {
+  return /^\d{2}:\d{2}$/.test(val);
+}
