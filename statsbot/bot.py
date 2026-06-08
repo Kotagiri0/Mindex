@@ -44,9 +44,11 @@ def fetch_stats() -> dict:
 
                   -- DAU/WAU: любой аутентифицированный запрос обновляет last_active_at в requireAuth.
                   -- DAU — календарный день МСК, WAU — скользящие 7 дней МСК.
-                  -- Начало текущих суток по Москве как абсолютный момент. Берём от NOW()
-                  -- (а не CURRENT_DATE) — иначе ночью 00:00–03:00 МСК сессия БД в UTC даёт
-                  -- "вчерашнюю" дату и окно расползается на лишние сутки.
+                  -- Начало текущих суток по Москве как абсолютный момент. Берём от NOW().
+                  -- ВАЖНО: нельзя писать CURRENT_DATE AT TIME ZONE 'Europe/Moscow' — при сессии
+                  -- БД в UTC это даёт не 00:00 МСК, а 06:00 МСК (двойной сдвиг: date→полночь UTC
+                  -- →настенное МСК 03:00→обратно трактуется как UTC). Итог — отрезались первые
+                  -- 6 часов суток, DAU занижался. date_trunc от NOW() в МСК так не ломается.
                   (SELECT COUNT(*) FROM user_profiles
                      WHERE last_active_at >= date_trunc('day', NOW() AT TIME ZONE 'Europe/Moscow') AT TIME ZONE 'Europe/Moscow') AS dau,
                   (SELECT COUNT(*) FROM user_profiles
