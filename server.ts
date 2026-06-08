@@ -2115,7 +2115,7 @@ app.post("/api/chat", requireAuth, aiRateLimit, async (req, res) => {
       tools: no_tools ? undefined : CHAT_TOOLS,
       tool_choice: no_tools ? "none" : "auto",
       temperature: 0.7,
-      max_tokens: 2048,
+      max_tokens: 1024,
       thinking: false,
     });
 
