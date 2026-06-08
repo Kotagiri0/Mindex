@@ -55,6 +55,7 @@ export default function TimelineCreatePopover({ startTime, onCancel, onCreate }:
       />
       <motion.div
         ref={squircleRef}
+        layout="position"
         initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 28, stiffness: 320 }}
         style={{
@@ -129,11 +130,10 @@ export default function TimelineCreatePopover({ startTime, onCancel, onCreate }:
           {expanded && (
             <motion.div
               key="expanded"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ type: 'spring', damping: 32, stiffness: 340 }}
-              style={{ overflow: 'hidden' }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
             >
               {/* Date */}
               <FieldBox style={{ marginBottom: 17, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
