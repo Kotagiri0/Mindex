@@ -258,7 +258,7 @@ const inputStyle = (hasValue: boolean): React.CSSProperties => ({
 });
 
 const nativeTimeStyle = (hasValue: boolean): React.CSSProperties => ({
-  flex: 1, border: 'none', outline: 'none', background: 'transparent',
+  width: 0, flex: 1, border: 'none', outline: 'none', background: 'transparent',
   fontFamily: M, fontSize: 15,
   fontWeight: hasValue ? 500 : 400,
   color: hasValue ? '#0B0D10' : 'rgba(11,13,16,0.3)',
