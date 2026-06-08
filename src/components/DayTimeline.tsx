@@ -242,7 +242,7 @@ export default function DayTimeline({
               minStart={topOffset}
               maxEnd={endHour * 60}
               onClick={() => (p.untimed ? onUntimedClick(p.task) : onTaskClick(p.task))}
-              onMove={p.untimed ? undefined : onTaskMove}
+              onMove={onTaskMove}
             />
           ))}
 
@@ -332,9 +332,8 @@ function TimelineBlock({
       ? `${task.time} - ${task.endTime}`
       : task.time;
 
-  // Задача без времени — тонкий серый чип: одна строка, без времени, без перетаскивания.
   const compact = untimed || height < 52;
-  const draggable = !!onMove && !untimed;
+  const draggable = !!onMove;
 
   // Активен ли drag прямо сейчас (для переключения touch-action: пока не тащим — pan-y
   // отдаёт вертикальный скролл; как только long-press сработал — none, чтобы браузер
