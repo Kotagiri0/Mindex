@@ -120,33 +120,19 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
             <div style={{ display: 'flex', gap: 13, marginBottom: 17 }}>
               <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <input
-                  type="text"
-                  inputMode="numeric"
+                  type="time"
                   value={time}
-                  onChange={(e) => setTime(formatTimeInput(e.target.value))}
-                  placeholder="00:00"
-                  autoComplete="new-password"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  maxLength={5}
-                  style={nativeInputStyle(isCompleteTime(time), 'Начало')}
+                  onChange={(e) => setTime(e.target.value)}
+                  style={nativeInputStyle(!!time, 'Начало')}
                 />
                 <img src={taskTimeIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
               </FieldBox>
               <FieldBox style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <input
-                  type="text"
-                  inputMode="numeric"
+                  type="time"
                   value={endTime}
-                  onChange={(e) => setEndTime(formatTimeInput(e.target.value))}
-                  placeholder="00:00"
-                  autoComplete="new-password"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  maxLength={5}
-                  style={nativeInputStyle(isCompleteTime(endTime), 'Конец')}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  style={nativeInputStyle(!!endTime, 'Конец')}
                 />
                 <img src={taskTimeIcon} width={20} height={20} style={{ opacity: 0.45, flexShrink: 0 }} alt="" />
               </FieldBox>
@@ -362,15 +348,6 @@ const valueStyle = (hasValue: boolean): React.CSSProperties => ({
   color: hasValue ? '#0B0D10' : 'rgba(11,13,16,0.3)',
 });
 
-function formatTimeInput(raw: string): string {
-  const digits = raw.replace(/\D/g, '').slice(0, 4);
-  if (digits.length <= 2) return digits;
-  return digits.slice(0, 2) + ':' + digits.slice(2);
-}
-
-function isCompleteTime(val: string): boolean {
-  return /^\d{2}:\d{2}$/.test(val);
-}
 
 const nativeInputStyle = (hasValue: boolean, _placeholder: string): React.CSSProperties => ({
   flex: 1,
