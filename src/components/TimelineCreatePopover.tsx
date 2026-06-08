@@ -80,7 +80,7 @@ export default function TimelineCreatePopover({ startTime, onCancel, onCreate }:
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && submit()}
             placeholder="Что на повестке дня?"
-            autoComplete="off"
+            autoComplete="new-password"
             autoCorrect="off"
             autoCapitalize="off"
             spellCheck={false}
@@ -97,7 +97,7 @@ export default function TimelineCreatePopover({ startTime, onCancel, onCreate }:
               value={start}
               onChange={(e) => setStart(formatTimeInput(e.target.value))}
               placeholder="00:00"
-              autoComplete="off"
+              autoComplete="new-password"
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck={false}
@@ -113,7 +113,7 @@ export default function TimelineCreatePopover({ startTime, onCancel, onCreate }:
               value={end}
               onChange={(e) => setEnd(formatTimeInput(e.target.value))}
               placeholder="00:00"
-              autoComplete="off"
+              autoComplete="new-password"
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck={false}
@@ -152,7 +152,7 @@ export default function TimelineCreatePopover({ startTime, onCancel, onCreate }:
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   placeholder="Где будет проходить?"
-                  autoComplete="off"
+                  autoComplete="new-password"
                   autoCorrect="off"
                   autoCapitalize="off"
                   spellCheck={false}

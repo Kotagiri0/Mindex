@@ -108,7 +108,7 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Что на повестке дня?"
-                autoComplete="off"
+                autoComplete="new-password"
                 autoCorrect="off"
                 autoCapitalize="off"
                 spellCheck={false}
@@ -125,7 +125,7 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
                   value={time}
                   onChange={(e) => setTime(formatTimeInput(e.target.value))}
                   placeholder="00:00"
-                  autoComplete="off"
+                  autoComplete="new-password"
                   autoCorrect="off"
                   autoCapitalize="off"
                   spellCheck={false}
@@ -141,7 +141,7 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
                   value={endTime}
                   onChange={(e) => setEndTime(formatTimeInput(e.target.value))}
                   placeholder="00:00"
-                  autoComplete="off"
+                  autoComplete="new-password"
                   autoCorrect="off"
                   autoCapitalize="off"
                   spellCheck={false}
@@ -169,7 +169,7 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 placeholder="Где будет проходить?"
-                autoComplete="off"
+                autoComplete="new-password"
                 autoCorrect="off"
                 autoCapitalize="off"
                 spellCheck={false}
@@ -185,7 +185,7 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Описание, если нужно подробнее"
                 rows={3}
-                autoComplete="off"
+                autoComplete="new-password"
                 autoCorrect="off"
                 autoCapitalize="sentences"
                 style={{
