@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useKeyboardInset } from '../hooks/useKeyboardInset';
 import { ChevronLeft, Star, ArrowUp, Mic, Loader, Copy, MoreHorizontal, X, BookOpen } from 'lucide-react';
 import { ChatIcon, NoteIcon, SettingsIcon } from './icons';
 import { MysliThinking } from './MysliThinking';
@@ -88,6 +89,7 @@ function checkTaskConflicts(allTasks: Task[], task: { id: string; name: string; 
 export default function AIChat({ threadId, threads, setThreads, tasks, setTasks, onClose, onNavigate, onOpenThread, autoSend, onAutoSentClear, isOnboarding }: AIChatProps) {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const keyboardInset = useKeyboardInset();
   const [noteMode, setNoteMode] = useState(false);
   const [animatingContent, setAnimatingContent] = useState<string | null>(null);
   const [replyQuote, setReplyQuote] = useState<string | null>(null);
@@ -1160,11 +1162,12 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
       <div
         className="px-4 flex-shrink-0"
         style={{
-          paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))',
+          paddingBottom: keyboardInset > 0 ? keyboardInset + 16 : 'max(16px, env(safe-area-inset-bottom, 16px))',
           paddingTop: '16px',
           background: '#f0f0f0',
           position: 'relative',
           zIndex: 2,
+          transition: 'padding-bottom 0.2s ease-out',
         }}
       >
         <AnimatePresence>
