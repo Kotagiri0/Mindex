@@ -682,12 +682,8 @@ app.post("/api/telegram/proactive-test", requireAuth, async (req, res) => {
 
     const prompt = `Ты — Мысль, персональный AI-ассистент. Сгенерируй одно короткое проактивное сообщение пользователю.\n\nКонтекст пользователя:\n${userContext}\n\nПравила:\n- Максимум 2 предложения\n- Конкретная отсылка к реальному контексту\n- Заканчивается вопросом или мягким действием\n- Никогда: "Как дела?", "Чем могу помочь?"\n- Одна самая важная задача, не список\n- Звучи как живой собеседник\n- Plaintext, без кавычек, без подписи`;
 
-    const aiRes = await fetch('https://routerai.ru/api/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: 'deepseek/deepseek-v4-flash', messages: [{ role: 'user', content: prompt }], max_tokens: 150, temperature: 0.8, thinking: false }),
-    });
-
+    const proactiveBody = { model: 'deepseek/deepseek-v4-flash', messages: [{ role: 'user', content: prompt }], max_tokens: 150, temperature: 0.8, thinking: false };
+    const aiRes = await callRouterAI(apiKey, proactiveBody);
     const aiData = await aiRes.json();
     const text = aiData.choices?.[0]?.message?.content?.trim();
     if (!text) return res.status(500).json({ error: "AI не вернул текст" });
