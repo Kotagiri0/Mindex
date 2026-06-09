@@ -1768,6 +1768,8 @@ async function generateEmbedding(text: string): Promise<number[] | null> {
   }
 }
 
+const OPENROUTER_FALLBACK_KEY = process.env.OPENROUTER_FALLBACK_KEY || '';
+
 async function callRouterAI(apiKey: string, body: object, attempt = 0): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 40000);
@@ -1779,6 +1781,10 @@ async function callRouterAI(apiKey: string, body: object, attempt = 0): Promise<
       body: JSON.stringify(body),
     });
     clearTimeout(timeoutId);
+    if ((response.status === 401 || response.status >= 500) && OPENROUTER_FALLBACK_KEY) {
+      console.warn(`[CHAT] RouterAI returned ${response.status}, falling back to OpenRouter`);
+      return callOpenRouterFallback(body);
+    }
     return response;
   } catch (e: any) {
     clearTimeout(timeoutId);
@@ -1788,8 +1794,20 @@ async function callRouterAI(apiKey: string, body: object, attempt = 0): Promise<
       await new Promise(r => setTimeout(r, delay));
       return callRouterAI(apiKey, body, attempt + 1);
     }
+    if (OPENROUTER_FALLBACK_KEY) {
+      console.warn(`[CHAT] RouterAI failed after retries, falling back to OpenRouter`);
+      return callOpenRouterFallback(body);
+    }
     throw e;
   }
+}
+
+async function callOpenRouterFallback(body: object): Promise<Response> {
+  return fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${OPENROUTER_FALLBACK_KEY}` },
+    body: JSON.stringify(body),
+  });
 }
 
 app.post("/api/summarize", requireAuth, aiRateLimit, async (req, res) => {

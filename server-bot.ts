@@ -493,6 +493,18 @@ function buildSafeHistory(msgs: StoredMessage[]): any[] {
   return safe;
 }
 
+const OPENROUTER_FALLBACK_KEY = process.env.OPENROUTER_FALLBACK_KEY || '';
+
+async function callOpenRouterFallback(body: object): Promise<any> {
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENROUTER_FALLBACK_KEY}` },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(`OpenRouter fallback error: ${response.status}`);
+  return await response.json();
+}
+
 async function callRouterAI(apiKey: string, body: object): Promise<any> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 55000);
@@ -504,10 +516,18 @@ async function callRouterAI(apiKey: string, body: object): Promise<any> {
       body: JSON.stringify(body),
     }));
     clearTimeout(timeoutId);
+    if ((response.status === 401 || response.status >= 500) && OPENROUTER_FALLBACK_KEY) {
+      console.warn(`[BOT] RouterAI returned ${response.status}, falling back to OpenRouter`);
+      return callOpenRouterFallback(body);
+    }
     if (!response.ok) throw new Error(`RouterAI error: ${response.status}`);
     return await response.json();
-  } catch (e) {
+  } catch (e: any) {
     clearTimeout(timeoutId);
+    if (OPENROUTER_FALLBACK_KEY && (e?.name === 'AbortError' || e?.message?.includes('RouterAI error'))) {
+      console.warn(`[BOT] RouterAI failed (${e?.message}), falling back to OpenRouter`);
+      return callOpenRouterFallback(body);
+    }
     throw e;
   }
 }
