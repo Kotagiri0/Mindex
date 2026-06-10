@@ -22,6 +22,7 @@ import Calendar from './components/Calendar';
 import BottomNav from './components/BottomNav';
 import DesktopApp from './components/DesktopApp';
 import TodayMobile from './components/TodayMobile';
+import { isIOS } from './lib/platform';
 
 const defaultSettings = { agent: true, confirm: true, notifs: true };
 const TASK_REFRESH_INTERVAL_MS = 60_000;
@@ -69,6 +70,31 @@ export default function App() {
       mediaQuery.removeEventListener('change', handleViewportChange);
     };
   }, []);
+
+  // iOS: прибиваем body к видимой части вьюпорта (visualViewport). Клавиатура на
+  // iOS не сжимает layout viewport — Safari скроллит документ вверх и даёт дрейф.
+  // Держим --app-height = высоте видимой области и сбрасываем любой скролл окна.
+  // Только мобильный iOS; Android и десктоп — без изменений (см. lib/platform).
+  useEffect(() => {
+    if (!isIOS || isDesktopViewport) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const html = document.documentElement;
+    const apply = () => {
+      html.style.setProperty('--app-height', `${vv.height}px`);
+      if (window.scrollX !== 0 || window.scrollY !== 0) window.scrollTo(0, 0);
+    };
+    html.classList.add('ios-kbd-fix');
+    apply();
+    vv.addEventListener('resize', apply);
+    vv.addEventListener('scroll', apply);
+    return () => {
+      html.classList.remove('ios-kbd-fix');
+      html.style.removeProperty('--app-height');
+      vv.removeEventListener('resize', apply);
+      vv.removeEventListener('scroll', apply);
+    };
+  }, [isDesktopViewport]);
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -325,7 +351,7 @@ export default function App() {
 
   return (
     <>
-    <div className="safe-area-container relative w-full overflow-hidden bg-bg" style={{ height: '100dvh' }}>
+    <div className="safe-area-container relative w-full overflow-hidden bg-bg" style={{ height: isIOS ? 'var(--app-height, 100dvh)' : '100dvh' }}>
       <AnimatePresence mode="wait">
         {screen === 'today' && (
           <motion.div

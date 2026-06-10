@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useKeyboardInset } from '../hooks/useKeyboardInset';
+import { isIOS } from '../lib/platform';
 import { ChevronLeft, Star, ArrowUp, Mic, Loader, Copy, MoreHorizontal, X, BookOpen } from 'lucide-react';
 import { ChatIcon, NoteIcon, SettingsIcon } from './icons';
 import { MysliThinking } from './MysliThinking';
@@ -89,7 +90,11 @@ function checkTaskConflicts(allTasks: Task[], task: { id: string; name: string; 
 export default function AIChat({ threadId, threads, setThreads, tasks, setTasks, onClose, onNavigate, onOpenThread, autoSend, onAutoSentClear, isOnboarding }: AIChatProps) {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const keyboardInset = useKeyboardInset();
+  // На iOS shell сам прибит к visualViewport (см. App.tsx) и поднимает input-бар
+  // над клавиатурой — доп. отступ не нужен, иначе бар уехал бы вдвое выше.
+  // На Android shell не сжимается, поэтому отступ нужен.
+  const rawKeyboardInset = useKeyboardInset();
+  const keyboardInset = isIOS ? 0 : rawKeyboardInset;
   const [noteMode, setNoteMode] = useState(false);
   const [animatingContent, setAnimatingContent] = useState<string | null>(null);
   const [replyQuote, setReplyQuote] = useState<string | null>(null);

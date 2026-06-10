@@ -140,6 +140,28 @@ body {
   }
 }
 
+/* ─── iOS keyboard/viewport fix ──────────────────────────────────────────── */
+/* На iOS экранная клавиатура НЕ сжимает layout viewport (в отличие от Android):
+   Safari скроллит весь документ вверх, чтобы показать поле ввода, и оставляет
+   visual viewport панорамируемым — отсюда «UI уехал выше» и «дрейф пальцем».
+   Решение: прибиваем body к видимой части вьюпорта (--app-height =
+   visualViewport.height, ставит JS). Документу больше нечего скроллить —
+   клавиатура перестаёт двигать интерфейс. Класс вешается только на iOS
+   (см. App.tsx), Android работает по-старому через 100dvh. */
+html.ios-kbd-fix {
+  overflow: hidden;
+  height: var(--app-height, 100dvh);
+}
+html.ios-kbd-fix body {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: var(--app-height, 100dvh);
+  overflow: hidden;
+}
+
 .safe-area-container {
   padding: var(--safe-area-top) var(--safe-area-right) var(--safe-area-bottom) var(--safe-area-left);
 }
