@@ -64,7 +64,7 @@ function tgFetchOptions(extra: RequestInit = {}): RequestInit {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const BOT_THREAD_TITLE = 'Telegram Bot';
-const CONTEXT_WINDOW = 12;
+const CONTEXT_WINDOW = 50;
 const MAX_TOOL_ITERATIONS = 5;
 const MAX_BUTTON_TEXT_LENGTH = 32;
 const POLLING_ERROR_RETRY_DELAY_MS = 5_000;
