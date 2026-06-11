@@ -552,6 +552,7 @@ const ensureAuthSchema = async () => {
   await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS is_meaningful BOOLEAN;`);
   await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'мысль';`);
   await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS label TEXT;`);
+  await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS summary_attempted_at TIMESTAMPTZ;`);
   try {
     await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS embedding vector(1536);`);
     await db.query(`
@@ -1806,6 +1807,96 @@ async function callOpenRouterFallback(body: object): Promise<Response> {
   });
 }
 
+// ── summarizeThreadCore ──────────────────────────────────────────────────────
+// Ядро саммаризации: вызывает LLM, парсит JSON, обновляет БД, генерирует эмбеддинг.
+// Используется и в /api/summarize (ручной), и в sweepColdThreads (автоматический).
+// Возвращает { summary, isMeaningful } при успехе, null при ошибке RouterAI.
+async function summarizeThreadCore(
+  threadId: string,
+  userId: string,
+  messages: any[],
+  apiKey: string
+): Promise<{ summary: string; isMeaningful: boolean } | null> {
+  const dialogText = messages
+    .filter((m: any) => m.role === 'user' || m.role === 'assistant')
+    .map((m: any) => `${m.role === 'user' ? 'Пользователь' : 'Мысль'}: ${String(m.content || '')}`)
+    .join('\n');
+
+  const response = await callRouterAI(apiKey, {
+    model: 'deepseek/deepseek-v4-flash',
+    messages: [
+      {
+        role: 'system',
+        content: `Ты — Мысль, персональный ИИ-ассистент. Проанализируй диалог и верни JSON-объект:
+{
+  "is_meaningful": true/false,
+  "summary": "..."
+}
+
+is_meaningful = true если диалог содержит: цели, планы, задачи, решения, важные мысли, информацию о пользователе, его проектах или приоритетах.
+is_meaningful = false если диалог: короткий small-talk, технические тесты, приветствия, бессодержательные реплики.
+
+Если is_meaningful = true, summary — структурированная заметка:
+**Суть:** одно предложение — о чём был разговор.
+**Ключевые тезисы:** 2–4 буллет-пункта с главными мыслями и решениями.
+**Задачи:** (только если были явно упомянуты) краткий список.
+
+Если is_meaningful = false, summary = "".
+Пиши по-русски. Верни только валидный JSON, без markdown-обёртки.`,
+      },
+      { role: 'user', content: `Диалог:\n\n${dialogText}` },
+    ],
+    max_tokens: 600,
+    temperature: 0.2,
+    thinking: false,
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const data = await response.json();
+  const rawContent = data.choices?.[0]?.message?.content || '';
+
+  let summary = '';
+  let isMeaningful = false;
+  try {
+    const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : rawContent);
+    isMeaningful = Boolean(parsed.is_meaningful);
+    summary = isMeaningful ? (parsed.summary || '') : '';
+  } catch {
+    // Если модель не вернула JSON — считаем контент саммари, is_meaningful = true
+    summary = rawContent;
+    isMeaningful = rawContent.length > 20;
+  }
+
+  if (db && threadId && userId) {
+    await db.query(
+      `UPDATE user_threads SET summary = $1, is_meaningful = $2, updated_at = NOW() WHERE id = $3 AND user_id = $4`,
+      [summary || null, isMeaningful, threadId, userId]
+    );
+
+    if (isMeaningful && summary) {
+      const threadRes = await db.query(
+        `SELECT title FROM user_threads WHERE id = $1 AND user_id = $2 LIMIT 1`,
+        [threadId, userId]
+      );
+      const title = threadRes.rows?.[0]?.title || '';
+      const embedding = await generateEmbedding(`${title}\n${summary}`);
+      if (embedding) {
+        await db.query(
+          `UPDATE user_threads SET embedding = $1::vector WHERE id = $2 AND user_id = $3`,
+          [`[${embedding.join(',')}]`, threadId, userId]
+        );
+      }
+    }
+  }
+
+  return { summary, isMeaningful };
+}
+
+// ── /api/summarize ────────────────────────────────────────────────────────────
 app.post("/api/summarize", requireAuth, aiRateLimit, async (req, res) => {
   const userId = (req as any).userId;
   const { messages, threadId, raw, rawSummary } = req.body || {};
@@ -1845,90 +1936,64 @@ app.post("/api/summarize", requireAuth, aiRateLimit, async (req, res) => {
   const apiKey = process.env.ROUTERAI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'ROUTERAI_API_KEY not set' });
 
-  const dialogText = messages
-    .filter((m: any) => m.role === 'user' || m.role === 'assistant')
-    .map((m: any) => `${m.role === 'user' ? 'Пользователь' : 'Мысль'}: ${String(m.content || '')}`)
-    .join('\n');
-
   try {
-    const response = await callRouterAI(apiKey, {
-      model: 'deepseek/deepseek-v4-flash',
-      messages: [
-        {
-          role: 'system',
-          content: `Ты — Мысль, персональный ИИ-ассистент. Проанализируй диалог и верни JSON-объект:
-{
-  "is_meaningful": true/false,
-  "summary": "..."
-}
+    const result = await summarizeThreadCore(threadId, userId, messages, apiKey);
 
-is_meaningful = true если диалог содержит: цели, планы, задачи, решения, важные мысли, информацию о пользователе, его проектах или приоритетах.
-is_meaningful = false если диалог: короткий small-talk, технические тесты, приветствия, бессодержательные реплики.
-
-Если is_meaningful = true, summary — структурированная заметка:
-**Суть:** одно предложение — о чём был разговор.
-**Ключевые тезисы:** 2–4 буллет-пункта с главными мыслями и решениями.
-**Задачи:** (только если были явно упомянуты) краткий список.
-
-Если is_meaningful = false, summary = "".
-Пиши по-русски. Верни только валидный JSON, без markdown-обёртки.`,
-        },
-        { role: 'user', content: `Диалог:\n\n${dialogText}` },
-      ],
-      max_tokens: 600,
-      temperature: 0.2,
-      thinking: false,
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      return res.status(500).json({ error: `RouterAI error: ${text}` });
+    if (result === null) {
+      // RouterAI недоступен — возвращаем ошибку как прежде
+      return res.status(500).json({ error: 'RouterAI error' });
     }
 
-    const data = await response.json();
-    const rawContent = data.choices?.[0]?.message?.content || '';
-
-    let summary = '';
-    let isMeaningful = false;
-    try {
-      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-      const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : rawContent);
-      isMeaningful = Boolean(parsed.is_meaningful);
-      summary = isMeaningful ? (parsed.summary || '') : '';
-    } catch {
-      // Если модель не вернула JSON — считаем контент саммари, is_meaningful = true
-      summary = rawContent;
-      isMeaningful = rawContent.length > 20;
-    }
-
-    if (db && threadId && userId) {
-      await db.query(
-        `UPDATE user_threads SET summary = $1, is_meaningful = $2, updated_at = NOW() WHERE id = $3 AND user_id = $4`,
-        [summary || null, isMeaningful, threadId, userId]
-      );
-
-      if (isMeaningful && summary) {
-        const threadRes = await db.query(
-          `SELECT title FROM user_threads WHERE id = $1 AND user_id = $2 LIMIT 1`,
-          [threadId, userId]
-        );
-        const title = threadRes.rows?.[0]?.title || '';
-        const embedding = await generateEmbedding(`${title}\n${summary}`);
-        if (embedding) {
-          await db.query(
-            `UPDATE user_threads SET embedding = $1::vector WHERE id = $2 AND user_id = $3`,
-            [`[${embedding.join(',')}]`, threadId, userId]
-          );
-        }
-      }
-    }
-
-    return res.status(200).json({ summary, is_meaningful: isMeaningful });
+    return res.status(200).json({ summary: result.summary, is_meaningful: result.isMeaningful });
   } catch (err: any) {
     console.error('[summarize]', err);
     return res.status(500).json({ error: err.message || 'summarize failed' });
   }
 });
+
+// ── Sweep: авто-саммаризация остывших тредов ──────────────────────────────────
+const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
+const SWEEP_COLD_MINUTES = 30;   // тред «остыл» после 30 мин тишины
+const SWEEP_BATCH = 10;          // максимум тредов за проход (плавный backfill истории)
+const SWEEP_RETRY_HOURS = 6;     // повторная попытка после неудачи
+
+async function sweepColdThreads(): Promise<void> {
+  if (!db) return;
+  const apiKey = process.env.ROUTERAI_API_KEY;
+  if (!apiKey) return;
+
+  const { rows } = await db.query(`
+    SELECT id, user_id, messages FROM user_threads
+    WHERE summary IS NULL
+      AND is_meaningful IS DISTINCT FROM false
+      AND source IS DISTINCT FROM 'заметка'
+      AND label IS DISTINCT FROM 'profile'
+      AND title IS DISTINCT FROM 'О себе'
+      AND updated_at < NOW() - INTERVAL '${SWEEP_COLD_MINUTES} minutes'
+      AND (summary_attempted_at IS NULL OR summary_attempted_at < NOW() - INTERVAL '${SWEEP_RETRY_HOURS} hours')
+    ORDER BY updated_at ASC
+    LIMIT ${SWEEP_BATCH}
+  `);
+
+  for (const row of rows) {
+    try {
+      await db.query(`UPDATE user_threads SET summary_attempted_at = NOW() WHERE id = $1`, [row.id]);
+      const messages = Array.isArray(row.messages) ? row.messages : [];
+      const userMsgCount = messages.filter((m: any) => m.role === 'user' && String(m.content || '').trim()).length;
+      if (userMsgCount < 2) {
+        // нечего саммаризировать — пометить, чтобы не сканировать вечно
+        await db.query(`UPDATE user_threads SET is_meaningful = false WHERE id = $1`, [row.id]);
+        continue;
+      }
+      await summarizeThreadCore(row.id, row.user_id, messages, apiKey);
+    } catch (e: any) {
+      console.warn('[polisad/sweep]', row.id, e?.message);
+    }
+  }
+}
+
+setInterval(() => { sweepColdThreads().catch(e => console.warn('[polisad/sweep]', e?.message)); }, SWEEP_INTERVAL_MS);
+console.log('[polisad] sweep запущен: каждые 10 мин, остывание 30 мин, батч 10');
 
 app.post("/api/chat", requireAuth, aiRateLimit, async (req, res) => {
   try {
