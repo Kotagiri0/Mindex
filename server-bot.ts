@@ -464,6 +464,31 @@ function toGroqFormat(msgs: StoredMessage[]) {
   });
 }
 
+const FOLD_MAX_CHARS = 1500;      // максимум на блок «Раньше сегодня»
+const FOLD_MSG_MAX_CHARS = 200;   // максимум на одну реплику в свёртке
+
+// Экстрактивная свёртка записей, выпавших за CONTEXT_WINDOW: только реплики
+// пользователя, без LLM. Возвращает '' если сворачивать нечего.
+function foldOverflowMessages(msgs: StoredMessage[]): string {
+  if (msgs.length <= CONTEXT_WINDOW) return '';
+  const overflow = msgs.slice(0, msgs.length - CONTEXT_WINDOW);
+  const lines: string[] = [];
+  for (const m of overflow) {
+    if (m.role !== 'user') continue;
+    const text = (typeof m.content === 'string' ? m.content : '').trim();
+    if (!text) continue;
+    lines.push('— ' + (text.length > FOLD_MSG_MAX_CHARS ? text.slice(0, FOLD_MSG_MAX_CHARS) + '…' : text));
+  }
+  if (lines.length === 0) return '';
+  // при переполнении блока выкидываем самые старые строки
+  let block = lines.join('\n');
+  while (block.length > FOLD_MAX_CHARS && lines.length > 1) {
+    lines.shift();
+    block = lines.join('\n');
+  }
+  return block;
+}
+
 function buildSafeHistory(msgs: StoredMessage[]): any[] {
   const raw = toGroqFormat(msgs.slice(-CONTEXT_WINDOW));
   const safe: any[] = [];
@@ -704,6 +729,11 @@ async function processWithAI(
   const userTz = await getUserTimezone(db, userId);
   const systemPrompt = await buildBotSystemPrompt(userText, userId, userTz, db, apiKey);
 
+  const folded = foldOverflowMessages(threadMessages);
+  const fullSystemPrompt = folded
+    ? `${systemPrompt}\n\n## Раньше сегодня (краткая сводка того, что пользователь говорил ранее в этот день — не переспрашивай это)\n${folded}`
+    : systemPrompt;
+
   const loopMessages = [
     ...buildSafeHistory(threadMessages),
     { role: 'user' as const, content: userText }
@@ -713,7 +743,7 @@ async function processWithAI(
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     const data = await callRouterAI(apiKey, {
       model: 'deepseek/deepseek-v4-flash',
-      messages: [{ role: 'system', content: systemPrompt }, ...loopMessages],
+      messages: [{ role: 'system', content: fullSystemPrompt }, ...loopMessages],
       tools: botTools,
       tool_choice: 'auto',
       temperature: 0.7,
