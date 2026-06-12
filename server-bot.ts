@@ -12,6 +12,7 @@ import crypto from 'crypto';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import * as polisad from './src/polisad/index.ts';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -63,8 +64,8 @@ function tgFetchOptions(extra: RequestInit = {}): RequestInit {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const BOT_THREAD_TITLE = 'Telegram Bot';
-const CONTEXT_WINDOW = 50;
+const BOT_THREAD_TITLE = polisad.BOT_THREAD_TITLE;
+const CONTEXT_WINDOW = polisad.CONTEXT_WINDOW;
 const MAX_TOOL_ITERATIONS = 5;
 const MAX_BUTTON_TEXT_LENGTH = 32;
 const POLLING_ERROR_RETRY_DELAY_MS = 5_000;
@@ -464,30 +465,7 @@ function toGroqFormat(msgs: StoredMessage[]) {
   });
 }
 
-const FOLD_MAX_CHARS = 1500;      // максимум на блок «Раньше сегодня»
-const FOLD_MSG_MAX_CHARS = 200;   // максимум на одну реплику в свёртке
-
-// Экстрактивная свёртка записей, выпавших за CONTEXT_WINDOW: только реплики
-// пользователя, без LLM. Возвращает '' если сворачивать нечего.
-function foldOverflowMessages(msgs: StoredMessage[]): string {
-  if (msgs.length <= CONTEXT_WINDOW) return '';
-  const overflow = msgs.slice(0, msgs.length - CONTEXT_WINDOW);
-  const lines: string[] = [];
-  for (const m of overflow) {
-    if (m.role !== 'user') continue;
-    const text = (typeof m.content === 'string' ? m.content : '').trim();
-    if (!text) continue;
-    lines.push('— ' + (text.length > FOLD_MSG_MAX_CHARS ? text.slice(0, FOLD_MSG_MAX_CHARS) + '…' : text));
-  }
-  if (lines.length === 0) return '';
-  // при переполнении блока выкидываем самые старые строки
-  let block = lines.join('\n');
-  while (block.length > FOLD_MAX_CHARS && lines.length > 1) {
-    lines.shift();
-    block = lines.join('\n');
-  }
-  return block;
-}
+const foldOverflowMessages = polisad.foldOverflowMessages;
 
 function buildSafeHistory(msgs: StoredMessage[]): any[] {
   const raw = toGroqFormat(msgs.slice(-CONTEXT_WINDOW));
@@ -564,56 +542,24 @@ async function getUserTimezone(db: Pool, userId: string): Promise<string> {
   } catch { return 'Europe/Moscow'; }
 }
 
-async function generateEmbedding(text: string, apiKey: string): Promise<number[] | null> {
-  if (!text?.trim()) return null;
-  try {
-    const response = await fetch('https://routerai.ru/api/v1/embeddings', tgFetchOptions({
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: 'openai/text-embedding-3-small', input: text.slice(0, 8000) }),
-    }));
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.data?.[0]?.embedding || null;
-  } catch {
-    return null;
-  }
-}
-
 async function buildBotSystemPrompt(userText: string, userId: string, userTz: string, db: Pool, apiKey: string): Promise<string> {
   let prompt = getSystemInstruction(userTz);
 
-  // 1. Профиль пользователя — всегда, без keyword-matching
+  // 1. Профиль пользователя — всегда, без keyword-matching (ПОЛИСАД, слой 1)
   try {
-    const { rows: profileRows } = await db.query(
-      `SELECT summary FROM user_threads
-       WHERE user_id = $1
-         AND summary IS NOT NULL
-         AND is_meaningful IS NOT FALSE
-         AND (title = 'О себе' OR label = 'profile' OR (source = 'заметка' AND title ILIKE '%себ%'))
-       ORDER BY created_at ASC LIMIT 3`,
-      [userId]
-    );
-    if (profileRows.length > 0) {
-      prompt += `\n\n## Что пользователь рассказал о себе\n${profileRows.map((r: any) => r.summary).join('\n\n')}`;
+    const profileSummaries = await polisad.getProfileSummaries(db, userId);
+    if (profileSummaries.length > 0) {
+      prompt += `\n\n## Что пользователь рассказал о себе\n${profileSummaries.join('\n\n')}`;
     }
   } catch (e: any) {
     console.warn('[Bot RAG] profile inject failed:', e?.message);
   }
 
-  // 2. Summary вчерашнего дня в боте
+  // 2. Summary вчерашнего дня в боте (ПОЛИСАД, слой 3)
   try {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toLocaleDateString('sv-SE', { timeZone: userTz });
-    const { rows: yRows } = await db.query(
-      `SELECT summary FROM user_threads
-       WHERE user_id = $1 AND title = $2 AND summary IS NOT NULL
-       LIMIT 1`,
-      [userId, botThreadTitle(yesterdayStr)]
-    );
-    if (yRows[0]?.summary) {
-      prompt += `\n\n## Вчера в боте\n${yRows[0].summary}`;
+    const ySummary = await polisad.getYesterdaySummary(db, userId, userTz);
+    if (ySummary) {
+      prompt += `\n\n## Вчера в боте\n${ySummary}`;
     }
   } catch (e: any) {
     console.warn('[Bot RAG] yesterday summary failed:', e?.message);
@@ -642,69 +588,13 @@ async function buildBotSystemPrompt(userText: string, userId: string, userTz: st
     console.warn('[Bot RAG] upcoming tasks failed:', e?.message);
   }
 
-  // 3. RAG — vector-first, keyword-fallback, recent-fallback
+  // 4. RAG — каскад vector → keyword → recent (ПОЛИСАД, слой 2).
+  // Дневные треды бота исключаются — они идут отдельным блоком «Вчера в боте».
   try {
-    let ragRows: any[] = [];
-    let isExplicit = false;
-
-    // Исключаем дневные треды бота из RAG — они идут отдельным блоком "Вчера в боте"
-    const BOT_THREAD_PREFIX = `${BOT_THREAD_TITLE} `;
-    const ragBaseFilter = `
-      AND summary IS NOT NULL
-      AND is_meaningful IS NOT FALSE
-      AND label IS DISTINCT FROM 'skill:self_knowledge'
-      AND title IS DISTINCT FROM 'О себе'
-      AND title NOT LIKE '${BOT_THREAD_PREFIX}%'
-    `;
-
-    // Vector search (если pgvector доступен и есть embeddings)
-    const queryEmbedding = await generateEmbedding(userText, apiKey);
-    if (queryEmbedding) {
-      const { rows } = await db.query(
-        `SELECT title, summary
-         FROM user_threads
-         WHERE user_id = $1
-           AND embedding IS NOT NULL
-           ${ragBaseFilter}
-           AND 1 - (embedding <=> $2::vector) > 0.65
-         ORDER BY embedding <=> $2::vector
-         LIMIT 3`,
-        [userId, `[${queryEmbedding.join(',')}]`]
-      );
-      if (rows.length > 0) { ragRows = rows; isExplicit = true; }
-    }
-
-    // Keyword fallback
-    if (ragRows.length === 0) {
-      const keywords = userText
-        .toLowerCase()
-        .replace(/[^\wа-яё\s]/gi, '')
-        .split(/\s+/)
-        .filter(w => w.length > 3)
-        .slice(0, 5);
-      if (keywords.length > 0) {
-        const conditions = keywords.map((_: string, i: number) => `(title ILIKE $${i + 2} OR summary ILIKE $${i + 2})`).join(' OR ');
-        const { rows } = await db.query(
-          `SELECT title, summary FROM user_threads
-           WHERE user_id = $1 ${ragBaseFilter} AND (${conditions})
-           ORDER BY updated_at DESC LIMIT 3`,
-          [userId, ...keywords.map((k: string) => `%${k}%`)]
-        );
-        if (rows.length > 0) { ragRows = rows; isExplicit = true; }
-      }
-    }
-
-    // Recent fallback
-    if (ragRows.length === 0) {
-      const { rows } = await db.query(
-        `SELECT title, summary FROM user_threads
-         WHERE user_id = $1 ${ragBaseFilter}
-         ORDER BY updated_at DESC LIMIT 3`,
-        [userId]
-      );
-      ragRows = rows;
-    }
-
+    const { rows: ragRows, isExplicit } = await polisad.retrieveArchive(
+      db, userId, userText, apiKey,
+      { vectorEnabled: true, excludeBotThreads: true }
+    );
     if (ragRows.length > 0) {
       const contextBlock = ragRows.map((r: any) => `[${r.title}]\n${r.summary}`).join('\n---\n');
       prompt += `\n\n## Из архива пользователя\nФрагменты из заметок и прошлых разговоров. Используй как контекст, не упоминай сам факт архива.\n\n${contextBlock}`;
@@ -823,11 +713,8 @@ async function processWithAI(
 
 // ─── Thread management (PostgreSQL) ──────────────────────────────────────────
 
-function botThreadTitle(dateStr: string): string {
-  return `${BOT_THREAD_TITLE} ${dateStr}`; // например "Telegram Bot 2026-06-02"
-}
+const botThreadTitle = polisad.botThreadTitle;
 
-// Извлекает факты о пользователе из transcript и дописывает в тред "О себе".
 async function extractAndSaveUserFacts(userId: string, transcript: string, db: Pool, apiKey: string): Promise<void> {
   // Фильтр: разговор должен содержать личную информацию
   const personalSignals = ['я ', 'мне ', 'моя ', 'мой ', 'моё ', 'работаю', 'хочу', 'планирую', 'занимаюсь', 'строю', 'делаю', 'учусь', 'живу'];
@@ -902,44 +789,10 @@ ${transcript.slice(0, 4000)}
 
 // Саммаризирует вчерашний тред — fire-and-forget, не блокирует ответ пользователю.
 async function summarizeBotThread(threadId: string, userId: string, messages: StoredMessage[], db: Pool, apiKey: string): Promise<void> {
-  const meaningful = messages.filter(m => m.role !== 'tool' && m.content?.trim());
-  if (meaningful.length < 4) return; // слишком короткий тред — не саммаризируем
-
-  const transcript = meaningful
-    .map(m => `${m.role === 'user' ? 'Пользователь' : 'Мысль'}: ${m.content}`)
-    .join('\n');
-
-  try {
-    const response = await fetch('https://routerai.ru/api/v1/chat/completions', tgFetchOptions({
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'deepseek/deepseek-v4-flash',
-        messages: [{
-          role: 'user',
-          content: `Сожми этот разговор в 3-5 предложений. Сохрани суть: о чём говорили, какие решения приняли, что важного сказал пользователь о себе или своих планах. Без воды.\n\n${transcript.slice(0, 6000)}`
-        }],
-        max_tokens: 300,
-        temperature: 0.3,
-        thinking: false,
-      }),
-    }));
-    if (!response.ok) return;
-    const data = await response.json();
-    const summary = data.choices?.[0]?.message?.content?.trim();
-    if (!summary || summary.length < 20) return;
-
-    await db.query(
-      `UPDATE user_threads SET summary = $1, is_meaningful = true WHERE id = $2`,
-      [summary, threadId]
-    );
-    console.log(`[Bot] саммари создан для треда ${threadId}`);
-
+  await polisad.summarizeBotThread(db, apiKey, threadId, messages, (transcript) => {
     // После саммаризации — извлекаем факты о пользователе (fire-and-forget)
     extractAndSaveUserFacts(userId, transcript, db, apiKey).catch(() => {});
-  } catch (e: any) {
-    console.warn('[Bot] саммаризация не удалась:', e?.message);
-  }
+  });
 }
 
 async function loadBotThread(
