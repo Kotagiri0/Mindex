@@ -1,9 +1,15 @@
 // ПОЛИСАД: retrieval — слой 1 (профиль) и слой 2 (семантическая память / RAG).
 // Каскад: vector → keyword → recent. Ноль LLM-токенов на retrieval.
+//
+// Векторный ярус ранжируется активационной моделью (activation.ts):
+// кандидаты отбираются по similarity, итоговый порядок учитывает,
+// как часто и давно тред вспоминался. Каждый explicit-инжект логируется —
+// память укрепляется от использования.
 
 import type { ArchiveResult, Db, RetrieveOptions } from './types.ts';
 import { generateEmbedding } from './embeddings.ts';
 import { BOT_THREAD_TITLE } from './temporal.ts';
+import { ACCESS_MASS_SQL, activationScore, logAccess } from './activation.ts';
 
 // Слой 1: профильные треды — всегда в промпте, без keyword-matching.
 // Возвращает массив summary (до 3), порядок created_at ASC.
@@ -45,36 +51,45 @@ export async function retrieveArchive(
   // Дневные треды бота исключаются по запросу вызывающего —
   // у бота они идут отдельным блоком «Вчера в боте»
   const botThreadFilter = opts.excludeBotThreads
-    ? `AND title NOT LIKE '${BOT_THREAD_TITLE} %'`
+    ? `AND t.title NOT LIKE '${BOT_THREAD_TITLE} %'`
     : '';
   const baseFilter = `
-    AND summary IS NOT NULL
-    AND is_meaningful IS NOT FALSE
-    AND label IS DISTINCT FROM 'skill:self_knowledge'
-    AND title IS DISTINCT FROM 'О себе'
+    AND t.summary IS NOT NULL
+    AND t.is_meaningful IS NOT FALSE
+    AND t.label IS DISTINCT FROM 'skill:self_knowledge'
+    AND t.title IS DISTINCT FROM 'О себе'
     ${botThreadFilter}
   `;
 
   let rows: any[] = [];
   let isExplicit = false;
 
-  // 1. Vector search
+  // 1. Vector search: кандидаты по similarity (порог 0.65, до 10 штук),
+  //    итоговый топ-3 — по активации (similarity + история обращений)
   if (opts.vectorEnabled) {
     try {
       const queryEmbedding = await generateEmbedding(queryText, apiKey);
       if (queryEmbedding) {
         const res = await db.query(
-          `SELECT title, summary
-           FROM user_threads
-           WHERE user_id = $1
-             AND embedding IS NOT NULL
+          `SELECT t.id, t.title, t.summary,
+                  1 - (t.embedding <=> $2::vector) AS similarity,
+                  ${ACCESS_MASS_SQL} AS access_mass
+           FROM user_threads t
+           WHERE t.user_id = $1
+             AND t.embedding IS NOT NULL
              ${baseFilter}
-             AND 1 - (embedding <=> $2::vector) > 0.65
-           ORDER BY embedding <=> $2::vector
-           LIMIT 3`,
+             AND 1 - (t.embedding <=> $2::vector) > 0.65
+           ORDER BY t.embedding <=> $2::vector
+           LIMIT 10`,
           [userId, `[${queryEmbedding.join(',')}]`]
         );
-        if (res.rows.length > 0) { rows = res.rows; isExplicit = true; }
+        if (res.rows.length > 0) {
+          rows = res.rows
+            .map((r: any) => ({ ...r, _score: activationScore(Number(r.similarity), Number(r.access_mass)) }))
+            .sort((a: any, b: any) => b._score - a._score)
+            .slice(0, 3);
+          isExplicit = true;
+        }
       }
     } catch (e: any) {
       // vector miss из-за ошибки → деградируем в keyword, не падаем
@@ -86,11 +101,11 @@ export async function retrieveArchive(
   if (rows.length === 0) {
     const keywords = extractKeywords(queryText);
     if (keywords.length > 0) {
-      const conditions = keywords.map((_: string, i: number) => `(title ILIKE $${i + 2} OR summary ILIKE $${i + 2})`).join(' OR ');
+      const conditions = keywords.map((_: string, i: number) => `(t.title ILIKE $${i + 2} OR t.summary ILIKE $${i + 2})`).join(' OR ');
       const res = await db.query(
-        `SELECT title, summary FROM user_threads
-         WHERE user_id = $1 ${baseFilter} AND (${conditions})
-         ORDER BY updated_at DESC LIMIT 3`,
+        `SELECT t.id, t.title, t.summary FROM user_threads t
+         WHERE t.user_id = $1 ${baseFilter} AND (${conditions})
+         ORDER BY t.updated_at DESC LIMIT 3`,
         [userId, ...keywords.map((k: string) => `%${k}%`)]
       );
       if (res.rows.length > 0) { rows = res.rows; isExplicit = true; }
@@ -100,12 +115,18 @@ export async function retrieveArchive(
   // 3. Recent fallback — только фоновый контекст, источники не показываются
   if (rows.length === 0) {
     const res = await db.query(
-      `SELECT title, summary FROM user_threads
-       WHERE user_id = $1 ${baseFilter}
-       ORDER BY updated_at DESC LIMIT 3`,
+      `SELECT t.title, t.summary FROM user_threads t
+       WHERE t.user_id = $1 ${baseFilter}
+       ORDER BY t.updated_at DESC LIMIT 3`,
       [userId]
     );
     rows = res.rows;
+  }
+
+  // Журнал обращений: только explicit-совпадения. Recent-fallback не логируем —
+  // он не запрос-зависим, логирование раздуло бы активацию случайных тредов.
+  if (isExplicit) {
+    logAccess(db, userId, rows.map((r: any) => r.id).filter(Boolean));
   }
 
   return { rows, isExplicit };

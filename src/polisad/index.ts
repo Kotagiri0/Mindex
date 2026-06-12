@@ -17,6 +17,13 @@ export type {
 } from './types.ts';
 
 export { generateEmbedding } from './embeddings.ts';
+export {
+  ensurePolisadSchema,
+  activationScore,
+  logAccess,
+  ACTIVATION_DECAY,
+  SIM_WEIGHT,
+} from './activation.ts';
 export { getProfileSummaries, retrieveArchive } from './retrieve.ts';
 export {
   summarizeThreadCore,

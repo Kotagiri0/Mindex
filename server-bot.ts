@@ -1289,6 +1289,7 @@ export async function startBot(db: Pool): Promise<void> {
 
   // Календарный вид: аддитивно гарантируем колонки (бот — отдельный контейнер от веб-сервера).
   await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS end_time TEXT`).catch(() => {});
+  await polisad.ensurePolisadSchema(db).catch((e: any) => console.warn('[polisad] schema init failed:', e?.message));
   await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS category TEXT`).catch(() => {});
   await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS time_source TEXT`).catch(() => {});
   await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS suggested_time TEXT`).catch(() => {});

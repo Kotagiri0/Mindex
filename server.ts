@@ -554,6 +554,7 @@ const ensureAuthSchema = async () => {
   await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'мысль';`);
   await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS label TEXT;`);
   await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS summary_attempted_at TIMESTAMPTZ;`);
+  await polisad.ensurePolisadSchema(db);
   try {
     await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS embedding vector(1536);`);
     await db.query(`
