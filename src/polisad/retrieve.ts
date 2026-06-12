@@ -9,7 +9,7 @@
 import type { ArchiveResult, Db, RetrieveOptions } from './types.ts';
 import { generateEmbedding } from './embeddings.ts';
 import { BOT_THREAD_TITLE } from './temporal.ts';
-import { ACCESS_MASS_SQL, activationScore, logAccess } from './activation.ts';
+import { ACCESS_MASS_SQL, activationScore, logAccess, logRetrieval } from './activation.ts';
 
 // Слой 1: профильные треды — всегда в промпте, без keyword-matching.
 // Возвращает массив summary (до 3), порядок created_at ASC.
@@ -63,6 +63,9 @@ export async function retrieveArchive(
 
   let rows: any[] = [];
   let isExplicit = false;
+  let tier: 'vector' | 'keyword' | 'recent' | 'none' = 'none';
+  let topSimilarity: number | null = null;
+  const startedAt = Date.now();
 
   // 1. Vector search: кандидаты по similarity (порог 0.65, до 10 штук),
   //    итоговый топ-3 — по активации (similarity + история обращений)
@@ -89,6 +92,8 @@ export async function retrieveArchive(
             .sort((a: any, b: any) => b._score - a._score)
             .slice(0, 3);
           isExplicit = true;
+          tier = 'vector';
+          topSimilarity = Math.max(...res.rows.map((r: any) => Number(r.similarity)));
         }
       }
     } catch (e: any) {
@@ -108,7 +113,7 @@ export async function retrieveArchive(
          ORDER BY t.updated_at DESC LIMIT 3`,
         [userId, ...keywords.map((k: string) => `%${k}%`)]
       );
-      if (res.rows.length > 0) { rows = res.rows; isExplicit = true; }
+      if (res.rows.length > 0) { rows = res.rows; isExplicit = true; tier = 'keyword'; }
     }
   }
 
@@ -121,6 +126,7 @@ export async function retrieveArchive(
       [userId]
     );
     rows = res.rows;
+    if (rows.length > 0) tier = 'recent';
   }
 
   // Журнал обращений: только explicit-совпадения. Recent-fallback не логируем —
@@ -128,6 +134,14 @@ export async function retrieveArchive(
   if (isExplicit) {
     logAccess(db, userId, rows.map((r: any) => r.id).filter(Boolean));
   }
+
+  logRetrieval(db, userId, {
+    tier,
+    queryLen: queryText.length,
+    resultsCount: rows.length,
+    topSimilarity,
+    latencyMs: Date.now() - startedAt,
+  });
 
   return { rows, isExplicit };
 }

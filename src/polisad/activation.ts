@@ -45,7 +45,7 @@ export function logAccess(db: Db, userId: string, threadIds: string[]): void {
   ).catch((e: any) => console.warn('[polisad/activation] logAccess failed:', e?.message));
 }
 
-// Схема журнала. Additive, вызывается с обоих серверов при старте.
+// Схема журналов. Additive, вызывается с обоих серверов при старте.
 export async function ensurePolisadSchema(db: Db): Promise<void> {
   await db.query(`
     CREATE TABLE IF NOT EXISTS polisad_access_log (
@@ -56,4 +56,32 @@ export async function ensurePolisadSchema(db: Db): Promise<void> {
     )`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_polisad_access_thread ON polisad_access_log (thread_id)`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_polisad_access_user_ts ON polisad_access_log (user_id, ts)`);
+  // Журнал retrieval: одна строка на каждый вызов retrieveArchive.
+  // Источник метрик: hit rate по ярусам, распределение similarity
+  // (проверка порога 0.65), латентность.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS polisad_retrieval_log (
+      id BIGSERIAL PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      tier TEXT NOT NULL,              -- 'vector' | 'keyword' | 'recent' | 'none'
+      query_len INT NOT NULL,
+      results_count INT NOT NULL,
+      top_similarity REAL,             -- только для tier='vector'
+      latency_ms INT NOT NULL,
+      ts TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_polisad_retrieval_ts ON polisad_retrieval_log (ts)`);
+}
+
+// Лог retrieval: fire-and-forget, ошибка не роняет основной поток.
+export function logRetrieval(
+  db: Db,
+  userId: string,
+  data: { tier: string; queryLen: number; resultsCount: number; topSimilarity: number | null; latencyMs: number }
+): void {
+  db.query(
+    `INSERT INTO polisad_retrieval_log (user_id, tier, query_len, results_count, top_similarity, latency_ms)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [userId, data.tier, data.queryLen, data.resultsCount, data.topSimilarity, data.latencyMs]
+  ).catch((e: any) => console.warn('[polisad/metrics] logRetrieval failed:', e?.message));
 }

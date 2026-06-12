@@ -1637,6 +1637,70 @@ app.post("/api/admin/backfill-embeddings", async (req, res) => {
   }
 });
 
+// Метрики ПОЛИСАД за последние N дней (default 7): hit rate по ярусам,
+// распределение similarity, покрытие summary, латентность.
+app.post("/api/admin/polisad-metrics", async (req, res) => {
+  if (!db) return res.status(500).json({ error: "БД не настроена." });
+  const secret = String(req.body?.secret || "").trim();
+  if (secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: "Forbidden." });
+  const days = Math.min(Number(req.body?.days) || 7, 90);
+
+  try {
+    const [tiers, similarity, coverage, accesses] = await Promise.all([
+      db.query(
+        `SELECT tier,
+                COUNT(*)::int AS calls,
+                ROUND(AVG(results_count), 2)::float AS avg_results,
+                ROUND(AVG(latency_ms))::int AS avg_latency_ms,
+                MAX(latency_ms)::int AS max_latency_ms
+         FROM polisad_retrieval_log
+         WHERE ts > NOW() - ($1 || ' days')::interval
+         GROUP BY tier ORDER BY calls DESC`,
+        [days]
+      ),
+      db.query(
+        `SELECT ROUND(AVG(top_similarity)::numeric, 3)::float AS avg,
+                ROUND(MIN(top_similarity)::numeric, 3)::float AS min,
+                ROUND(MAX(top_similarity)::numeric, 3)::float AS max,
+                ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY top_similarity)::numeric, 3)::float AS p50
+         FROM polisad_retrieval_log
+         WHERE tier = 'vector' AND ts > NOW() - ($1 || ' days')::interval`,
+        [days]
+      ),
+      db.query(
+        `SELECT COUNT(*)::int AS total_threads,
+                COUNT(*) FILTER (WHERE summary IS NOT NULL)::int AS with_summary,
+                COUNT(*) FILTER (WHERE embedding IS NOT NULL)::int AS with_embedding,
+                COUNT(*) FILTER (WHERE is_meaningful = false)::int AS marked_noise
+         FROM user_threads`
+      ),
+      db.query(
+        `SELECT COUNT(*)::int AS total,
+                COUNT(DISTINCT thread_id)::int AS unique_threads
+         FROM polisad_access_log
+         WHERE ts > NOW() - ($1 || ' days')::interval`,
+        [days]
+      ),
+    ]);
+
+    const tierRows = tiers.rows;
+    const totalCalls = tierRows.reduce((s: number, r: any) => s + r.calls, 0);
+    return res.json({
+      period_days: days,
+      retrieval: {
+        total_calls: totalCalls,
+        tiers: tierRows.map((r: any) => ({ ...r, share: totalCalls ? Math.round(r.calls / totalCalls * 100) + '%' : '0%' })),
+        vector_similarity: similarity.rows[0],
+      },
+      memory: coverage.rows[0],
+      activation: accesses.rows[0],
+    });
+  } catch (err: any) {
+    console.error('[polisad/metrics]', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/search", requireAuth, async (req, res) => {
   if (!db) return res.status(500).json({ error: "БД не настроена." });
   const userId = (req as any).userId;

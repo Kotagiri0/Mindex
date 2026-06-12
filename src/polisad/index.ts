@@ -21,6 +21,7 @@ export {
   ensurePolisadSchema,
   activationScore,
   logAccess,
+  logRetrieval,
   ACTIVATION_DECAY,
   SIM_WEIGHT,
 } from './activation.ts';
