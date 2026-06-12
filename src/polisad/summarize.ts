@@ -4,6 +4,7 @@
 
 import type { ChatCall, Db, PolisadMessage, SummarizeResult } from './types.ts';
 import { generateEmbedding } from './embeddings.ts';
+import { scoreMeaningful } from './meaningful.ts';
 
 const SUMMARIZE_SYSTEM_PROMPT = `Ты — Мысль, персональный ИИ-ассистент. Проанализируй диалог и верни JSON-объект:
 {
@@ -33,6 +34,18 @@ export async function summarizeThreadCore(
   userId: string,
   messages: PolisadMessage[]
 ): Promise<SummarizeResult | null> {
+  const { verdict } = scoreMeaningful(messages);
+  if (verdict === 'noise') {
+    // явный шум — LLM не нужна
+    if (db && threadId && userId) {
+      await db.query(
+        `UPDATE user_threads SET summary = NULL, is_meaningful = false, updated_at = NOW() WHERE id = $1 AND user_id = $2`,
+        [threadId, userId]
+      );
+    }
+    return { summary: '', isMeaningful: false };
+  }
+
   const dialogText = messages
     .filter((m: any) => m.role === 'user' || m.role === 'assistant')
     .map((m: any) => `${m.role === 'user' ? 'Пользователь' : 'Мысль'}: ${String(m.content || '')}`)

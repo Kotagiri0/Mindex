@@ -32,6 +32,8 @@ export {
   summarizeBotThread,
   SWEEP_INTERVAL_MS,
 } from './summarize.ts';
+export { scoreMeaningful } from './meaningful.ts';
+export type { MeaningfulVerdict } from './meaningful.ts';
 export {
   BOT_THREAD_TITLE,
   CONTEXT_WINDOW,
