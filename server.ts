@@ -1646,7 +1646,7 @@ app.post("/api/admin/polisad-metrics", async (req, res) => {
   const days = Math.min(Number(req.body?.days) || 7, 90);
 
   try {
-    const [tiers, similarity, coverage, accesses] = await Promise.all([
+    const [tiers, similarity, coverage, accesses, feedback] = await Promise.all([
       db.query(
         `SELECT tier,
                 COUNT(*)::int AS calls,
@@ -1681,6 +1681,14 @@ app.post("/api/admin/polisad-metrics", async (req, res) => {
          WHERE ts > NOW() - ($1 || ' days')::interval`,
         [days]
       ),
+      db.query(
+        `SELECT COUNT(*) FILTER (WHERE repeated_query = true)::int AS repeated,
+                COUNT(*) FILTER (WHERE repeated_query IS NOT NULL)::int AS measured,
+                (SELECT COUNT(*)::int FROM polisad_memory_edges) AS graph_edges
+         FROM polisad_retrieval_log
+         WHERE ts > NOW() - ($1 || ' days')::interval`,
+        [days]
+      ),
     ]);
 
     const tierRows = tiers.rows;
@@ -1694,6 +1702,15 @@ app.post("/api/admin/polisad-metrics", async (req, res) => {
       },
       memory: coverage.rows[0],
       activation: accesses.rows[0],
+      feedback: {
+        // повторный запрос в течение 30 мин = вероятный промах памяти
+        repeated_queries: feedback.rows[0].repeated,
+        measured: feedback.rows[0].measured,
+        miss_rate: feedback.rows[0].measured
+          ? Math.round(feedback.rows[0].repeated / feedback.rows[0].measured * 100) + '%'
+          : 'n/a',
+        graph_edges: feedback.rows[0].graph_edges,
+      },
     });
   } catch (err: any) {
     console.error('[polisad/metrics]', err);

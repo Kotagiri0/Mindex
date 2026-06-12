@@ -9,7 +9,12 @@
 import type { ArchiveResult, Db, RetrieveOptions } from './types.ts';
 import { generateEmbedding } from './embeddings.ts';
 import { BOT_THREAD_TITLE } from './temporal.ts';
-import { ACCESS_MASS_SQL, activationScore, logAccess, logRetrieval } from './activation.ts';
+import { ACCESS_MASS_SQL, ASSOC_MASS_SQL, activationScore, logAccess, logRetrieval, recordCoRetrieval } from './activation.ts';
+import { extractKeywords } from './morphology.ts';
+
+// MMR-дедупликация: почти одинаковые воспоминания (30 дневных тредов про один
+// проект) не должны занимать всю выдачу — место отдаётся разнообразию.
+const DEDUP_SIMILARITY = 0.92;
 
 // Слой 1: профильные треды — всегда в промпте, без keyword-matching.
 // Возвращает массив summary (до 3), порядок created_at ASC.
@@ -31,13 +36,38 @@ export async function getProfileSummaries(db: Db, userId: string): Promise<strin
   return rows.map((r: any) => r.summary);
 }
 
-function extractKeywords(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^\wа-яё\s]/gi, '')
-    .split(/\s+/)
-    .filter(w => w.length > 3)
-    .slice(0, 5);
+// Дедуп выдачи: жадный проход по отсортированным кандидатам, пропускаем тех,
+// кто слишком похож (cosine > DEDUP_SIMILARITY) на уже выбранного.
+async function dedupCandidates(db: Db, sorted: any[], limit: number): Promise<any[]> {
+  if (sorted.length <= 1) return sorted.slice(0, limit);
+  const ids = sorted.map((r: any) => r.id);
+  let pairSim = new Map<string, number>();
+  try {
+    const { rows } = await db.query(
+      `SELECT a.id AS id_a, b.id AS id_b, 1 - (a.embedding <=> b.embedding) AS sim
+       FROM user_threads a
+       JOIN user_threads b ON a.id < b.id
+       WHERE a.id = ANY($1::uuid[]) AND b.id = ANY($1::uuid[])
+         AND a.embedding IS NOT NULL AND b.embedding IS NOT NULL`,
+      [ids]
+    );
+    for (const r of rows) {
+      pairSim.set(`${r.id_a}|${r.id_b}`, Number(r.sim));
+      pairSim.set(`${r.id_b}|${r.id_a}`, Number(r.sim));
+    }
+  } catch (e: any) {
+    console.warn('[polisad/retrieve] dedup failed, keeping order:', e?.message);
+    return sorted.slice(0, limit);
+  }
+  const picked: any[] = [];
+  for (const cand of sorted) {
+    if (picked.length >= limit) break;
+    const isDuplicate = picked.some(p => (pairSim.get(`${p.id}|${cand.id}`) ?? 0) > DEDUP_SIMILARITY);
+    if (!isDuplicate) picked.push(cand);
+  }
+  // если дедуп выкинул всех кроме одного — добираем дублями до лимита не нужно:
+  // лучше 1-2 разнообразных воспоминания, чем 3 одинаковых
+  return picked;
 }
 
 // Слой 2: каскадный поиск по архиву.
@@ -76,7 +106,8 @@ export async function retrieveArchive(
         const res = await db.query(
           `SELECT t.id, t.title, t.summary,
                   1 - (t.embedding <=> $2::vector) AS similarity,
-                  ${ACCESS_MASS_SQL} AS access_mass
+                  ${ACCESS_MASS_SQL} AS access_mass,
+                  ${ASSOC_MASS_SQL} AS assoc_mass
            FROM user_threads t
            WHERE t.user_id = $1
              AND t.embedding IS NOT NULL
@@ -87,10 +118,10 @@ export async function retrieveArchive(
           [userId, `[${queryEmbedding.join(',')}]`]
         );
         if (res.rows.length > 0) {
-          rows = res.rows
-            .map((r: any) => ({ ...r, _score: activationScore(Number(r.similarity), Number(r.access_mass)) }))
-            .sort((a: any, b: any) => b._score - a._score)
-            .slice(0, 3);
+          const sorted = res.rows
+            .map((r: any) => ({ ...r, _score: activationScore(Number(r.similarity), Number(r.access_mass), Number(r.assoc_mass)) }))
+            .sort((a: any, b: any) => b._score - a._score);
+          rows = await dedupCandidates(db, sorted, 3);
           isExplicit = true;
           tier = 'vector';
           topSimilarity = Math.max(...res.rows.map((r: any) => Number(r.similarity)));
@@ -132,7 +163,10 @@ export async function retrieveArchive(
   // Журнал обращений: только explicit-совпадения. Recent-fallback не логируем —
   // он не запрос-зависим, логирование раздуло бы активацию случайных тредов.
   if (isExplicit) {
-    logAccess(db, userId, rows.map((r: any) => r.id).filter(Boolean));
+    const ids = rows.map((r: any) => r.id).filter(Boolean);
+    logAccess(db, userId, ids);
+    // Со-вспоминание: извлечённые вместе треды связываются ребром графа
+    recordCoRetrieval(db, userId, ids);
   }
 
   logRetrieval(db, userId, {
@@ -141,6 +175,7 @@ export async function retrieveArchive(
     resultsCount: rows.length,
     topSimilarity,
     latencyMs: Date.now() - startedAt,
+    keywords: extractKeywords(queryText),
   });
 
   return { rows, isExplicit };

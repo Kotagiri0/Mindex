@@ -22,9 +22,12 @@ export {
   activationScore,
   logAccess,
   logRetrieval,
+  recordCoRetrieval,
+  jaccard,
   ACTIVATION_DECAY,
   SIM_WEIGHT,
 } from './activation.ts';
+export { stemRu, extractKeywords } from './morphology.ts';
 export { getProfileSummaries, retrieveArchive } from './retrieve.ts';
 export {
   summarizeThreadCore,
