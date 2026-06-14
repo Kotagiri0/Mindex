@@ -9,7 +9,7 @@
 import type { Express } from 'express';
 import type { Pool } from 'pg';
 import crypto from 'crypto';
-import { ProxyAgent, setGlobalDispatcher } from 'undici';
+import { ProxyAgent, setGlobalDispatcher, Agent } from 'undici';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as polisad from './src/polisad/index.ts';
@@ -24,6 +24,10 @@ if (proxyUrlGlobal) {
   setGlobalDispatcher(new ProxyAgent(proxyUrlGlobal));
   console.log('[Bot] Прокси установлен:', proxyUrlGlobal.replace(/:([^@]+)@/, ':***@'));
 }
+
+// Прямой диспетчер — в обход глобального прокси. Нужен для эксперимента «OpenRouter
+// напрямую»: проверяем, не российский ли прокси раздувает TTFT на каждом LLM-вызове.
+const directDispatcher = new Agent();
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -504,6 +508,8 @@ const OPENROUTER_FALLBACK_KEY = process.env.OPENROUTER_FALLBACK_KEY || '';
 // Дефолт — routerai. Нестриминговые вызовы и фоллбек не меняются.
 const STREAM_PROVIDER = (process.env.STREAM_PROVIDER || 'routerai').toLowerCase();
 const OPENROUTER_STREAM_MODEL = process.env.OPENROUTER_STREAM_MODEL || 'deepseek/deepseek-chat';
+// OpenRouter в обход прокси (по умолчанию да). STREAM_OR_DIRECT=0 — через прокси.
+const STREAM_OR_DIRECT = (process.env.STREAM_OR_DIRECT || '1') !== '0';
 
 async function callOpenRouterFallback(body: object): Promise<any> {
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -557,25 +563,31 @@ async function callRouterAIStream(
 ): Promise<LlmStepResult> {
   // Выбор провайдера стрима. По умолчанию RouterAI; STREAM_PROVIDER=openrouter — OpenRouter.
   const useOR = STREAM_PROVIDER === 'openrouter' && Boolean(OPENROUTER_FALLBACK_KEY);
+  // OpenRouter по умолчанию идёт В ОБХОД прокси (проверка гипотезы «прокси душит TTFT»).
+  // STREAM_OR_DIRECT=0 — вернуть через прокси.
+  const direct = useOR && STREAM_OR_DIRECT;
   const url = useOR ? 'https://openrouter.ai/api/v1/chat/completions' : 'https://routerai.ru/api/v1/chat/completions';
   const key = useOR ? OPENROUTER_FALLBACK_KEY : apiKey;
   // OpenRouter не знает RouterAI-шный id 'deepseek/deepseek-v4-flash' — подменяем модель.
   const sendBody = useOR
     ? { ...body, model: OPENROUTER_STREAM_MODEL, stream: true }
     : { ...body, stream: true };
-  const tag = useOR ? `openrouter:${OPENROUTER_STREAM_MODEL}` : 'routerai';
+  const tag = useOR ? `openrouter:${OPENROUTER_STREAM_MODEL}${direct ? '/direct' : '/proxy'}` : 'routerai';
   const startedAt = Date.now();
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 55000);
   let response: Response;
   try {
-    response = await fetch(url, tgFetchOptions({
+    const fetchOpts: any = {
       method: 'POST',
       signal: controller.signal,
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
       body: JSON.stringify(sendBody),
-    }));
+    };
+    // dispatcher переопределяет глобальный прокси — прямое соединение для OpenRouter.
+    if (direct) fetchOpts.dispatcher = directDispatcher;
+    response = await fetch(url, fetchOpts);
   } catch (e) {
     clearTimeout(timeoutId);
     throw e;
