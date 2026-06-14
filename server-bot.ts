@@ -498,6 +498,13 @@ function buildSafeHistory(msgs: StoredMessage[]): any[] {
 
 const OPENROUTER_FALLBACK_KEY = process.env.OPENROUTER_FALLBACK_KEY || '';
 
+// Провайдер для СТРИМИНГА (диагностика «гигантских кусков»). RouterAI может не
+// отдавать настоящий SSE — тогда стрим вырождается в одну правку. STREAM_PROVIDER=openrouter
+// переключает стрим на OpenRouter (ключ OPENROUTER_FALLBACK_KEY), у него полноценный SSE.
+// Дефолт — routerai. Нестриминговые вызовы и фоллбек не меняются.
+const STREAM_PROVIDER = (process.env.STREAM_PROVIDER || 'routerai').toLowerCase();
+const OPENROUTER_STREAM_MODEL = process.env.OPENROUTER_STREAM_MODEL || 'deepseek/deepseek-chat';
+
 async function callOpenRouterFallback(body: object): Promise<any> {
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -548,15 +555,26 @@ async function callRouterAIStream(
   body: object,
   onDelta: (fullContent: string) => void
 ): Promise<LlmStepResult> {
+  // Выбор провайдера стрима. По умолчанию RouterAI; STREAM_PROVIDER=openrouter — OpenRouter.
+  const useOR = STREAM_PROVIDER === 'openrouter' && Boolean(OPENROUTER_FALLBACK_KEY);
+  const url = useOR ? 'https://openrouter.ai/api/v1/chat/completions' : 'https://routerai.ru/api/v1/chat/completions';
+  const key = useOR ? OPENROUTER_FALLBACK_KEY : apiKey;
+  // OpenRouter не знает RouterAI-шный id 'deepseek/deepseek-v4-flash' — подменяем модель.
+  const sendBody = useOR
+    ? { ...body, model: OPENROUTER_STREAM_MODEL, stream: true }
+    : { ...body, stream: true };
+  const tag = useOR ? `openrouter:${OPENROUTER_STREAM_MODEL}` : 'routerai';
+  const startedAt = Date.now();
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 55000);
   let response: Response;
   try {
-    response = await fetch('https://routerai.ru/api/v1/chat/completions', tgFetchOptions({
+    response = await fetch(url, tgFetchOptions({
       method: 'POST',
       signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ ...body, stream: true }),
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      body: JSON.stringify(sendBody),
     }));
   } catch (e) {
     clearTimeout(timeoutId);
@@ -564,7 +582,7 @@ async function callRouterAIStream(
   }
   if (!response.ok || !response.body) {
     clearTimeout(timeoutId);
-    throw new Error(`RouterAI stream error: ${response.status}`);
+    throw new Error(`stream error [${tag}]: ${response.status}`);
   }
 
   // Страховка: если провайдер проигнорировал stream:true и вернул обычный JSON
@@ -576,6 +594,7 @@ async function callRouterAIStream(
     const m = data?.choices?.[0]?.message;
     const content = typeof m?.content === 'string' ? m.content : '';
     if (content) onDelta(content);
+    console.log(`[Bot stream] ${tag} SSE=нет (ctype="${ctype}") → один кусок, ${content.length} симв за ${Date.now() - startedAt}мс`);
     return { content, tool_calls: m?.tool_calls };
   }
 
@@ -583,12 +602,15 @@ async function callRouterAIStream(
   const decoder = new TextDecoder();
   let buffer = '';
   let content = '';
+  let netReads = 0;     // сколько сетевых чанков пришло от провайдера
+  let deltaCount = 0;   // сколько текстовых дельт (рост content)
   const toolCallsByIndex = new Map<number, any>();
 
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      if (value) netReads++;
       buffer += decoder.decode(value, { stream: true });
       let nlIdx: number;
       while ((nlIdx = buffer.indexOf('\n')) !== -1) {
@@ -603,6 +625,7 @@ async function callRouterAIStream(
         if (!delta) continue;
         if (typeof delta.content === 'string' && delta.content) {
           content += delta.content;
+          deltaCount++;
           onDelta(content);
         }
         if (Array.isArray(delta.tool_calls)) {
@@ -622,6 +645,10 @@ async function callRouterAIStream(
     clearTimeout(timeoutId);
     try { reader.releaseLock?.(); } catch { /* noop */ }
   }
+
+  // Диагностика плавности: netReads — сколько раз сеть отдала данные (если 1-2,
+  // провайдер/прокси буферизуют → «гигантские куски»); deltaCount — сколько дельт текста.
+  console.log(`[Bot stream] ${tag} SSE=да чанков=${netReads} дельт=${deltaCount} ${content.length} симв за ${Date.now() - startedAt}мс`);
 
   const tool_calls = toolCallsByIndex.size > 0
     ? [...toolCallsByIndex.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v)
