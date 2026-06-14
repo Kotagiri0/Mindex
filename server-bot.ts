@@ -741,16 +741,26 @@ async function buildBotSystemPrompt(userText: string, userId: string, userTz: st
   // 4. RAG — каскад vector → keyword → recent (ПОЛИСАД, слой 2).
   // Дневные треды бота исключаются — они идут отдельным блоком «Вчера в боте».
   const ragBlock = (async () => {
+    // Гейт: реплики без содержательных слов («да мб», «ещё раз», «понял») архив
+    // не трогают — экономим эмбеддинг-вызов (он на критическом пути префилла) и
+    // не раздуваем промпт. Личный контекст таким репликам даёт профиль + история.
+    if (polisad.extractKeywords(userText).length === 0) {
+      return '';
+    }
     try {
       const { rows: ragRows, isExplicit } = await polisad.retrieveArchive(
         db, userId, userText, apiKey,
         { vectorEnabled: true, excludeBotThreads: true }
       );
-      if (ragRows.length > 0) {
+      // Инжектим ТОЛЬКО явное совпадение (vector/keyword). Recent-fallback для бота —
+      // шум: он не по запросу, а просто свежие треды, и путал модель («Усталость»
+      // на «да мб»). Свежий контекст уже есть в истории треда и блоке «Вчера в боте».
+      if (ragRows.length > 0 && isExplicit) {
         const contextBlock = ragRows.map((r: any) => `[${r.title}]\n${r.summary}`).join('\n---\n');
-        console.log('[Bot RAG] injected:', ragRows.map((r: any) => r.title), isExplicit ? '(explicit)' : '(fallback)');
+        console.log('[Bot RAG] injected:', ragRows.map((r: any) => r.title));
         return `\n\n## Из архива пользователя\nФрагменты из заметок и прошлых разговоров. Используй как контекст, не упоминай сам факт архива.\n\n${contextBlock}`;
       }
+      if (ragRows.length > 0) console.log('[Bot RAG] fallback не инжектим (нет явного совпадения)');
     } catch (e: any) {
       console.warn('[Bot RAG] rag failed:', e?.message);
     }
