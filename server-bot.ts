@@ -19,15 +19,20 @@ import path from 'path';
 
 const execFileAsync = promisify(execFile);
 
+// Тёплый пул соединений: бот получает сообщения редко, дефолтный keepAliveTimeout
+// (4с) роняет коннект между запросами → каждый раз новый TLS-хендшейк (1-2с в TTFT).
+// Держим соединения живыми минуту, чтобы хендшейк не повторялся.
+const KEEPALIVE_OPTS = { keepAliveTimeout: 60_000, keepAliveMaxTimeout: 600_000, connections: 8 };
+
 const proxyUrlGlobal = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
 if (proxyUrlGlobal) {
-  setGlobalDispatcher(new ProxyAgent(proxyUrlGlobal));
+  setGlobalDispatcher(new ProxyAgent({ uri: proxyUrlGlobal, ...KEEPALIVE_OPTS }));
   console.log('[Bot] Прокси установлен:', proxyUrlGlobal.replace(/:([^@]+)@/, ':***@'));
 }
 
-// Прямой диспетчер — в обход глобального прокси. Нужен для эксперимента «OpenRouter
-// напрямую»: проверяем, не российский ли прокси раздувает TTFT на каждом LLM-вызове.
-const directDispatcher = new Agent();
+// Прямой диспетчер — в обход глобального прокси. routerai.ru — российский, и если
+// VPS в РФ, до него можно ходить НАПРЯМУЮ (ROUTERAI_DIRECT=1), убирая лишний хоп.
+const directDispatcher = new Agent(KEEPALIVE_OPTS);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -510,6 +515,8 @@ const STREAM_PROVIDER = (process.env.STREAM_PROVIDER || 'routerai').toLowerCase(
 const OPENROUTER_STREAM_MODEL = process.env.OPENROUTER_STREAM_MODEL || 'deepseek/deepseek-chat';
 // OpenRouter в обход прокси (по умолчанию да). STREAM_OR_DIRECT=0 — через прокси.
 const STREAM_OR_DIRECT = (process.env.STREAM_OR_DIRECT || '1') !== '0';
+// RouterAI напрямую, мимо прокси (домашний сервис). ROUTERAI_DIRECT=1 — включить.
+const ROUTERAI_DIRECT = process.env.ROUTERAI_DIRECT === '1';
 
 async function callOpenRouterFallback(body: object): Promise<any> {
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -563,16 +570,16 @@ async function callRouterAIStream(
 ): Promise<LlmStepResult> {
   // Выбор провайдера стрима. По умолчанию RouterAI; STREAM_PROVIDER=openrouter — OpenRouter.
   const useOR = STREAM_PROVIDER === 'openrouter' && Boolean(OPENROUTER_FALLBACK_KEY);
-  // OpenRouter по умолчанию идёт В ОБХОД прокси (проверка гипотезы «прокси душит TTFT»).
-  // STREAM_OR_DIRECT=0 — вернуть через прокси.
-  const direct = useOR && STREAM_OR_DIRECT;
+  // Обход прокси: OpenRouter — по STREAM_OR_DIRECT, RouterAI — по ROUTERAI_DIRECT.
+  // Если прямой путь не достучится (fetch failed) — runStep откатится на нестрим-вызов.
+  const direct = useOR ? STREAM_OR_DIRECT : ROUTERAI_DIRECT;
   const url = useOR ? 'https://openrouter.ai/api/v1/chat/completions' : 'https://routerai.ru/api/v1/chat/completions';
   const key = useOR ? OPENROUTER_FALLBACK_KEY : apiKey;
   // OpenRouter не знает RouterAI-шный id 'deepseek/deepseek-v4-flash' — подменяем модель.
   const sendBody = useOR
     ? { ...body, model: OPENROUTER_STREAM_MODEL, stream: true }
     : { ...body, stream: true };
-  const tag = useOR ? `openrouter:${OPENROUTER_STREAM_MODEL}${direct ? '/direct' : '/proxy'}` : 'routerai';
+  const tag = (useOR ? `openrouter:${OPENROUTER_STREAM_MODEL}` : 'routerai') + (direct ? '/direct' : '/proxy');
   const startedAt = Date.now();
 
   const controller = new AbortController();
@@ -673,6 +680,23 @@ async function callRouterAIStream(
     ? [...toolCallsByIndex.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v)
     : undefined;
   return { content, tool_calls };
+}
+
+// Тёплый коннект к routerai.ru: бот пишет редко → пул протухает → холодный
+// TLS-хендшейк на каждый запрос (1-2с в TTFT). Лёгкий GET раз в 30с держит
+// соединение того же origin (chat + embeddings) живым — реальный запрос его
+// переиспользует. Путь warmup совпадает с боевым (прямой/прокси по ROUTERAI_DIRECT).
+function startConnectionWarmup(): void {
+  const ping = () => {
+    const opts: any = { method: 'GET', signal: AbortSignal.timeout(8000) };
+    if (ROUTERAI_DIRECT) opts.dispatcher = directDispatcher;
+    fetch('https://routerai.ru/', opts)
+      .then(r => { try { (r.body as any)?.cancel?.(); } catch { /* noop */ } })
+      .catch(() => { /* warmup — ошибки не важны */ });
+  };
+  ping();
+  setInterval(ping, 30_000);
+  console.log(`[Bot] Прогрев соединения к routerai.ru каждые 30с (${ROUTERAI_DIRECT ? 'напрямую' : 'через прокси'})`);
 }
 
 async function getUserTimezone(db: Pool, userId: string): Promise<string> {
@@ -1612,6 +1636,9 @@ export async function startBot(db: Pool): Promise<void> {
   await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS time_source TEXT`).catch(() => {});
   await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS suggested_time TEXT`).catch(() => {});
   await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS suggested_end_time TEXT`).catch(() => {});
+
+  // Прогрев соединения к LLM-провайдеру — режет TLS-хендшейк из TTFT.
+  startConnectionWarmup();
 
   const appUrl = process.env.APP_URL || null;
 
