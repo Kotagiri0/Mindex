@@ -815,7 +815,10 @@ async function processWithAI(
       try {
         return await callRouterAIStream(apiKey, body, (full) => sink.update(full));
       } catch (e: any) {
-        console.warn('[Bot] стрим не удался, фоллбек на обычный вызов:', e?.message);
+        // e.cause — настоящая причина (undici прячет её под generic «fetch failed»):
+        // код сети/TLS (ECONNREFUSED, ENOTFOUND, cert, UND_ERR_*), важен для ROUTERAI_DIRECT.
+        const cause = e?.cause?.code ?? e?.cause?.message ?? e?.cause;
+        console.warn('[Bot] стрим не удался, фоллбек:', e?.message, '| cause:', cause ?? '(нет)');
         const data = await callRouterAI(apiKey, body);
         const m = data.choices[0].message;
         const content = typeof m.content === 'string' ? m.content : '';
