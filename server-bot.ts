@@ -1154,13 +1154,16 @@ interface StreamSink {
   typing(): void;                           // освежить индикатор «печатает…»
 }
 
+// Заглушка-плейсхолдер, пока модель молчит до первого токена (в голосе «Мысли»).
+const STREAM_PLACEHOLDER = 'Размышляю...';
+
 // Создаёт сток: шлёт «печатает…», ставит сообщение-плейсхолдер и редактирует его.
 async function createStreamSink(token: string, chatId: number): Promise<StreamSink> {
   tgApi(token, 'sendChatAction', { chat_id: chatId, action: 'typing' }).catch(() => {});
-  const sent = await tgApi(token, 'sendMessage', { chat_id: chatId, text: '…' });
+  const sent = await tgApi(token, 'sendMessage', { chat_id: chatId, text: STREAM_PLACEHOLDER });
   const messageId: number | undefined = sent?.result?.message_id;
 
-  let lastSent = '…';
+  let lastSent = STREAM_PLACEHOLDER;
   let pending: string | null = null;
   // ставим «время последней правки» в текущий момент: первая правка подождёт
   // throttle, чтобы не лупить editMessageText сразу после sendMessage (429).
