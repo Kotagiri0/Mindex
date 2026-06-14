@@ -91,12 +91,15 @@ export function logAccess(db: Db, userId: string, threadIds: string[]): void {
 }
 
 // Схема журналов. Additive, вызывается с обоих серверов при старте.
+// ВАЖНО: user_threads.id и user_id — TEXT (см. server.ts), поэтому thread_id и
+// thread_a/thread_b здесь тоже TEXT. Иначе джойн al.thread_id = t.id даёт
+// «operator does not exist: uuid = text» и весь векторный ярус падает в keyword.
 export async function ensurePolisadSchema(db: Db): Promise<void> {
   await db.query(`
     CREATE TABLE IF NOT EXISTS polisad_access_log (
       id BIGSERIAL PRIMARY KEY,
       user_id TEXT NOT NULL,
-      thread_id UUID NOT NULL,
+      thread_id TEXT NOT NULL,
       ts TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_polisad_access_thread ON polisad_access_log (thread_id)`);
@@ -120,8 +123,8 @@ export async function ensurePolisadSchema(db: Db): Promise<void> {
   // Источник ассоциативной активации (spreading activation).
   await db.query(`
     CREATE TABLE IF NOT EXISTS polisad_memory_edges (
-      thread_a UUID NOT NULL,
-      thread_b UUID NOT NULL,
+      thread_a TEXT NOT NULL,
+      thread_b TEXT NOT NULL,
       user_id TEXT NOT NULL,
       weight INT NOT NULL DEFAULT 1,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -131,6 +134,24 @@ export async function ensurePolisadSchema(db: Db): Promise<void> {
   // Поля детектора повторных запросов (фундамент feedback loop)
   await db.query(`ALTER TABLE polisad_retrieval_log ADD COLUMN IF NOT EXISTS keywords TEXT`);
   await db.query(`ALTER TABLE polisad_retrieval_log ADD COLUMN IF NOT EXISTS repeated_query BOOLEAN`);
+
+  // Миграция типов для таблиц, созданных ранее с UUID-колонками (прод).
+  // ALTER COLUMN TYPE только если колонка ещё uuid — иначе no-op без перезаписи.
+  await db.query(`DO $$
+    BEGIN
+      IF (SELECT data_type FROM information_schema.columns
+          WHERE table_name = 'polisad_access_log' AND column_name = 'thread_id') = 'uuid' THEN
+        ALTER TABLE polisad_access_log ALTER COLUMN thread_id TYPE TEXT USING thread_id::text;
+      END IF;
+      IF (SELECT data_type FROM information_schema.columns
+          WHERE table_name = 'polisad_memory_edges' AND column_name = 'thread_a') = 'uuid' THEN
+        ALTER TABLE polisad_memory_edges ALTER COLUMN thread_a TYPE TEXT USING thread_a::text;
+      END IF;
+      IF (SELECT data_type FROM information_schema.columns
+          WHERE table_name = 'polisad_memory_edges' AND column_name = 'thread_b') = 'uuid' THEN
+        ALTER TABLE polisad_memory_edges ALTER COLUMN thread_b TYPE TEXT USING thread_b::text;
+      END IF;
+    END $$;`);
 }
 
 // Детектор повторного запроса: пользователь спрашивает почти то же самое

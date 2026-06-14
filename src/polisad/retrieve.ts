@@ -52,7 +52,7 @@ async function dedupCandidates(db: Db, sorted: any[], limit: number): Promise<an
       `SELECT a.id AS id_a, b.id AS id_b, 1 - (a.embedding <=> b.embedding) AS sim
        FROM user_threads a
        JOIN user_threads b ON a.id < b.id
-       WHERE a.id = ANY($1::uuid[]) AND b.id = ANY($1::uuid[])
+       WHERE a.id = ANY($1::text[]) AND b.id = ANY($1::text[])
          AND a.embedding IS NOT NULL AND b.embedding IS NOT NULL`,
       [ids]
     );
