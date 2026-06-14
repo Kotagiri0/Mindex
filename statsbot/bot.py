@@ -66,13 +66,34 @@ def fetch_stats() -> dict:
                   (SELECT COUNT(DISTINCT user_id) FROM user_threads
                      WHERE updated_at >= NOW() - INTERVAL '7 days')                              AS active_chatters_7d,
 
-                  -- Retention 7d: из тех, кто зарегался 7+ дней назад, сколько вернулись за последние 7 дней
+                  -- ОБЩИЙ retention (блендованный): доля активных за последние 7 дней
+                  -- среди всех, кто зарегался 7+ дней назад. Не когорта — мешает в одну кучу
+                  -- и новичков, и ветеранов. Окно активности абсолютное (NOW()-7д), не от
+                  -- даты регистрации. По сути «какая доля старой базы ещё жива сейчас».
                   (SELECT COUNT(*) FROM auth_users
                      WHERE created_at <= NOW() - INTERVAL '7 days')                              AS cohort_7d,
                   (SELECT COUNT(*) FROM auth_users a
-                     JOIN user_profiles p ON p.user_id = a.id
+                     LEFT JOIN user_profiles p ON p.user_id = a.id
                      WHERE a.created_at <= NOW() - INTERVAL '7 days'
                        AND p.last_active_at >= NOW() - INTERVAL '7 days')                        AS retained_7d,
+
+                  -- КОГОРТНЫЙ retention (rolling): якорь — личная дата регистрации каждого.
+                  -- «Дожил ли пользователь активным до дня N своей жизни» = last_active_at
+                  -- не раньше, чем created_at + N дней. Знаменатель — только те, кто УСПЕЛ
+                  -- прожить N дней (иначе мерить нечего). Это честная когортная метрика,
+                  -- доступная без event-лога (есть только last_active_at).
+                  (SELECT COUNT(*) FROM auth_users
+                     WHERE created_at <= NOW() - INTERVAL '7 days')                              AS d7_eligible,
+                  (SELECT COUNT(*) FROM auth_users a
+                     LEFT JOIN user_profiles p ON p.user_id = a.id
+                     WHERE a.created_at <= NOW() - INTERVAL '7 days'
+                       AND p.last_active_at >= a.created_at + INTERVAL '7 days')                 AS d7_retained,
+                  (SELECT COUNT(*) FROM auth_users
+                     WHERE created_at <= NOW() - INTERVAL '30 days')                             AS d30_eligible,
+                  (SELECT COUNT(*) FROM auth_users a
+                     LEFT JOIN user_profiles p ON p.user_id = a.id
+                     WHERE a.created_at <= NOW() - INTERVAL '30 days'
+                       AND p.last_active_at >= a.created_at + INTERVAL '30 days')                AS d30_retained,
 
                   -- Telegram-интеграция
                   (SELECT COUNT(*) FROM user_profiles)                                           AS total_profiles,
@@ -91,14 +112,61 @@ def fetch_stats() -> dict:
                   (SELECT COUNT(DISTINCT user_id) FROM user_tasks
                      WHERE created_at >= NOW() - INTERVAL '1 day')                               AS task_creators_1d
             """)
-            return dict(cur.fetchone())
+            stats = dict(cur.fetchone())
+
+            # Когорты по неделям регистрации: размер и D7 rolling-retention.
+            # Считаем D7 только по тем членам недели, кто уже прожил 7 дней
+            # (eligible_d7) — свежие недели показываем как «дозревает».
+            cur.execute("""
+                SELECT
+                  to_char(date_trunc('week', a.created_at), 'DD.MM')                            AS week,
+                  COUNT(*)                                                                       AS size,
+                  COUNT(*) FILTER (WHERE a.created_at <= NOW() - INTERVAL '7 days')              AS eligible_d7,
+                  COUNT(*) FILTER (WHERE a.created_at <= NOW() - INTERVAL '7 days'
+                                     AND p.last_active_at >= a.created_at + INTERVAL '7 days')   AS retained_d7
+                FROM auth_users a
+                LEFT JOIN user_profiles p ON p.user_id = a.id
+                WHERE a.created_at >= NOW() - INTERVAL '8 weeks'
+                GROUP BY date_trunc('week', a.created_at)
+                ORDER BY date_trunc('week', a.created_at) DESC
+                LIMIT 6
+            """)
+            stats["cohorts"] = [dict(r) for r in cur.fetchall()]
+            return stats
+
+
+def _pct(num: int, den: int) -> str:
+    return f"{round(num / den * 100)}%" if den else "—"
 
 
 def format_stats(s: dict) -> str:
     dau_wau = f"{round(s['dau'] / s['wau'] * 100)}%" if s['wau'] else "—"
-    cohort = s['cohort_7d'] or 0
-    retained = s['retained_7d'] or 0
-    retention_pct = f"{round(retained / cohort * 100)}%" if cohort else "недостаточно данных"
+
+    # Общий (блендованный) retention — вся старая база одной кучей
+    gen_cohort = s['cohort_7d'] or 0
+    gen_retained = s['retained_7d'] or 0
+    gen_pct = _pct(gen_retained, gen_cohort) if gen_cohort else "недостаточно данных"
+
+    # Когортный rolling retention — якорь на личную дату регистрации
+    d7_elig = s.get('d7_eligible') or 0
+    d7_ret = s.get('d7_retained') or 0
+    d30_elig = s.get('d30_eligible') or 0
+    d30_ret = s.get('d30_retained') or 0
+    d7_pct = _pct(d7_ret, d7_elig) if d7_elig else "мало данных"
+    d30_pct = _pct(d30_ret, d30_elig) if d30_elig else "мало данных"
+
+    # Таблица когорт по неделям (D7 rolling)
+    cohort_lines = []
+    for c in s.get('cohorts', []):
+        elig = c.get('eligible_d7') or 0
+        ret = c.get('retained_d7') or 0
+        size = c.get('size') or 0
+        if elig:
+            cohort_lines.append(f"  {c['week']}: `{size}` чел → D7 `{_pct(ret, elig)}`")
+        else:
+            cohort_lines.append(f"  {c['week']}: `{size}` чел → _дозревает_")
+    cohort_block = "\n".join(cohort_lines) if cohort_lines else "  _нет когорт за 8 недель_"
+
     tg_total = s['total_profiles'] or 0
     tg_conn = s['tg_connected'] or 0
     tg_pct = f"{round(tg_conn / tg_total * 100)}%" if tg_total else "—"
@@ -116,9 +184,14 @@ def format_stats(s: dict) -> str:
         f"  DAU/WAU: `{dau_wau}`\n"
         f"  Писали Мысли за 7д: `{s['active_chatters_7d']}`\n"
         f"  Создавали задачи сегодня: `{s['task_creators_1d']}`\n\n"
-        f"📈 *Retention 7d*\n"
-        f"  Когорта (7д+): `{cohort}`\n"
-        f"  Вернулись: `{retained}` — `{retention_pct}`\n\n"
+        f"📈 *Retention — общий* _(вся старая база)_\n"
+        f"  Активны сейчас: `{gen_retained}` из `{gen_cohort}` — `{gen_pct}`\n"
+        f"  _доля старой базы, живой за 7д. Растёт база → падает_\n\n"
+        f"🎯 *Retention — когортный* _(rolling, от своей даты)_\n"
+        f"  D7: `{d7_pct}` _(дожили активными до 7-го дня)_\n"
+        f"  D30: `{d30_pct}` _(до 30-го дня)_\n\n"
+        f"📅 *Когорты по неделям* _(D7 rolling)_\n"
+        f"{cohort_block}\n\n"
         f"✉️ *Telegram-бот*\n"
         f"  Подключили: `{tg_conn}` из `{tg_total}` — `{tg_pct}`\n\n"
         f"💬 *Мысль говорит*\n"
