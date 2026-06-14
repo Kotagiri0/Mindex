@@ -535,6 +535,100 @@ async function callRouterAI(apiKey: string, body: object): Promise<any> {
   }
 }
 
+// Унифицированный результат одного шага LLM: текст ответа + (опц.) вызовы инструментов.
+interface LlmStepResult { content: string; tool_calls?: any[] }
+
+// Стриминговый вызов RouterAI (SSE). Накапливает content и tool_calls из дельт,
+// дёргает onDelta(полный_текст_на_данный_момент) по мере прихода текста.
+// Возвращает финальный content + собранные tool_calls в форме как у обычного message.
+// Бросает исключение при сетевой ошибке/не-2xx — вызывающий код делает фоллбек
+// на обычный (нестриминговый) callRouterAI.
+async function callRouterAIStream(
+  apiKey: string,
+  body: object,
+  onDelta: (fullContent: string) => void
+): Promise<LlmStepResult> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 55000);
+  let response: Response;
+  try {
+    response = await fetch('https://routerai.ru/api/v1/chat/completions', tgFetchOptions({
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ ...body, stream: true }),
+    }));
+  } catch (e) {
+    clearTimeout(timeoutId);
+    throw e;
+  }
+  if (!response.ok || !response.body) {
+    clearTimeout(timeoutId);
+    throw new Error(`RouterAI stream error: ${response.status}`);
+  }
+
+  // Страховка: если провайдер проигнорировал stream:true и вернул обычный JSON
+  // (не SSE) — разбираем как единичный ответ, а не как поток дельт.
+  const ctype = response.headers.get('content-type') || '';
+  if (!ctype.includes('event-stream')) {
+    clearTimeout(timeoutId);
+    const data = await response.json().catch(() => null);
+    const m = data?.choices?.[0]?.message;
+    const content = typeof m?.content === 'string' ? m.content : '';
+    if (content) onDelta(content);
+    return { content, tool_calls: m?.tool_calls };
+  }
+
+  const reader = (response.body as any).getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let content = '';
+  const toolCallsByIndex = new Map<number, any>();
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let nlIdx: number;
+      while ((nlIdx = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, nlIdx).trim();
+        buffer = buffer.slice(nlIdx + 1);
+        if (!line.startsWith('data:')) continue;
+        const payload = line.slice(5).trim();
+        if (payload === '' || payload === '[DONE]') continue;
+        let json: any;
+        try { json = JSON.parse(payload); } catch { continue; }
+        const delta = json.choices?.[0]?.delta;
+        if (!delta) continue;
+        if (typeof delta.content === 'string' && delta.content) {
+          content += delta.content;
+          onDelta(content);
+        }
+        if (Array.isArray(delta.tool_calls)) {
+          for (const tc of delta.tool_calls) {
+            const idx = tc.index ?? 0;
+            const existing = toolCallsByIndex.get(idx)
+              || { id: '', type: 'function', function: { name: '', arguments: '' } };
+            if (tc.id) existing.id = tc.id;
+            if (tc.function?.name) existing.function.name = tc.function.name;
+            if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
+            toolCallsByIndex.set(idx, existing);
+          }
+        }
+      }
+    }
+  } finally {
+    clearTimeout(timeoutId);
+    try { reader.releaseLock?.(); } catch { /* noop */ }
+  }
+
+  const tool_calls = toolCallsByIndex.size > 0
+    ? [...toolCallsByIndex.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v)
+    : undefined;
+  return { content, tool_calls };
+}
+
 async function getUserTimezone(db: Pool, userId: string): Promise<string> {
   try {
     const { rows } = await db.query(`SELECT timezone FROM user_profiles WHERE user_id = $1 LIMIT 1`, [userId]);
@@ -543,68 +637,82 @@ async function getUserTimezone(db: Pool, userId: string): Promise<string> {
 }
 
 async function buildBotSystemPrompt(userText: string, userId: string, userTz: string, db: Pool, apiKey: string): Promise<string> {
-  let prompt = getSystemInstruction(userTz);
+  // Четыре источника контекста независимы — тянем их параллельно (раньше шли
+  // последовательно, 4 round-trip'а подряд перед каждым ответом). Каждый блок
+  // собирается изолированно, ошибка одного не валит остальные. Порядок склейки
+  // фиксированный, чтобы промпт был детерминированным.
 
   // 1. Профиль пользователя — всегда, без keyword-matching (ПОЛИСАД, слой 1)
-  try {
-    const profileSummaries = await polisad.getProfileSummaries(db, userId);
-    if (profileSummaries.length > 0) {
-      prompt += `\n\n## Что пользователь рассказал о себе\n${profileSummaries.join('\n\n')}`;
+  const profileBlock = (async () => {
+    try {
+      const profileSummaries = await polisad.getProfileSummaries(db, userId);
+      if (profileSummaries.length > 0) {
+        return `\n\n## Что пользователь рассказал о себе\n${profileSummaries.join('\n\n')}`;
+      }
+    } catch (e: any) {
+      console.warn('[Bot RAG] profile inject failed:', e?.message);
     }
-  } catch (e: any) {
-    console.warn('[Bot RAG] profile inject failed:', e?.message);
-  }
+    return '';
+  })();
 
   // 2. Summary вчерашнего дня в боте (ПОЛИСАД, слой 3)
-  try {
-    const ySummary = await polisad.getYesterdaySummary(db, userId, userTz);
-    if (ySummary) {
-      prompt += `\n\n## Вчера в боте\n${ySummary}`;
+  const yesterdayBlock = (async () => {
+    try {
+      const ySummary = await polisad.getYesterdaySummary(db, userId, userTz);
+      if (ySummary) return `\n\n## Вчера в боте\n${ySummary}`;
+    } catch (e: any) {
+      console.warn('[Bot RAG] yesterday summary failed:', e?.message);
     }
-  } catch (e: any) {
-    console.warn('[Bot RAG] yesterday summary failed:', e?.message);
-  }
+    return '';
+  })();
 
   // 3. Ближайшие задачи (следующие 30 минут)
-  try {
-    const now = new Date();
-    const todayStr = now.toLocaleDateString('sv-SE', { timeZone: userTz });
-    const currentTimeStr = now.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: userTz });
-    const windowEnd = new Date(now.getTime() + 30 * 60 * 1000);
-    const windowEndStr = windowEnd.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: userTz });
-    const { rows: upcoming } = await db.query(
-      `SELECT name, time FROM user_tasks
-       WHERE user_id = $1 AND date = $2 AND done = false
-         AND time != '' AND time IS NOT NULL
-         AND time >= $3 AND time <= $4
-       ORDER BY time ASC LIMIT 5`,
-      [userId, todayStr, currentTimeStr, windowEndStr]
-    );
-    if (upcoming.length > 0) {
-      const lines = upcoming.map((t: any) => `— ${t.name} в ${t.time}`).join('\n');
-      prompt += `\n\n## Ближайшие задачи (следующие 30 минут)\n${lines}\n\nЕсли уместно — упомяни одну из них к месту. Один раз, без навязчивости.`;
+  const upcomingBlock = (async () => {
+    try {
+      const now = new Date();
+      const todayStr = now.toLocaleDateString('sv-SE', { timeZone: userTz });
+      const currentTimeStr = now.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: userTz });
+      const windowEnd = new Date(now.getTime() + 30 * 60 * 1000);
+      const windowEndStr = windowEnd.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: userTz });
+      const { rows: upcoming } = await db.query(
+        `SELECT name, time FROM user_tasks
+         WHERE user_id = $1 AND date = $2 AND done = false
+           AND time != '' AND time IS NOT NULL
+           AND time >= $3 AND time <= $4
+         ORDER BY time ASC LIMIT 5`,
+        [userId, todayStr, currentTimeStr, windowEndStr]
+      );
+      if (upcoming.length > 0) {
+        const lines = upcoming.map((t: any) => `— ${t.name} в ${t.time}`).join('\n');
+        return `\n\n## Ближайшие задачи (следующие 30 минут)\n${lines}\n\nЕсли уместно — упомяни одну из них к месту. Один раз, без навязчивости.`;
+      }
+    } catch (e: any) {
+      console.warn('[Bot RAG] upcoming tasks failed:', e?.message);
     }
-  } catch (e: any) {
-    console.warn('[Bot RAG] upcoming tasks failed:', e?.message);
-  }
+    return '';
+  })();
 
   // 4. RAG — каскад vector → keyword → recent (ПОЛИСАД, слой 2).
   // Дневные треды бота исключаются — они идут отдельным блоком «Вчера в боте».
-  try {
-    const { rows: ragRows, isExplicit } = await polisad.retrieveArchive(
-      db, userId, userText, apiKey,
-      { vectorEnabled: true, excludeBotThreads: true }
-    );
-    if (ragRows.length > 0) {
-      const contextBlock = ragRows.map((r: any) => `[${r.title}]\n${r.summary}`).join('\n---\n');
-      prompt += `\n\n## Из архива пользователя\nФрагменты из заметок и прошлых разговоров. Используй как контекст, не упоминай сам факт архива.\n\n${contextBlock}`;
-      console.log('[Bot RAG] injected:', ragRows.map((r: any) => r.title), isExplicit ? '(explicit)' : '(fallback)');
+  const ragBlock = (async () => {
+    try {
+      const { rows: ragRows, isExplicit } = await polisad.retrieveArchive(
+        db, userId, userText, apiKey,
+        { vectorEnabled: true, excludeBotThreads: true }
+      );
+      if (ragRows.length > 0) {
+        const contextBlock = ragRows.map((r: any) => `[${r.title}]\n${r.summary}`).join('\n---\n');
+        console.log('[Bot RAG] injected:', ragRows.map((r: any) => r.title), isExplicit ? '(explicit)' : '(fallback)');
+        return `\n\n## Из архива пользователя\nФрагменты из заметок и прошлых разговоров. Используй как контекст, не упоминай сам факт архива.\n\n${contextBlock}`;
+      }
+    } catch (e: any) {
+      console.warn('[Bot RAG] rag failed:', e?.message);
     }
-  } catch (e: any) {
-    console.warn('[Bot RAG] rag failed:', e?.message);
-  }
+    return '';
+  })();
 
-  return prompt;
+  const [profile, yesterday, upcoming, rag] = await Promise.all([profileBlock, yesterdayBlock, upcomingBlock, ragBlock]);
+  return getSystemInstruction(userTz) + profile + yesterday + upcoming + rag;
 }
 
 async function processWithAI(
@@ -612,11 +720,33 @@ async function processWithAI(
   threadMessages: StoredMessage[],
   db: Pool,
   userId: string,
-  apiKey: string
+  apiKey: string,
+  sink?: StreamSink
 ): Promise<{ aiResponse: string; newMessages: StoredMessage[] }> {
   const now = () => new Date().toISOString();
   const userMsg: StoredMessage = { role: 'user', content: userText, time: now() };
   const userTz = await getUserTimezone(db, userId);
+
+  // Один шаг LLM. При наличии sink — стримим текст вживую; если стрим упал,
+  // молча откатываемся на обычный (нестриминговый) вызов с его OpenRouter-фоллбеком.
+  // Шаги с tool_calls текста не дают — sink остаётся на «печатает…».
+  const runStep = async (body: object): Promise<LlmStepResult> => {
+    if (sink) {
+      try {
+        return await callRouterAIStream(apiKey, body, (full) => sink.update(full));
+      } catch (e: any) {
+        console.warn('[Bot] стрим не удался, фоллбек на обычный вызов:', e?.message);
+        const data = await callRouterAI(apiKey, body);
+        const m = data.choices[0].message;
+        const content = typeof m.content === 'string' ? m.content : '';
+        if (content) sink.update(content);
+        return { content, tool_calls: m.tool_calls };
+      }
+    }
+    const data = await callRouterAI(apiKey, body);
+    const m = data.choices[0].message;
+    return { content: typeof m.content === 'string' ? m.content : '', tool_calls: m.tool_calls };
+  };
   const systemPrompt = await buildBotSystemPrompt(userText, userId, userTz, db, apiKey);
 
   const folded = foldOverflowMessages(threadMessages);
@@ -631,7 +761,8 @@ async function processWithAI(
   const newMessages: StoredMessage[] = [userMsg];
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
-    const data = await callRouterAI(apiKey, {
+    sink?.typing();
+    const msg = await runStep({
       model: 'deepseek/deepseek-v4-flash',
       messages: [{ role: 'system', content: fullSystemPrompt }, ...loopMessages],
       tools: botTools,
@@ -640,8 +771,6 @@ async function processWithAI(
       max_tokens: 1024,
       thinking: false,
     });
-
-    const msg = data.choices[0].message;
 
     if (msg.tool_calls && msg.tool_calls.length > 0) {
       const assistantEntry: StoredMessage = {
@@ -685,7 +814,8 @@ async function processWithAI(
       // без инструментов, чтобы вытянуть нормальный текстовый ответ.
       if (!text) {
         try {
-          const retry = await callRouterAI(apiKey, {
+          sink?.typing();
+          const retry = await runStep({
             model: 'deepseek/deepseek-v4-flash',
             messages: [
               { role: 'system', content: getSystemInstruction(userTz) },
@@ -696,8 +826,7 @@ async function processWithAI(
             max_tokens: 512,
             thinking: false,
           });
-          const retryText = retry?.choices?.[0]?.message?.content;
-          if (typeof retryText === 'string' && retryText.trim()) text = retryText.trim();
+          if (retry.content.trim()) text = retry.content.trim();
         } catch (e: any) {
           console.warn('[Bot] fallback-запрос не удался:', e?.message);
         }
@@ -907,6 +1036,124 @@ async function tgApi(token: string, method: string, body: any): Promise<any> {
 
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ─── Стриминг ответа в Telegram (через editMessageText) ───────────────────────
+// Telegram не умеет токеновый поток, поэтому стримим через редактирование одного
+// сообщения-плейсхолдера. Лимит правок — ~1/сек на чат, поэтому throttle.
+// ВАЖНО: финальный текст коммитится тем же editMessageText, отдельного
+// sendMessage в конце НЕТ — иначе сообщение задвоится.
+
+const STREAM_EDIT_THROTTLE_MS = 1200;   // безопасный интервал между правками
+const TG_MAX_LEN = 4096;                // лимит длины сообщения Telegram
+
+// Чистим разметку: системный промпт запрещает Markdown, но подстрахуемся.
+function cleanBotText(s: string): string {
+  return s.replace(/\*\*/g, '').replace(/\*/g, '').replace(/^#{1,3}\s/gm, '');
+}
+
+// Бьём длинный текст на куски ≤ TG_MAX_LEN по границам строк/пробелов.
+function splitForTelegram(text: string, max = TG_MAX_LEN): string[] {
+  if (text.length <= max) return [text];
+  const chunks: string[] = [];
+  let rest = text;
+  while (rest.length > max) {
+    let cut = rest.lastIndexOf('\n', max);
+    if (cut < max * 0.5) cut = rest.lastIndexOf(' ', max);
+    if (cut < max * 0.5) cut = max;
+    chunks.push(rest.slice(0, cut));
+    rest = rest.slice(cut).replace(/^\s+/, '');
+  }
+  if (rest) chunks.push(rest);
+  return chunks;
+}
+
+interface StreamSink {
+  update(rawFull: string): void;            // дельта: накопленный сырой текст
+  finish(finalRaw: string): Promise<void>;  // финальный коммит (без доп. sendMessage)
+  typing(): void;                           // освежить индикатор «печатает…»
+}
+
+// Создаёт сток: шлёт «печатает…», ставит сообщение-плейсхолдер и редактирует его.
+async function createStreamSink(token: string, chatId: number): Promise<StreamSink> {
+  tgApi(token, 'sendChatAction', { chat_id: chatId, action: 'typing' }).catch(() => {});
+  const sent = await tgApi(token, 'sendMessage', { chat_id: chatId, text: '…' });
+  const messageId: number | undefined = sent?.result?.message_id;
+
+  let lastSent = '…';
+  let pending: string | null = null;
+  // ставим «время последней правки» в текущий момент: первая правка подождёт
+  // throttle, чтобы не лупить editMessageText сразу после sendMessage (429).
+  let lastEditAt = Date.now();
+  let timer: NodeJS.Timeout | null = null;
+  let finished = false;
+  // Все правки сериализованы через цепочку — никаких параллельных editMessageText,
+  // которые могли бы прийти в Telegram не по порядку и оставить устаревший текст.
+  let editChain: Promise<void> = Promise.resolve();
+
+  const doEdit = async (raw: string) => {
+    if (!messageId || finished) return;  // finish уже взял управление — стрим-правки молчат
+    let clean = cleanBotText(raw).trim();
+    if (!clean || clean === lastSent) return;
+    if (clean.length > TG_MAX_LEN) clean = clean.slice(0, TG_MAX_LEN - 1) + '…';
+    lastSent = clean;
+    await tgApi(token, 'editMessageText', { chat_id: chatId, message_id: messageId, text: clean })
+      .catch(() => { /* 429 / not modified — игнор */ });
+  };
+
+  const flush = () => {
+    if (pending === null) return;
+    const t = pending;
+    pending = null;
+    // Отмечаем момент правки уже при постановке в очередь — иначе несколько
+    // SSE-строк из одного сетевого чанка проскочат троттлинг за один тик.
+    lastEditAt = Date.now();
+    editChain = editChain.then(() => doEdit(t));
+  };
+
+  return {
+    update(rawFull: string) {
+      if (finished || !messageId) return;
+      pending = rawFull;
+      const since = Date.now() - lastEditAt;
+      if (since >= STREAM_EDIT_THROTTLE_MS) {
+        if (timer) { clearTimeout(timer); timer = null; }
+        flush();
+      } else if (!timer) {
+        timer = setTimeout(() => { timer = null; flush(); }, STREAM_EDIT_THROTTLE_MS - since);
+      }
+    },
+    async finish(finalRaw: string) {
+      finished = true;
+      if (timer) { clearTimeout(timer); timer = null; }
+      pending = null;
+      // Дожидаемся, пока сольются все стрим-правки в полёте — финальная правка
+      // должна записаться ПОСЛЕДНЕЙ, иначе устаревшая дельта перетрёт финал.
+      await editChain.catch(() => {});
+      const clean = (cleanBotText(finalRaw).trim()) || 'Готово';
+      // Плейсхолдер не создался — единственная отправка целиком (задвоения нет).
+      if (!messageId) {
+        for (const part of splitForTelegram(clean)) {
+          await tgApi(token, 'sendMessage', { chat_id: chatId, text: part }).catch(() => {});
+        }
+        return;
+      }
+      const parts = splitForTelegram(clean);
+      // Первый кусок — в плейсхолдер (если уже совпадает, Telegram сам не тронет).
+      if (parts[0] !== lastSent) {
+        await tgApi(token, 'editMessageText', { chat_id: chatId, message_id: messageId, text: parts[0] })
+          .catch(() => {});
+        lastSent = parts[0];
+      }
+      // Остаток (для длинных ответов) — отдельными сообщениями.
+      for (const part of parts.slice(1)) {
+        await tgApi(token, 'sendMessage', { chat_id: chatId, text: part }).catch(() => {});
+      }
+    },
+    typing() {
+      if (!finished) tgApi(token, 'sendChatAction', { chat_id: chatId, action: 'typing' }).catch(() => {});
+    },
+  };
 }
 
 // ─── Command handlers ─────────────────────────────────────────────────────────
@@ -1141,21 +1388,36 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
   const existingMessages = thread.messages;
 
   console.log(`[Bot] вызываю AI для ${webUserId}, сообщение: "${userText.slice(0, 80)}"${thread.isNew ? ' [новый тред]' : ''}`);
+
+  // Стрим-сток: плейсхолдер + «печатает…». Если создать не удалось (сеть),
+  // работаем по-старому — одной отправкой в конце. Двойной отправки нет ни в одной ветке:
+  // при наличии sink финал коммитится через editMessageText, без sink — единственный sendMessage.
+  let sink: StreamSink | null = null;
+  try {
+    sink = await createStreamSink(token, chatId);
+  } catch (e: any) {
+    console.warn('[Bot] не удалось создать стрим-сток, шлём без стрима:', e?.message);
+  }
+
   try {
     const { aiResponse, newMessages } = await processWithAI(
       userText,
       existingMessages,
       db,
       webUserId,
-      apiKey
+      apiKey,
+      sink ?? undefined
     );
     console.log(`[Bot] AI ответил: "${aiResponse?.slice(0, 80)}"`);
     await saveBotThread(db, webUserId, thread.id, [...existingMessages, ...newMessages]);
-    const cleanResponse = aiResponse.replace(/\*\*/g, '').replace(/\*/g, '').replace(/^#{1,3}\s/gm, '');
-    await tgApi(token, 'sendMessage', { chat_id: chatId, text: cleanResponse });
+    const cleanResponse = cleanBotText(aiResponse);
+    if (sink) await sink.finish(cleanResponse);
+    else await tgApi(token, 'sendMessage', { chat_id: chatId, text: cleanResponse });
   } catch (e: any) {
     console.error(`[Bot] ошибка AI:`, e?.message || e);
-    await tgApi(token, 'sendMessage', { chat_id: chatId, text: 'Не могу ответить прямо сейчас, попробуй позже.' });
+    const errText = 'Не могу ответить прямо сейчас, попробуй позже.';
+    if (sink) await sink.finish(errText);
+    else await tgApi(token, 'sendMessage', { chat_id: chatId, text: errText });
   }
 }
 

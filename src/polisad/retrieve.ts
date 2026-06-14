@@ -16,6 +16,11 @@ import { extractKeywords } from './morphology.ts';
 // проект) не должны занимать всю выдачу — место отдаётся разнообразию.
 const DEDUP_SIMILARITY = 0.92;
 
+// Реплики короче этого порога («ок», «да», «спс», «ясно») не несут запроса к
+// памяти — пропускаем дорогой embedding-вызов и идём сразу в keyword/recent.
+// Экономит сетевой round-trip к провайдеру эмбеддингов на каждом таком сообщении.
+const MIN_VECTOR_QUERY_CHARS = 6;
+
 // Слой 1: профильные треды — всегда в промпте, без keyword-matching.
 // Возвращает массив summary (до 3), порядок created_at ASC.
 export async function getProfileSummaries(db: Db, userId: string): Promise<string[]> {
@@ -98,8 +103,9 @@ export async function retrieveArchive(
   const startedAt = Date.now();
 
   // 1. Vector search: кандидаты по similarity (порог 0.65, до 10 штук),
-  //    итоговый топ-3 — по активации (similarity + история обращений)
-  if (opts.vectorEnabled) {
+  //    итоговый топ-3 — по активации (similarity + история обращений).
+  //    Слишком короткие реплики не эмбеддим — экономим сетевой вызов.
+  if (opts.vectorEnabled && queryText.trim().length >= MIN_VECTOR_QUERY_CHARS) {
     try {
       const queryEmbedding = await generateEmbedding(queryText, apiKey);
       if (queryEmbedding) {
