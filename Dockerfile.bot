@@ -9,5 +9,6 @@ RUN npm install --omit=dev --legacy-peer-deps
 
 COPY server-bot.ts ./
 COPY bot.ts ./
+COPY src/ ./src/
 
 CMD ["npx", "tsx", "bot.ts"]
