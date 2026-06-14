@@ -604,6 +604,7 @@ async function callRouterAIStream(
   let content = '';
   let netReads = 0;     // сколько сетевых чанков пришло от провайдера
   let deltaCount = 0;   // сколько текстовых дельт (рост content)
+  let firstTokenAt = 0; // момент первого токена — для TTFT
   const toolCallsByIndex = new Map<number, any>();
 
   try {
@@ -624,6 +625,7 @@ async function callRouterAIStream(
         const delta = json.choices?.[0]?.delta;
         if (!delta) continue;
         if (typeof delta.content === 'string' && delta.content) {
+          if (firstTokenAt === 0) firstTokenAt = Date.now();
           content += delta.content;
           deltaCount++;
           onDelta(content);
@@ -646,9 +648,14 @@ async function callRouterAIStream(
     try { reader.releaseLock?.(); } catch { /* noop */ }
   }
 
-  // Диагностика плавности: netReads — сколько раз сеть отдала данные (если 1-2,
-  // провайдер/прокси буферизуют → «гигантские куски»); deltaCount — сколько дельт текста.
-  console.log(`[Bot stream] ${tag} SSE=да чанков=${netReads} дельт=${deltaCount} ${content.length} симв за ${Date.now() - startedAt}мс`);
+  // Диагностика: TTFT — пауза до первого токена (если велика — узкое место в
+  // промпте/провайдере/прокси, стрим её не лечит); netReads — сетевые чанки;
+  // deltaCount — текстовые дельты; gen — скорость генерации после первого токена.
+  const totalMs = Date.now() - startedAt;
+  const ttft = firstTokenAt ? firstTokenAt - startedAt : totalMs;
+  const genMs = firstTokenAt ? Date.now() - firstTokenAt : 0;
+  const cps = genMs > 0 ? Math.round(content.length / (genMs / 1000)) : 0;
+  console.log(`[Bot stream] ${tag} SSE=да TTFT=${ttft}мс ген=${genMs}мс (${cps} симв/с) чанков=${netReads} дельт=${deltaCount} ${content.length} симв всего ${totalMs}мс`);
 
   const tool_calls = toolCallsByIndex.size > 0
     ? [...toolCallsByIndex.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v)
