@@ -708,6 +708,14 @@ async function getUserTimezone(db: Pool, userId: string): Promise<string> {
 }
 
 async function buildBotSystemPrompt(userText: string, userId: string, userTz: string, db: Pool, apiKey: string): Promise<string> {
+  // Тест латентности (LEAN_MODE=1): отключаем ВСЮ память/RAG/эмбеддинг — только
+  // базовый промпт. Замеряем TTFT с пустым контекстом против полного: если те же
+  // 4-6с — виноват RouterAI (не префилл/прокси-эмбеддинг); если упал — нашли рычаг.
+  if (process.env.LEAN_MODE === '1') {
+    console.log('[Bot] LEAN_MODE: контекст/RAG/эмбеддинг отключены (тест латентности)');
+    return getSystemInstruction(userTz);
+  }
+
   // Четыре источника контекста независимы — тянем их параллельно (раньше шли
   // последовательно, 4 round-trip'а подряд перед каждым ответом). Каждый блок
   // собирается изолированно, ошибка одного не валит остальные. Порядок склейки
