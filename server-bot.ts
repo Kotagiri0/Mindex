@@ -1637,6 +1637,32 @@ export async function startBot(db: Pool): Promise<void> {
   await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS suggested_time TEXT`).catch(() => {});
   await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS suggested_end_time TEXT`).catch(() => {});
 
+  // Shared events: дублируем схему (бот — отдельный контейнер от веб-сервера).
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS shared_events (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      date TEXT NOT NULL,
+      time TEXT,
+      end_time TEXT,
+      location TEXT,
+      description TEXT,
+      partner_name TEXT,
+      created_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ
+    );
+  `).catch(() => {});
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS shared_event_adds (
+      event_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      task_id TEXT,
+      added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (event_id, user_id)
+    );
+  `).catch(() => {});
+
   // Прогрев соединения к LLM-провайдеру — режет TLS-хендшейк из TTFT.
   startConnectionWarmup();
 
