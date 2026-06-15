@@ -580,6 +580,8 @@ async function callRouterAIStream(
     ? { ...body, model: OPENROUTER_STREAM_MODEL, stream: true }
     : { ...body, stream: true };
   const tag = (useOR ? `openrouter:${OPENROUTER_STREAM_MODEL}` : 'routerai') + (direct ? '/direct' : '/proxy');
+  const bodyJson = JSON.stringify(sendBody);
+  const promptChars = bodyJson.length;  // размер промпта — главный фактор префилла/TTFT
   const startedAt = Date.now();
 
   const controller = new AbortController();
@@ -590,7 +592,7 @@ async function callRouterAIStream(
       method: 'POST',
       signal: controller.signal,
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-      body: JSON.stringify(sendBody),
+      body: bodyJson,
     };
     // dispatcher переопределяет глобальный прокси на один запрос — но это умеет
     // ТОЛЬКО fetch из undici. Глобальный fetch Node бросает UND_ERR_INVALID_ARG.
@@ -614,7 +616,7 @@ async function callRouterAIStream(
     const m = data?.choices?.[0]?.message;
     const content = typeof m?.content === 'string' ? m.content : '';
     if (content) onDelta(content);
-    console.log(`[Bot stream] ${tag} SSE=нет (ctype="${ctype}") → один кусок, ${content.length} симв за ${Date.now() - startedAt}мс`);
+    console.log(`[Bot stream] ${tag} SSE=нет (ctype="${ctype}") промпт=${promptChars}симв → один кусок, ${content.length} симв за ${Date.now() - startedAt}мс`);
     return { content, tool_calls: m?.tool_calls };
   }
 
@@ -675,7 +677,7 @@ async function callRouterAIStream(
   const ttft = firstTokenAt ? firstTokenAt - startedAt : totalMs;
   const genMs = firstTokenAt ? Date.now() - firstTokenAt : 0;
   const cps = genMs > 0 ? Math.round(content.length / (genMs / 1000)) : 0;
-  console.log(`[Bot stream] ${tag} SSE=да TTFT=${ttft}мс ген=${genMs}мс (${cps} симв/с) чанков=${netReads} дельт=${deltaCount} ${content.length} симв всего ${totalMs}мс`);
+  console.log(`[Bot stream] ${tag} промпт=${promptChars}симв TTFT=${ttft}мс ген=${genMs}мс (${cps} симв/с) чанков=${netReads} дельт=${deltaCount} ${content.length} симв всего ${totalMs}мс`);
 
   const tool_calls = toolCallsByIndex.size > 0
     ? [...toolCallsByIndex.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v)
