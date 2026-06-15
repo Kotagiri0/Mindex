@@ -599,6 +599,32 @@ const ensureAuthSchema = async () => {
   await db.query(`CREATE INDEX IF NOT EXISTS email_otp_email_idx ON email_otp_codes (email);`);
   // Rate limit: не больше 5 OTP на email за час
   await db.query(`CREATE INDEX IF NOT EXISTS email_otp_created_idx ON email_otp_codes (email, created_at);`);
+
+  // ─── Shared events: партнёрские события, добавляемые в календарь по ссылке ───
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS shared_events (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      date TEXT NOT NULL,
+      time TEXT,
+      end_time TEXT,
+      location TEXT,
+      description TEXT,
+      partner_name TEXT,
+      created_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ
+    );
+  `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS shared_event_adds (
+      event_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      task_id TEXT,
+      added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (event_id, user_id)
+    );
+  `);
 };
 
 // Генерация одноразового кода для привязки Telegram
@@ -1433,6 +1459,159 @@ app.delete("/api/data/task/:id", requireAuth, dataRateLimit, async (req, res) =>
     return res.status(200).json({ success: true });
   } catch {
     return res.status(500).json({ error: "Не удалось удалить задачу." });
+  }
+});
+
+// ─── Shared events: партнёрские события для добавления в календарь по ссылке ───
+
+// Публичный просмотр события (без авторизации) — фронт строит превью-страницу.
+app.get("/api/events/:id", async (req, res) => {
+  if (!db) return res.status(500).json({ error: "БД не настроена." });
+  const id = String(req.params.id || "").trim();
+  if (!id) return res.status(400).json({ error: "id обязателен." });
+
+  try {
+    const result = await db.query(
+      `SELECT id, title, date, time, end_time, location, description, partner_name,
+              (expires_at IS NOT NULL AND expires_at < NOW()) AS expired
+         FROM shared_events WHERE id = $1 LIMIT 1`,
+      [id]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: "Событие не найдено" });
+    const r = result.rows[0];
+    return res.status(200).json({
+      id: r.id,
+      title: r.title,
+      date: r.date,
+      time: r.time,
+      endTime: r.end_time,
+      location: r.location,
+      description: r.description,
+      partnerName: r.partner_name,
+      expired: Boolean(r.expired),
+    });
+  } catch (err) {
+    console.error('[API] GET /api/events/:id error:', err);
+    return res.status(500).json({ error: "Не удалось загрузить событие." });
+  }
+});
+
+// Добавить событие в свой календарь (идемпотентно).
+app.post("/api/events/:id/add", requireAuth, async (req, res) => {
+  if (!db) return res.status(500).json({ error: "БД не настроена." });
+  const userId = (req as any).userId;
+  const id = String(req.params.id || "").trim();
+  if (!id) return res.status(400).json({ error: "id обязателен." });
+
+  try {
+    const evRes = await db.query(
+      `SELECT id, title, date, time, end_time, location, description,
+              (expires_at IS NOT NULL AND expires_at < NOW()) AS expired
+         FROM shared_events WHERE id = $1 LIMIT 1`,
+      [id]
+    );
+    if (!evRes.rows.length) return res.status(404).json({ error: "Событие не найдено" });
+    const ev = evRes.rows[0];
+
+    // Идемпотентность: если уже добавлено — возвращаем существующую задачу.
+    const existing = await db.query(
+      `SELECT task_id FROM shared_event_adds WHERE event_id = $1 AND user_id = $2 LIMIT 1`,
+      [id, userId]
+    );
+    if (existing.rows.length) {
+      return res.status(200).json({ added: true, already: true, taskId: existing.rows[0].task_id });
+    }
+
+    if (ev.expired) {
+      return res.status(410).json({ error: "Событие уже прошло" });
+    }
+
+    // Создаём задачу в календаре пользователя. Дата/время — МСК-локальные, не конвертируем.
+    const taskId = crypto.randomUUID();
+    await db.query(
+      `INSERT INTO user_tasks (id, user_id, name, time, date, done, type, subtasks, description, location, end_time, category, time_source, updated_at)
+       VALUES ($1, $2, $3, $4, $5, FALSE, 'regular', '[]'::jsonb, $6, $7, $8, 'event', 'user', NOW())`,
+      [
+        taskId,
+        userId,
+        String(ev.title),
+        String(ev.time || ""),
+        String(ev.date),
+        ev.description ? String(ev.description) : null,
+        ev.location ? String(ev.location) : null,
+        ev.end_time ? String(ev.end_time) : null,
+      ]
+    );
+
+    // TODO: напоминания живут в server-bot.ts (set_reminder). На стороне server.ts
+    // механизма нет — дефолтное напоминание за 15 минут здесь не ставим.
+
+    await db.query(
+      `INSERT INTO shared_event_adds (event_id, user_id, task_id) VALUES ($1, $2, $3)
+       ON CONFLICT (event_id, user_id) DO NOTHING`,
+      [id, userId, taskId]
+    );
+
+    return res.status(200).json({ added: true, already: false, taskId });
+  } catch (err) {
+    console.error('[API] POST /api/events/:id/add error:', err);
+    return res.status(500).json({ error: "Не удалось добавить событие." });
+  }
+});
+
+// Создание события партнёром.
+app.post("/api/events", requireAuth, async (req, res) => {
+  if (!db) return res.status(500).json({ error: "БД не настроена." });
+  const userId = (req as any).userId;
+  const { title, date, time, endTime, location, description, partnerName, expiresAt } = req.body || {};
+
+  if (!title || typeof title !== 'string' || !title.trim()) {
+    return res.status(400).json({ error: "title обязателен." });
+  }
+  if (!date || typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: "date обязателен в формате YYYY-MM-DD." });
+  }
+
+  try {
+    // id вида 'evt_' + 10 случайных символов [a-z0-9].
+    const slug = crypto.randomBytes(8).toString('hex').slice(0, 10);
+    const id = `evt_${slug}`;
+
+    // Если срок не передан — конец дня события + 1 день.
+    let expires: Date;
+    if (expiresAt) {
+      expires = new Date(expiresAt);
+      if (isNaN(expires.getTime())) return res.status(400).json({ error: "expiresAt некорректен." });
+    } else {
+      expires = new Date(`${date}T23:59:59`);
+      expires.setDate(expires.getDate() + 1);
+    }
+
+    await db.query(
+      `INSERT INTO shared_events (id, title, date, time, end_time, location, description, partner_name, created_by, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [
+        id,
+        String(title).trim(),
+        String(date),
+        time ? String(time) : null,
+        endTime ? String(endTime) : null,
+        location ? String(location) : null,
+        description ? String(description) : null,
+        partnerName ? String(partnerName) : null,
+        userId,
+        expires,
+      ]
+    );
+
+    const base = process.env.APP_URL || '';
+    const url = `${base}/#/e/${id}`;
+    const buttonSnippet = `Кнопка: текст «📅 Добавить в календарь», URL: ${url}`;
+
+    return res.status(200).json({ id, url, buttonSnippet });
+  } catch (err) {
+    console.error('[API] POST /api/events error:', err);
+    return res.status(500).json({ error: "Не удалось создать событие." });
   }
 });
 

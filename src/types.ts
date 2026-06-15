@@ -105,3 +105,16 @@ export interface LocalProfile {
 }
 
 export type Screen = 'ob' | 'dash' | 'ai' | 'threads' | 'settings' | 'cal' | 'today';
+
+/** Публичное событие, которым делится партнёр (GET /api/events/:id). */
+export interface SharedEvent {
+  id: string;
+  title: string;
+  date: string;
+  time?: string;
+  endTime?: string;
+  location?: string;
+  description?: string;
+  partnerName?: string;
+  expired: boolean;
+}

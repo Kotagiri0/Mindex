@@ -22,12 +22,27 @@ import Calendar from './components/Calendar';
 import BottomNav from './components/BottomNav';
 import DesktopApp from './components/DesktopApp';
 import TodayMobile from './components/TodayMobile';
+import SharedEventPage from './components/SharedEventPage';
+import CreateEventPage from './components/CreateEventPage';
+import { useHashRoute } from './lib/useHashRoute';
 import { isIOS } from './lib/platform';
 
 const defaultSettings = { agent: true, confirm: true, notifs: true };
 const TASK_REFRESH_INTERVAL_MS = 60_000;
 
+// Публичные роуты события: '#/e/new' (создание партнёром) и '#/e/:id' (страница участника).
+// Возвращает { kind } для рендера ДО гейта авторизации.
+function parseEventRoute(route: string): { kind: 'new' } | { kind: 'view'; id: string } | null {
+  const m = route.match(/^\/e\/([^/?#]+)/);
+  if (!m) return null;
+  const id = decodeURIComponent(m[1]);
+  if (id === 'new') return { kind: 'new' };
+  return { kind: 'view', id };
+}
+
 export default function App() {
+  const [route] = useHashRoute('/');
+  const eventRoute = parseEventRoute(route);
   const [currentUser, setCurrentUser] = useState<LocalUser | null>(getCurrentUser());
   const [screen, setScreen] = useState<Screen>(() => getCurrentUser() ? 'dash' : 'ob');
   const [tasks, setTasksRaw] = useState<Task[]>([]);
@@ -300,6 +315,21 @@ export default function App() {
     setPendingMsg(msg);
     setScreen('ai');
   };
+
+  // ── Публичные роуты события — ДО гейта авторизации ──
+  // Страница #/e/:id доступна без сессии (холодный канал привлечения).
+  if (eventRoute) {
+    const openApp = () => {
+      // Уход в основное приложение: чистим хеш и перезагружаем, чтобы App подхватил
+      // сессию, которая могла появиться на странице события (холодный логин).
+      window.location.hash = '';
+      window.location.reload();
+    };
+    if (eventRoute.kind === 'new') {
+      return <CreateEventPage onOpenApp={openApp} />;
+    }
+    return <SharedEventPage eventId={eventRoute.id} onOpenApp={openApp} />;
+  }
 
   if (!currentUser) {
     return <LocalAuth onAuthenticated={handleAuthenticated} />;
