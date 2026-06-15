@@ -9,7 +9,7 @@
 import type { Express } from 'express';
 import type { Pool } from 'pg';
 import crypto from 'crypto';
-import { ProxyAgent, setGlobalDispatcher, Agent } from 'undici';
+import { ProxyAgent, setGlobalDispatcher, Agent, fetch as undiciFetch } from 'undici';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as polisad from './src/polisad/index.ts';
@@ -584,7 +584,7 @@ async function callRouterAIStream(
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 55000);
-  let response: Response;
+  let response: any;
   try {
     const fetchOpts: any = {
       method: 'POST',
@@ -592,9 +592,10 @@ async function callRouterAIStream(
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
       body: JSON.stringify(sendBody),
     };
-    // dispatcher переопределяет глобальный прокси — прямое соединение для OpenRouter.
+    // dispatcher переопределяет глобальный прокси на один запрос — но это умеет
+    // ТОЛЬКО fetch из undici. Глобальный fetch Node бросает UND_ERR_INVALID_ARG.
     if (direct) fetchOpts.dispatcher = directDispatcher;
-    response = await fetch(url, fetchOpts);
+    response = await undiciFetch(url, fetchOpts);
   } catch (e) {
     clearTimeout(timeoutId);
     throw e;
