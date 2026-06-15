@@ -1666,12 +1666,17 @@ export async function startBot(db: Pool): Promise<void> {
   // Прогрев соединения к LLM-провайдеру — режет TLS-хендшейк из TTFT.
   startConnectionWarmup();
 
+  // Режим обновлений НЕ зависит от APP_URL: APP_URL нужен веб-серверу для
+  // генерации публичных ссылок (shared events), но не должен переключать бота
+  // на webhook. Webhook — только по явному опту USE_WEBHOOK=1 (и заданному URL),
+  // иначе long-polling, на котором бот работает по умолчанию.
+  const useWebhook = process.env.USE_WEBHOOK === '1';
   const appUrl = process.env.APP_URL || null;
 
-  if (appUrl) {
+  if (useWebhook && appUrl) {
     await setupWebhook(token, appUrl);
   } else {
-    console.log('[Bot] APP_URL не задан — запускаем long-polling');
+    console.log('[Bot] long-polling режим (USE_WEBHOOK!=1)');
     startLongPolling(token, db, apiKey);
   }
 }
