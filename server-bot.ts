@@ -500,6 +500,12 @@ const OPENROUTER_STREAM_MODEL = process.env.OPENROUTER_STREAM_MODEL || 'deepseek
 const STREAM_OR_DIRECT = (process.env.STREAM_OR_DIRECT || '1') !== '0';
 // RouterAI напрямую, мимо прокси (домашний сервис). ROUTERAI_DIRECT=1 — включить.
 const ROUTERAI_DIRECT = process.env.ROUTERAI_DIRECT === '1';
+// Groq — выделенное LPU-железо, суб-секундный TTFT (тест «скорость как у Perplexity»).
+// OpenAI-совместимый API, наш SSE-парсер подходит без изменений. STREAM_PROVIDER=groq.
+const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+const GROQ_STREAM_MODEL = process.env.GROQ_STREAM_MODEL || 'llama-3.3-70b-versatile';
+// Groq — зарубежный сервис: по умолчанию мимо Telegram-прокси. GROQ_DIRECT=0 — через прокси.
+const GROQ_DIRECT = (process.env.GROQ_DIRECT || '1') !== '0';
 
 async function callOpenRouterFallback(body: object): Promise<any> {
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -551,18 +557,24 @@ async function callRouterAIStream(
   body: object,
   onDelta: (fullContent: string) => void
 ): Promise<LlmStepResult> {
-  // Выбор провайдера стрима. По умолчанию RouterAI; STREAM_PROVIDER=openrouter — OpenRouter.
-  const useOR = STREAM_PROVIDER === 'openrouter' && Boolean(OPENROUTER_FALLBACK_KEY);
-  // Обход прокси: OpenRouter — по STREAM_OR_DIRECT, RouterAI — по ROUTERAI_DIRECT.
+  // Выбор провайдера стрима. Дефолт RouterAI; STREAM_PROVIDER=openrouter|groq переключает.
+  const provider =
+    STREAM_PROVIDER === 'openrouter' && OPENROUTER_FALLBACK_KEY ? 'openrouter' :
+    STREAM_PROVIDER === 'groq' && GROQ_API_KEY ? 'groq' :
+    'routerai';
+  // Обход прокси (Telegram-прокси глобальный): RouterAI — по ROUTERAI_DIRECT;
+  // зарубежные (OpenRouter/Groq) по умолчанию мимо прокси.
   // Если прямой путь не достучится (fetch failed) — runStep откатится на нестрим-вызов.
-  const direct = useOR ? STREAM_OR_DIRECT : ROUTERAI_DIRECT;
-  const url = useOR ? 'https://openrouter.ai/api/v1/chat/completions' : 'https://routerai.ru/api/v1/chat/completions';
-  const key = useOR ? OPENROUTER_FALLBACK_KEY : apiKey;
-  // OpenRouter не знает RouterAI-шный id 'deepseek/deepseek-v4-flash' — подменяем модель.
-  const sendBody = useOR
-    ? { ...body, model: OPENROUTER_STREAM_MODEL, stream: true }
-    : { ...body, stream: true };
-  const tag = (useOR ? `openrouter:${OPENROUTER_STREAM_MODEL}` : 'routerai') + (direct ? '/direct' : '/proxy');
+  const direct = provider === 'routerai' ? ROUTERAI_DIRECT : provider === 'groq' ? GROQ_DIRECT : STREAM_OR_DIRECT;
+  const url =
+    provider === 'openrouter' ? 'https://openrouter.ai/api/v1/chat/completions' :
+    provider === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions' :
+    'https://routerai.ru/api/v1/chat/completions';
+  const key = provider === 'openrouter' ? OPENROUTER_FALLBACK_KEY : provider === 'groq' ? GROQ_API_KEY : apiKey;
+  // Чужие провайдеры не знают RouterAI-шный id 'deepseek/deepseek-v4-flash' — подменяем модель.
+  const model = provider === 'openrouter' ? OPENROUTER_STREAM_MODEL : provider === 'groq' ? GROQ_STREAM_MODEL : null;
+  const sendBody = model ? { ...body, model, stream: true } : { ...body, stream: true };
+  const tag = (provider === 'routerai' ? 'routerai' : `${provider}:${model}`) + (direct ? '/direct' : '/proxy');
   const bodyJson = JSON.stringify(sendBody);
   const promptChars = bodyJson.length;  // размер промпта — главный фактор префилла/TTFT
   const startedAt = Date.now();
