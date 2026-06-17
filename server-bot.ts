@@ -794,6 +794,35 @@ async function buildBotSystemPrompt(userText: string, userId: string, userTz: st
     return '';
   })();
 
+  // 3.5. ЗАДАЧИ НА СЕГОДНЯ — детерминированная точка правды прямо в промпте.
+  // Модель НЕ должна угадывать «сегодня» через get_tasks (без даты он отдаёт ВСЕ
+  // дни → вчерашние невыполненные приписывались сегодня). Здесь — строго date=сегодня,
+  // как в календаре. Это авторитетный список; задачи других дней сюда не попадают.
+  const todayBlock = (async () => {
+    try {
+      const now = new Date();
+      const todayStr = now.toLocaleDateString('sv-SE', { timeZone: userTz });
+      const { rows } = await db.query(
+        `SELECT name, time, done FROM user_tasks
+         WHERE user_id = $1 AND date = $2
+         ORDER BY (time = '' OR time IS NULL) ASC, time ASC`,
+        [userId, todayStr]
+      );
+      if (rows.length > 0) {
+        const lines = rows.map((t: any) => {
+          const when = t.time && t.time !== '' ? `${t.time} ` : 'без времени — ';
+          const status = t.done ? '[выполнено] ' : '';
+          return `— ${when}${status}${t.name}`;
+        }).join('\n');
+        return `\n\n## Задачи на сегодня (${todayStr})\nЭто полный и точный список задач на сегодня из календаря. На вопрос «что у меня сегодня» отвечай строго по нему. НЕ добавляй сюда задачи других дней и НЕ выдумывай. Невыполненные задачи прошлых дней в «сегодня» НЕ входят — не приписывай их сегодняшнему дню.\n${lines}`;
+      }
+      return `\n\n## Задачи на сегодня (${todayStr})\nНа сегодня задач нет. Если спросят про сегодня — так и скажи, не выдумывай и не подтягивай задачи других дней.`;
+    } catch (e: any) {
+      console.warn('[Bot RAG] today tasks inject failed:', e?.message);
+    }
+    return '';
+  })();
+
   // 4. RAG — каскад vector → keyword → recent (ПОЛИСАД, слой 2).
   // Дневные треды бота исключаются — они идут отдельным блоком «Вчера в боте».
   const ragBlock = (async () => {
@@ -823,8 +852,8 @@ async function buildBotSystemPrompt(userText: string, userId: string, userTz: st
     return '';
   })();
 
-  const [profile, yesterday, upcoming, rag] = await Promise.all([profileBlock, yesterdayBlock, upcomingBlock, ragBlock]);
-  return getSystemInstruction(userTz) + profile + yesterday + upcoming + rag;
+  const [profile, yesterday, today, upcoming, rag] = await Promise.all([profileBlock, yesterdayBlock, todayBlock, upcomingBlock, ragBlock]);
+  return getSystemInstruction(userTz) + profile + yesterday + today + upcoming + rag;
 }
 
 async function processWithAI(
