@@ -5,7 +5,7 @@
 import type { Db, PolisadMessage } from './types.ts';
 
 export const BOT_THREAD_TITLE = 'Telegram Bot';
-export const CONTEXT_WINDOW = 15;
+export const CONTEXT_WINDOW = 50;
 
 const FOLD_MAX_CHARS = 1500;      // максимум на блок «Раньше сегодня»
 const FOLD_MSG_MAX_CHARS = 200;   // максимум на одну реплику в свёртке
