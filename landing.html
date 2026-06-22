@@ -3,15 +3,15 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Мысль — агент для личной эффективности прямо в Telegram</title>
-<meta name="description" content="Мысль — AI-агент, который живёт в твоём календаре и действует сам: запоминает, напоминает, видит день целиком. Не планировщик — агент. Прямо в Telegram, без VPN." />
-<meta property="og:title" content="Мысль — агент для личной эффективности в Telegram" />
+<title>Мысль — агент, который живёт в календаре</title>
+<meta name="description" content="Мысль — AI-агент, который живёт в твоём календаре: запоминает, напоминает, видит день целиком и помогает стать продуктивнее. Прямо в Telegram, без VPN." />
+<meta property="og:title" content="Мысль — агент, который живёт в календаре" />
 <meta property="og:description" content="AI планирует, не ты. Агент видит день целиком и действует проактивно." />
 <meta property="og:type" content="website" />
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400&family=Inter:wght@400;450;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="/landing/v2.css" />
 <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
 
@@ -34,112 +34,84 @@
 </head>
 <body>
 
-<!-- GEO-якорь для парсеров: прямой H1 первым в DOM -->
-<h1 class="geo-h1">Агент для личной эффективности прямо в Telegram</h1>
+<!-- GEO-якорь для парсеров -->
+<h1 class="geo-h1">Агент, который живёт в календаре</h1>
 
 <!-- ═════ Navigation ═════ -->
 <nav id="nav">
   <div class="nav-inner">
-    <a class="nav-logo" href="#top" aria-label="Мысль"><span class="dot"></span>Мысль</a>
+    <a class="nav-logo" href="#top" aria-label="Мысль">
+      <span class="nav-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="11" stroke="currentColor" stroke-width="1.5"/><path d="M12 7.5v9M7.5 12h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </span>
+      <span>мысль</span>
+    </a>
     <div class="nav-links">
-      <a class="nav-link" href="#about">О нас</a>
-      <a class="nav-link" href="#product">Продукт</a>
+      <a class="nav-link" href="#top">О нас</a>
+      <a class="nav-link" href="#solutions">Решения</a>
       <a class="nav-link" href="#tech">Технологии</a>
-      <a class="nav-link" href="#research">Исследования</a>
+      <a class="nav-link" href="#news">Новости</a>
       <a class="nav-link" href="#download">Скачать</a>
     </div>
     <div class="nav-cta">
-      <a class="btn btn-ghost" href="/app#/login">Войти</a>
-      <a class="btn btn-accent" href="/app#/signup">Попробовать →</a>
+      <a class="nav-login" href="/app#/login">Войти</a>
+      <a class="btn-dark" href="/app#/signup">Попробовать</a>
     </div>
   </div>
 </nav>
 
-<!-- ═════ БЛОК 1 — HERO «мыслесос» ═════ -->
+<!-- ═════ БЛОК 1 — HERO ═════ -->
 <section class="hero" id="top">
-  <div class="hero-cards" id="heroCards" aria-hidden="true"></div>
-
-  <!-- Агент-маскот в центре -->
-  <div class="hero-mascot" id="heroMascot" aria-hidden="true">
-    <svg viewBox="0 0 120 120" class="mascot-svg">
-      <circle cx="60" cy="60" r="54" class="mascot-body" />
-      <g class="mascot-eyes">
-        <circle cx="44" cy="56" r="9" class="mascot-eye-white" />
-        <circle cx="76" cy="56" r="9" class="mascot-eye-white" />
-        <circle cx="44" cy="56" r="4.4" class="mascot-pupil" id="pupilL" />
-        <circle cx="76" cy="56" r="4.4" class="mascot-pupil" id="pupilR" />
-      </g>
-      <path d="M48 80 Q60 88 72 80" class="mascot-smile" />
-    </svg>
+  <div class="hero-cards" aria-hidden="true">
+    <div class="note note-green"  style="--x:8%;  --y:13%;  --r:-7deg;"><span class="note-title">Задача</span><span class="note-lines"></span></div>
+    <div class="note note-blue"   style="--x:43%; --y:5%;   --r:-4deg;"><span class="note-title">Событие</span><span class="note-lines"></span></div>
+    <div class="note note-pink"   style="--x:78%; --y:9%;   --r:6deg;"><span class="note-title">Дедлайн</span><span class="note-lines"></span></div>
+    <div class="note note-peach"  style="--x:19%; --y:30%;  --r:5deg;"><span class="note-title">Подсказка</span><span class="note-lines"></span></div>
+    <div class="note note-peach"  style="--x:69%; --y:30%;  --r:-5deg;"><span class="note-title">Вебинар</span><span class="note-lines"></span></div>
+    <div class="note note-white"  style="--x:83%; --y:40%;  --r:4deg;"><span class="note-title">Заметка</span><span class="note-lines"></span></div>
+    <div class="note note-blue"   style="--x:9%;  --y:46%;  --r:6deg;"><span class="note-title">Встреча</span><span class="note-lines"></span></div>
+    <div class="note note-green"  style="--x:44%; --y:48%;  --r:-6deg;"><span class="note-title">Мысль</span><span class="note-lines"></span></div>
   </div>
 
   <div class="hero-content">
-    <div class="eyebrow reveal in">AI планирует, не ты</div>
-    <h2 class="hero-title display" id="heroTitle">Инструмент для<br>мыслящих людей</h2>
-    <p class="hero-sub">Агент, который живёт в твоём календаре и действует сам — <br>запоминает, напоминает, видит день целиком.</p>
-    <div class="hero-cta">
-      <a class="btn btn-accent btn-lg" href="/app#/signup">Попробовать бесплатно</a>
-      <a class="btn btn-outline btn-lg" href="#product">Как это работает</a>
-    </div>
-    <div class="hero-trust">Работает без VPN · Сделано в России · Прямо в Telegram</div>
+    <h2 class="hero-title">Агент, который<br>живёт в календаре</h2>
+    <p class="hero-sub">И помогает тебе стать продуктивнее,<br>следя за задачами и дедлайнами</p>
   </div>
-
-  <div class="hero-scroll-hint" aria-hidden="true"><span></span></div>
 </section>
 
-<!-- ═════ БЛОК 2 — Ценностное предложение ═════ -->
-<section class="value section-pad" id="product">
-  <div class="wrap">
-    <div class="value-head section-head reveal">
-      <div class="eyebrow">Ценность</div>
-      <h2 class="section-title">Дай волю мыслям,<br>а рутину — агенту</h2>
-      <p class="section-sub">Люди тратят так много времени на то, чтобы просто запомнить или
-        спланировать что-то. Мысль берёт это на себя.</p>
-    </div>
-
-    <div class="value-list">
-      <div class="value-row reveal">
-        <div class="value-text">
-          <span class="value-num">01</span>
-          <h3 class="value-tname">Говоришь — запоминает.</h3>
-          <p class="value-tdesc">Любая мысль, задача или идея — голосом или текстом.
-            Не потеряется.</p>
-        </div>
-        <div class="value-visual">
-          <div class="vv-chat">
-            <div class="vv-bubble vv-user">напомни через час позвонить подрядчику</div>
-            <div class="vv-bubble vv-agent">Записал. Напомню в 15:40 — позвонить подрядчику.</div>
-          </div>
-        </div>
+<!-- ═════ БЛОК 2 — Анимация «Дай волю мыслям» (scroll-scrubbed) ═════ -->
+<section class="scrub" id="solutions" data-scrub>
+  <div class="scrub-sticky">
+    <div class="wrap scrub-inner">
+      <div class="scrub-text">
+        <h2 class="section-title">Дай волю мыслям,<br>а рутину — агенту</h2>
+        <p class="section-sub">Люди тратят так много времени на то, чтобы просто
+          запомнить или спланировать что-то. Мысль берёт это на себя.</p>
       </div>
 
-      <div class="value-row value-row-rev reveal">
-        <div class="value-text">
-          <span class="value-num">02</span>
-          <h3 class="value-tname">Не ждёт пока спросишь.</h3>
-          <p class="value-tdesc">Видит конфликты в расписании, напоминает сама,
-            пишет первой.</p>
-        </div>
-        <div class="value-visual">
-          <div class="vv-chat">
-            <div class="vv-bubble vv-agent">У тебя в 14:00 встреча и созвон одновременно. Перенести созвон на 15:30?</div>
-            <div class="vv-bubble vv-user">да, давай</div>
+      <div class="scrub-stage" aria-hidden="true">
+        <!-- Кадр 1: сетка иконок -->
+        <div class="stage-grid" data-grid>
+          <div class="tile"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M16 4v3h3"/></svg></div>
+          <div class="tile"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9h16M8 3v4M16 3v4"/></svg></div>
+          <div class="tile"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg></div>
+          <div class="tile"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg></div>
+          <div class="tile tile-play" data-play>
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M10 9v6M14 9v6"/></svg>
           </div>
+          <div class="tile"><svg viewBox="0 0 24 24"><path d="M5 5h14v10H9l-4 4z"/></svg></div>
+          <div class="tile"><svg viewBox="0 0 24 24"><path d="M5 5h14v10H9l-4 4z"/></svg></div>
+          <div class="tile"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></div>
+          <div class="tile"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9h16M8 3v4M16 3v4"/></svg></div>
         </div>
-      </div>
 
-      <div class="value-row reveal">
-        <div class="value-text">
-          <span class="value-num">03</span>
-          <h3 class="value-tname">Видит день целиком.</h3>
-          <p class="value-tdesc">Календарь, задачи, заметки — в одном контексте.
-            Агент видит всё сразу.</p>
-        </div>
-        <div class="value-visual">
-          <div class="vv-day">
-            <div class="vv-day-row"><span class="vv-time">09:00</span><span class="vv-pill vv-pill-a">Стендап команды</span></div>
-            <div class="vv-day-row"><span class="vv-time">12:30</span><span class="vv-pill vv-pill-b">Дедлайн: презентация</span></div>
-            <div class="vv-day-row"><span class="vv-time">16:00</span><span class="vv-pill vv-pill-c">Встреча с инвестором</span></div>
+        <!-- Кадр 2: память + таймлайн -->
+        <div class="stage-day" data-day>
+          <div class="day-memory"><span class="day-memory-tag">память&nbsp;обновлена&nbsp;→</span><span class="day-memory-line"></span></div>
+          <div class="day-rows">
+            <div class="day-row"><span class="day-ax">10</span><span class="day-pill day-pill-green">Составить текст для креативов в канал</span></div>
+            <div class="day-row"><span class="day-ax">12</span><span class="day-pill day-pill-peach">Посмотреть вебинар</span></div>
+            <div class="day-row"><span class="day-ax">14</span><span class="day-pill day-pill-blue">Важная встреча + подготовка</span></div>
           </div>
         </div>
       </div>
@@ -147,182 +119,80 @@
   </div>
 </section>
 
-<!-- ═════ БЛОК 3 — Доказательство ═════ -->
-<section class="proof section-pad" id="proof">
-  <div class="wrap">
-    <div class="proof-head section-head reveal">
-      <div class="eyebrow">Доказательство</div>
-      <h2 class="section-title">Не рекламирует себя.<br>Просто работает.</h2>
-    </div>
-
-    <div class="proof-grid">
-      <div class="proof-chat reveal">
-        <div class="proof-chat-bar">
-          <span class="proof-ava">М</span>
-          <div><div class="proof-name">Мысль</div><div class="proof-status">пишет первой</div></div>
-        </div>
-        <div class="proof-bubble">
-          Осталось меньше трёх часов до дедлайна регистрации на бизнес-слёт,
-          а завтра важная встреча с основателем Яндекс.Лавки — стоит прямо
-          сейчас закрыть регистрацию, чтобы ни о чём не беспокоиться.
-        </div>
-        <div class="proof-caption">Реальное сообщение агента. Никто его не спрашивал.</div>
-      </div>
-
-      <div class="proof-metrics">
-        <div class="metric reveal">
-          <div class="metric-val">55<span>%</span></div>
-          <div class="metric-name">DAU/WAU</div>
-          <div class="metric-note">уровень топ-5% SaaS</div>
-        </div>
-        <div class="metric reveal reveal-d1">
-          <div class="metric-val">33<span>%</span></div>
-          <div class="metric-name">Retention 7 дней</div>
-          <div class="metric-note">выше среднего по рынку</div>
-        </div>
-        <div class="metric reveal reveal-d2">
-          <div class="metric-val">3000<span>+</span></div>
-          <div class="metric-name">сообщений</div>
-          <div class="metric-note">от живых пользователей</div>
-        </div>
-        <div class="metric metric-quote reveal reveal-d3">
-          <div class="metric-quote-text">«не знаю как без неё»</div>
-          <div class="metric-note">— из отзыва пользователя</div>
-        </div>
+<!-- ═════ БЛОК 3 — Горизонтальная лента «Делегируй» (scroll-jack) ═════ -->
+<section class="rail" id="tech" data-rail>
+  <div class="rail-sticky">
+    <div class="wrap rail-head">
+      <h2 class="rail-title"><span class="rail-word" data-rail-word>Делегируй</span> <span class="rail-word-dim">через мысль</span></h2>
+      <div class="rail-nav">
+        <button class="rail-arrow" data-rail-prev aria-label="Назад">‹</button>
+        <button class="rail-arrow" data-rail-next aria-label="Вперёд">›</button>
       </div>
     </div>
-  </div>
-</section>
 
-<!-- ═════ БЛОК 4 — Юз-кейсы «Делегируй через мысль» ═════ -->
-<section class="cases section-pad" id="cases">
-  <div class="wrap">
-    <div class="section-head reveal" style="margin-bottom:54px">
-      <div class="eyebrow">Сценарии</div>
-      <h2 class="section-title">Делегируй через мысль</h2>
-      <p class="section-sub">Просто скидываешь то, что в голове. Агент сам понимает,
-        что это — задача, встреча или дедлайн — и берёт в работу.</p>
-    </div>
+    <div class="rail-viewport">
+      <div class="rail-track" data-rail-track>
+        <article class="rail-card" data-word="Делегируй">
+          <div class="rc-mock">
+            <div class="rc-bubble rc-in">Утром просо канал</div>
+            <div class="rc-bubble rc-in rc-pink">Мысль включить</div>
+            <div class="rc-bubble rc-in">На созвон выйти</div>
+            <div class="rc-field">Ассистент, мне как обычно. Составь планы на завтра</div>
+          </div>
+          <h3 class="rc-title">Агентный календарь</h3>
+          <p class="rc-desc">ИИ ставит задачи и управляет событиями, планируя твой день
+            на основе истории чата. Не нужно держать в уме проекты, дедлайны и встречи —
+            Мысль напомнит.</p>
+        </article>
 
-    <div class="cases-grid">
-      <article class="case-card reveal">
-        <span class="case-tag">Задача</span>
-        <p class="case-msg">«помоги составить текст для креативов в канал, самому лень»</p>
-        <div class="case-arrow">Агент → черновик + задача с дедлайном</div>
-      </article>
-      <article class="case-card reveal reveal-d1">
-        <span class="case-tag">Дедлайн</span>
-        <p class="case-msg">«три дня на презентацию, напомни за два дня»</p>
-        <div class="case-arrow">Агент → дедлайн + напоминание заранее</div>
-      </article>
-      <article class="case-card reveal reveal-d2">
-        <span class="case-tag">Встреча</span>
-        <p class="case-msg">«завтра в два созвон по релизу, не дай забыть»</p>
-        <div class="case-arrow">Агент → событие в календаре + пинг</div>
-      </article>
-      <article class="case-card reveal">
-        <span class="case-tag">Событие</span>
-        <p class="case-msg">«выступаю на форуме про себя и компанию, накидай идей»</p>
-        <div class="case-arrow">Агент → план выступления + тезисы</div>
-      </article>
-      <article class="case-card reveal reveal-d1">
-        <span class="case-tag">Вебинар</span>
-        <p class="case-msg">«записался на вебинар в четверг вечером, не дай проспать»</p>
-        <div class="case-arrow">Агент → напоминание + ссылка под рукой</div>
-      </article>
-      <article class="case-card reveal reveal-d2">
-        <span class="case-tag">Заметка</span>
-        <p class="case-msg">«идея: еженедельный разбор — что успел, что перенеслось»</p>
-        <div class="case-arrow">Агент → заметка в памяти, всплывёт в контексте</div>
-      </article>
-    </div>
-  </div>
-</section>
+        <article class="rail-card" data-word="Ускоряйся">
+          <div class="rc-mock">
+            <div class="rc-bubble rc-out">Короче, завтра хочу погулять, потом нужно подать заявку на конкурс, созвониться с проктором и обдумать новые цели</div>
+            <div class="rc-note">Добавил все задачи в календарь. Напомню о каждой за 15 минут</div>
+          </div>
+          <h3 class="rc-title">Тг бот и управление голосом</h3>
+          <p class="rc-desc">Наговори все задачи в голосовом в тг — Мысль сама расставит их
+            в календаре, выберет категории и встроит в общий план дня, опираясь на твой
+            контекст.</p>
+        </article>
 
-<!-- ═════ БЛОК 5 — Технологии под капотом ═════ -->
-<section class="tech section-pad" id="tech">
-  <div class="wrap">
-    <div class="section-head reveal" style="margin-bottom:54px">
-      <div class="eyebrow">Под капотом</div>
-      <h2 class="section-title">Под капотом</h2>
-      <p class="section-sub">Мы единственные, кто не внедряет AI — мы убираем его
-        оттуда, где думать не нужно.</p>
-    </div>
+        <article class="rail-card" data-word="Запоминай">
+          <div class="rc-mock rc-mock-kb">
+            <div class="rc-kb"><span class="rc-kb-h">Важноооо</span><span class="rc-kb-t">Главное — не забыть позвонить, всё до того дня, когда уже будет поздно. Пока можно отдыхать</span></div>
+            <div class="rc-kb"><span class="rc-kb-h">Контекст</span><span class="rc-kb-t">Пользователю не нравится жёлто-чёрный. Только чёрно-жёлтый. Учту в дальнейшем</span></div>
+            <div class="rc-kb"><span class="rc-kb-h">Чат от 16.06</span><span class="rc-kb-t">Сегодня обсуждали то, как лучше продвигать стартап на холодном старте</span></div>
+            <div class="rc-kb"><span class="rc-kb-h">Принцип</span><span class="rc-kb-t">Сегодня обсуждали то, как лучше продвигать стартап на холодном старте</span></div>
+          </div>
+          <h3 class="rc-title">Личная база знаний</h3>
+          <p class="rc-desc">Записывай агенту свои мысли и то, что нужно сохранить, и возвращайся
+            в любой момент, спросив его в чате. Более того, зачастую ассистент пишет себе
+            заметки сам.</p>
+        </article>
 
-    <div class="tech-grid">
-      <article class="tech-card reveal">
-        <div class="tech-name">ПОЛИСАД</div>
-        <div class="tech-role">Память агента без LLM</div>
-        <p class="tech-desc">Агент помнит контекст, не сжигая токены на каждое слово.</p>
-        <div class="tech-metric">0,023&nbsp;₽ <span>за полный цикл с памятью</span></div>
-      </article>
-      <article class="tech-card reveal reveal-d1">
-        <div class="tech-name">РЕЛЬСА</div>
-        <div class="tech-role">Агентный веб-протокол</div>
-        <p class="tech-desc">Агент ходит в веб по рельсам, а не вслепую.</p>
-        <div class="tech-metric">500 <span>токенов вместо 50&nbsp;000</span></div>
-      </article>
-      <article class="tech-card reveal reveal-d2">
-        <div class="tech-name">КОРА</div>
-        <div class="tech-role">Агентный календарь</div>
-        <p class="tech-desc">Агент видит день целиком и действует прямо в нём.</p>
-        <div class="tech-metric">День <span>как единый контекст</span></div>
-      </article>
-    </div>
-    <a class="tech-more reveal" href="#tech">Подробнее о технологиях →</a>
-  </div>
-</section>
-
-<!-- ═════ БЛОК 6 — Онбординг ═════ -->
-<section class="onb section-pad" id="download">
-  <div class="wrap">
-    <div class="section-head reveal" style="text-align:center;margin:0 auto 54px">
-      <div class="eyebrow" style="display:inline-block;margin-bottom:14px">Начать</div>
-      <h2 class="section-title">Три шага — и агент в деле</h2>
-    </div>
-    <div class="onb-steps">
-      <div class="onb-step reveal">
-        <span class="onb-num">01</span>
-        <h3 class="onb-title">Зарегистрируйся</h3>
-        <p class="onb-desc">На mysle.ru — через Google или почту. Быстро и без VPN.</p>
-      </div>
-      <div class="onb-line reveal reveal-d1" aria-hidden="true"></div>
-      <div class="onb-step reveal reveal-d1">
-        <span class="onb-num">02</span>
-        <h3 class="onb-title">Подключи Telegram</h3>
-        <p class="onb-desc">Перешли боту любое сообщение — и он уже на связи.</p>
-      </div>
-      <div class="onb-line reveal reveal-d2" aria-hidden="true"></div>
-      <div class="onb-step reveal reveal-d2">
-        <span class="onb-num">03</span>
-        <h3 class="onb-title">Говори</h3>
-        <p class="onb-desc">Просто пиши или диктуй как другу. Дальше — происходит.</p>
+        <article class="rail-card rail-card-soon" data-word="Упрощай">
+          <div class="rc-soon">скоро</div>
+          <h3 class="rc-title">Ещё впереди</h3>
+          <p class="rc-desc">Готовим следующий сценарий. Скоро покажем.</p>
+        </article>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ═════ БЛОК 7 — Платформы + финальный CTA ═════ -->
-<section class="final section-pad">
-  <div class="wrap">
-    <div class="final-platforms reveal">
-      <span class="plat">Веб</span>
-      <span class="plat-sep">·</span>
-      <span class="plat">Telegram</span>
-      <span class="plat-sep">·</span>
-      <span class="plat plat-soon">RuStore <em>скоро</em></span>
+<!-- ═════ БЛОК 4 — Ассистент, который растёт ═════ -->
+<section class="grow" id="download">
+  <div class="wrap grow-inner">
+    <h2 class="grow-title">Ассистент, который<br>растёт вместе с тобой</h2>
+    <p class="grow-note">здесь показываем возможности памяти и контекста анимированно</p>
+    <div class="grow-cta">
+      <a class="btn-dark btn-lg" href="/app#/signup">Попробовать бесплатно</a>
     </div>
-    <h2 class="final-title reveal">Есть мысли?<br>Агент готов.</h2>
-    <div class="final-cta reveal reveal-d1">
-      <a class="btn btn-accent btn-lg" href="/app#/signup">Попробовать бесплатно</a>
-    </div>
-    <div class="final-trust reveal reveal-d2">Работает без VPN · Сделано в России</div>
   </div>
   <footer class="foot">
     <div class="wrap foot-inner">
-      <a class="nav-logo" href="#top"><span class="dot"></span>Мысль</a>
+      <a class="nav-logo" href="#top"><span class="nav-mark"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="11" stroke="currentColor" stroke-width="1.5"/><path d="M12 7.5v9M7.5 12h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span><span>мысль</span></a>
       <span class="foot-copy">Сделано в России · 2026 · © Mindex</span>
-      <a class="foot-tg" href="https://t.me/mysle_app" target="_blank" rel="noopener" aria-label="Telegram">Telegram</a>
+      <a class="foot-tg" href="https://t.me/mysle_app" target="_blank" rel="noopener">Telegram</a>
     </div>
   </footer>
 </section>
