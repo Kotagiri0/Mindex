@@ -91,13 +91,7 @@ body {
 .btn-dark:hover { transform: translateY(-1px); opacity: .92; }
 .btn-lg { padding: 15px 32px; font-size: 16px; }
 
-/* ─── HERO ───────────────────────────────────────────────────── */
-.hero {
-  position: relative; min-height: 100vh;
-  display: flex; align-items: center; justify-content: center;
-  overflow: hidden; padding: 120px 24px 60px;
-}
-.hero-content { position: relative; z-index: 2; text-align: center; }
+/* ─── Общие заголовки ────────────────────────────────────────── */
 .hero-title {
   font-size: clamp(34px, 5vw, 60px); font-weight: 500; line-height: 1.08;
   letter-spacing: -.02em; color: var(--ink);
@@ -106,67 +100,61 @@ body {
   margin-top: 22px; font-size: clamp(15px, 1.6vw, 19px); font-weight: 500;
   color: var(--ink-soft); line-height: 1.5;
 }
-
-.hero-cards { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
-.note {
-  position: absolute; left: var(--x); top: var(--y);
-  width: clamp(120px, 11vw, 168px); height: auto;
-  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, .10));
-  animation: float 7s ease-in-out infinite;
-  animation-delay: calc(var(--y) * -.06s);
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-12px); }
-}
-
-/* ─── Общие заголовки секций ─────────────────────────────────── */
 .section-title {
   font-size: clamp(28px, 3.4vw, 44px); font-weight: 500; line-height: 1.12;
   letter-spacing: -.02em; color: var(--ink);
 }
 .section-sub { margin-top: 18px; font-size: 17px; font-weight: 500; color: var(--ink-soft); max-width: 30ch; }
 
-/* ─── БЛОК 2: сцена «заметки → плитки» (scroll-scrubbed) ──────── */
-.scrub { position: relative; height: 260vh; }      /* запас прокрутки для скраба */
-.scrub-sticky { position: sticky; top: 0; height: 100vh; overflow: hidden; }
-
-/* Текст слева, поверх пустой левой части холста */
-.scrub-text {
-  position: absolute; left: max(32px, calc((100% - var(--wrap)) / 2 + 32px));
-  top: 50%; transform: translateY(-50%); z-index: 5; max-width: 30ch;
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-12px); }
+}
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.05); }
 }
 
-/* Сцена = холст block2-1 (5802×2858). Соотношение запекает позиции плиток. */
+/* ─── АКТ 1: Hero → сцена (заметки → плитки) ──────────────────── */
+.act { position: relative; height: 320vh; }   /* запас прокрутки для сцены */
+.act-sticky { position: sticky; top: 0; height: 100vh; overflow: hidden; }
+
+/* Текст hero — по центру */
+.act-hero {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  z-index: 6; text-align: center; width: 100%; padding: 0 24px;
+}
+/* Текст решений — слева, поверх пустой части холста */
+.act-sol {
+  position: absolute; left: max(32px, calc((100% - var(--wrap)) / 2 + 32px));
+  top: 50%; transform: translateY(-50%); z-index: 5; max-width: 30ch; opacity: 0;
+}
+
+/* Сетка = холст block2-1 (5802×2858), позиции плиток запечены */
 .grid {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: min(100%, 1320px); aspect-ratio: 5802 / 2858;
+  width: min(100%, 1320px); aspect-ratio: 5802 / 2858; z-index: 3;
 }
 .grid > * { position: absolute; }
-
-/* подложки и маскот — full-bleed, тайлы стоят на запечённых местах */
 .g-tile, .g-mascot { inset: 0; width: 100%; height: 100%; }
-.g-tile { opacity: 0; transform: scale(.9); transition: none; }
+.g-tile { opacity: 0; }
 .g-mascot { opacity: 0; transform-origin: 68.99% 50%; animation: breathe 3s var(--ease) infinite; }
 
-/* иконки — в центрах плиток (--cx/--cy в % холста) */
 .g-ico {
-  left: var(--cx); top: var(--cy); width: 3.4%;
+  left: var(--cx); top: var(--cy); width: 2.1%;
   transform: translate(-50%, -50%); opacity: 0;
 }
 .g-ico img { width: 100%; height: auto; display: block; }
 
-/* заметки, летящие в плитки */
-.g-note {
-  left: var(--cx); top: var(--cy); width: 11%;
-  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, .10));
-  will-change: transform, opacity;
-}
+/* маркеры целей — невидимы, нужны только для замера координат */
+.g-mark { left: var(--cx); top: var(--cy); width: 1px; height: 1px; }
 
-@keyframes breathe {
-  0%, 100% { transform: scale(1); }
-  50%      { transform: scale(1.05); }
+/* заметки: дом = разброс hero (--x/--y), летят в маркеры (transform из JS) */
+.act-notes { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.note {
+  position: absolute; left: var(--x); top: var(--y);
+  width: clamp(96px, 8vw, 132px); height: auto;
+  will-change: transform, opacity;
 }
 
 /* ─── БЛОК 3: горизонтальная лента (scroll-jack) ─────────────── */
@@ -231,14 +219,13 @@ body {
   .nav-inner { padding: 14px 20px; }
   .wrap { padding: 0 20px; }
 
-  .note { width: 104px; }
-
-  /* На мобиле скраб не пиним — текст сверху, готовая сетка снизу */
-  .scrub { height: auto; }
-  .scrub-sticky { position: static; height: auto; padding: 64px 0; }
-  .scrub-text { position: static; transform: none; max-width: none; margin-bottom: 28px; }
-  .grid { position: relative; top: auto; left: auto; transform: none; width: 100%; margin: 0 auto; }
-  .g-note { display: none; }
+  /* На мобиле сцену не пиним: hero-текст → текст решений → готовая сетка */
+  .act { height: auto; }
+  .act-sticky { position: static; height: auto; overflow: visible; }
+  .act-hero { position: relative; left: auto; top: auto; transform: none; padding: 96px 0 48px; }
+  .act-sol { position: relative; left: auto; top: auto; transform: none; opacity: 1 !important; max-width: none; padding: 20px 0 24px; }
+  .grid { position: relative; top: auto; left: auto; transform: none; width: 100%; margin: 0 0 48px; }
+  .act-notes, .g-note { display: none; }   /* полёт заметок — только на десктопе */
 
   /* Лента — нативный горизонтальный скролл со снапом */
   .rail { height: auto !important; }

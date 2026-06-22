@@ -54,49 +54,36 @@
   </div>
 </nav>
 
-<!-- ═════ БЛОК 1 — HERO ═════ -->
-<section class="hero" id="top">
-  <div class="hero-cards" aria-hidden="true">
-    <img class="note" src="/landing/assets/hero/note_task.svg"     alt="" style="--x:7%;  --y:13%;" />
-    <img class="note" src="/landing/assets/hero/note_event.svg"    alt="" style="--x:42%; --y:4%;" />
-    <img class="note" src="/landing/assets/hero/note_deadline.svg" alt="" style="--x:77%; --y:8%;" />
-    <img class="note" src="/landing/assets/hero/note_reminder.svg" alt="" style="--x:18%; --y:30%;" />
-    <img class="note" src="/landing/assets/hero/note_webinar.svg"  alt="" style="--x:68%; --y:29%;" />
-    <img class="note" src="/landing/assets/hero/note_note.svg"     alt="" style="--x:82%; --y:40%;" />
-    <img class="note" src="/landing/assets/hero/note_meeting.svg"  alt="" style="--x:8%;  --y:46%;" />
-    <img class="note" src="/landing/assets/hero/note_thought.svg"  alt="" style="--x:43%; --y:48%;" />
-  </div>
+<!-- ═════ АКТ 1 — Hero → сцена (заметки летят в плитки) ═════ -->
+<section class="act" id="top" data-act>
+  <div class="act-sticky">
 
-  <div class="hero-content">
-    <h2 class="hero-title">Агент, который<br>живёт в календаре</h2>
-    <p class="hero-sub">И помогает тебе стать продуктивнее,<br>следя за задачами и дедлайнами</p>
-  </div>
-</section>
+    <!-- Текст hero (виден в начале, гаснет при прокрутке) -->
+    <div class="act-hero" data-hero-text>
+      <h2 class="hero-title">Агент, который<br>живёт в календаре</h2>
+      <p class="hero-sub">И помогает тебе стать продуктивнее,<br>следя за задачами и дедлайнами</p>
+    </div>
 
-<!-- ═════ БЛОК 2 — Сцена: заметки слетают в плитки (scroll-scrubbed) ═════ -->
-<section class="scrub" id="solutions" data-scrub>
-  <div class="scrub-sticky">
-    <div class="scrub-text">
+    <!-- Текст решений (проявляется при прокрутке) -->
+    <div class="act-sol" id="solutions" data-sol-text>
       <h2 class="section-title">Дай волю мыслям,<br>а рутину — агенту</h2>
       <p class="section-sub">Люди тратят так много времени на то, чтобы просто
         запомнить или спланировать что-то. Мысль берёт это на себя.</p>
     </div>
 
+    <!-- Сетка плиток + маскот + иконки + маркеры целей -->
     <div class="grid" data-grid aria-hidden="true">
-      <!-- подложки плиток (full-bleed, позиции запечены в SVG) -->
-      <img class="g-tile" data-tile="1" src="/landing/assets/block2-1/title_bg_1.svg" alt="" />
-      <img class="g-tile" data-tile="2" src="/landing/assets/block2-1/title_bg_2.svg" alt="" />
-      <img class="g-tile" data-tile="3" src="/landing/assets/block2-1/title_bg_3.svg" alt="" />
-      <img class="g-tile" data-tile="4" src="/landing/assets/block2-1/title_bg_4.svg" alt="" />
-      <img class="g-tile" data-tile="5" src="/landing/assets/block2-1/title_bg_5.svg" alt="" />
-      <img class="g-tile" data-tile="6" src="/landing/assets/block2-1/title_bg_6.svg" alt="" />
-      <img class="g-tile" data-tile="7" src="/landing/assets/block2-1/title_bg_7.svg" alt="" />
-      <img class="g-tile" data-tile="8" src="/landing/assets/block2-1/title_bg_8.svg" alt="" />
+      <img class="g-tile" src="/landing/assets/block2-1/title_bg_1.svg" alt="" />
+      <img class="g-tile" src="/landing/assets/block2-1/title_bg_2.svg" alt="" />
+      <img class="g-tile" src="/landing/assets/block2-1/title_bg_3.svg" alt="" />
+      <img class="g-tile" src="/landing/assets/block2-1/title_bg_4.svg" alt="" />
+      <img class="g-tile" src="/landing/assets/block2-1/title_bg_5.svg" alt="" />
+      <img class="g-tile" src="/landing/assets/block2-1/title_bg_6.svg" alt="" />
+      <img class="g-tile" src="/landing/assets/block2-1/title_bg_7.svg" alt="" />
+      <img class="g-tile" src="/landing/assets/block2-1/title_bg_8.svg" alt="" />
 
-      <!-- маскот (full-bleed) -->
       <img class="g-mascot" src="/landing/assets/block2-1/mascott.svg" alt="" />
 
-      <!-- иконки в центрах плиток -->
       <div class="g-ico" style="--cx:57.856%;--cy:27.264%"><img src="/landing/assets/block2-1/icon_note.svg" alt="" /></div>
       <div class="g-ico" style="--cx:68.990%;--cy:27.264%"><img src="/landing/assets/block2-1/icon_calendar.svg" alt="" /></div>
       <div class="g-ico" style="--cx:80.124%;--cy:27.264%"><img src="/landing/assets/block2-1/icon_camera.svg" alt="" /></div>
@@ -106,15 +93,27 @@
       <div class="g-ico" style="--cx:57.856%;--cy:72.750%"><img src="/landing/assets/block2-1/icon_chat.svg" alt="" /></div>
       <div class="g-ico" style="--cx:57.856%;--cy:50.007%"><img src="/landing/assets/block2-1/icon_settings.svg" alt="" /></div>
 
-      <!-- заметки, слетающие в плитки. --cx/--cy = центр целевой плитки, data-sx/sy = старт (vw/vh) -->
-      <img class="g-note" src="/landing/assets/hero/note_task.svg"     style="--cx:57.856%;--cy:27.264%" data-sx="-10" data-sy="-70" alt="" />
-      <img class="g-note" src="/landing/assets/hero/note_event.svg"    style="--cx:68.990%;--cy:27.264%" data-sx="0"   data-sy="-85" alt="" />
-      <img class="g-note" src="/landing/assets/hero/note_deadline.svg" style="--cx:80.124%;--cy:27.264%" data-sx="12"  data-sy="-70" alt="" />
-      <img class="g-note" src="/landing/assets/hero/note_reminder.svg" style="--cx:57.856%;--cy:50.007%" data-sx="-22" data-sy="-45" alt="" />
-      <img class="g-note" src="/landing/assets/hero/note_webinar.svg"  style="--cx:80.124%;--cy:50.007%" data-sx="20"  data-sy="-45" alt="" />
-      <img class="g-note" src="/landing/assets/hero/note_note.svg"     style="--cx:80.124%;--cy:72.750%" data-sx="25"  data-sy="-20" alt="" />
-      <img class="g-note" src="/landing/assets/hero/note_meeting.svg"  style="--cx:57.856%;--cy:72.750%" data-sx="-25" data-sy="-20" alt="" />
-      <img class="g-note" src="/landing/assets/hero/note_thought.svg"  style="--cx:68.990%;--cy:72.750%" data-sx="0"   data-sy="-30" alt="" />
+      <!-- маркеры центров плиток — цели полёта заметок -->
+      <i class="g-mark" data-mark="1" style="--cx:57.856%;--cy:27.264%"></i>
+      <i class="g-mark" data-mark="2" style="--cx:68.990%;--cy:27.264%"></i>
+      <i class="g-mark" data-mark="3" style="--cx:80.124%;--cy:27.264%"></i>
+      <i class="g-mark" data-mark="4" style="--cx:80.124%;--cy:50.007%"></i>
+      <i class="g-mark" data-mark="5" style="--cx:80.124%;--cy:72.750%"></i>
+      <i class="g-mark" data-mark="6" style="--cx:68.990%;--cy:72.750%"></i>
+      <i class="g-mark" data-mark="7" style="--cx:57.856%;--cy:72.750%"></i>
+      <i class="g-mark" data-mark="8" style="--cx:57.856%;--cy:50.007%"></i>
+    </div>
+
+    <!-- Заметки: дом = разброс hero, летят в маркер data-to -->
+    <div class="act-notes" data-notes>
+      <img class="note g-note" data-to="1" src="/landing/assets/hero/note_task.svg"     style="--x:5%;  --y:13%;" alt="" />
+      <img class="note g-note" data-to="2" src="/landing/assets/hero/note_event.svg"    style="--x:44%; --y:2%;"  alt="" />
+      <img class="note g-note" data-to="3" src="/landing/assets/hero/note_deadline.svg" style="--x:82%; --y:7%;"  alt="" />
+      <img class="note g-note" data-to="8" src="/landing/assets/hero/note_reminder.svg" style="--x:15%; --y:33%;" alt="" />
+      <img class="note g-note" data-to="4" src="/landing/assets/hero/note_webinar.svg"  style="--x:73%; --y:31%;" alt="" />
+      <img class="note g-note" data-to="5" src="/landing/assets/hero/note_note.svg"     style="--x:84%; --y:47%;" alt="" />
+      <img class="note g-note" data-to="7" src="/landing/assets/hero/note_meeting.svg"  style="--x:4%;  --y:55%;" alt="" />
+      <img class="note g-note" data-to="6" src="/landing/assets/hero/note_thought.svg"  style="--x:42%; --y:72%;" alt="" />
     </div>
   </div>
 </section>

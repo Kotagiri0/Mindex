@@ -21,54 +21,69 @@
   function onNav() { nav.classList.toggle('scrolled', window.scrollY > 8); }
   onNav();
 
-  /* ── Блок 2: scroll-scrubbed (сетка → день) ─────────────────── */
-  var scrub = document.querySelector('[data-scrub]');
-  var gNotes = scrub ? Array.prototype.slice.call(scrub.querySelectorAll('.g-note')) : [];
-  var gTiles = scrub ? Array.prototype.slice.call(scrub.querySelectorAll('.g-tile')) : [];
-  var gIcos = scrub ? Array.prototype.slice.call(scrub.querySelectorAll('.g-ico')) : [];
-  var gMascot = scrub && scrub.querySelector('.g-mascot');
+  /* ── Акт 1: Hero → сцена (заметки летят из hero в плитки) ────── */
+  var act = document.querySelector('[data-act]');
+  var aHero = act && act.querySelector('[data-hero-text]');
+  var aSol = act && act.querySelector('[data-sol-text]');
+  var aGrid = act && act.querySelector('[data-grid]');
+  var gNotes = act ? Array.prototype.slice.call(act.querySelectorAll('.g-note')) : [];
+  var gTiles = act ? Array.prototype.slice.call(act.querySelectorAll('.g-tile')) : [];
+  var gIcos = act ? Array.prototype.slice.call(act.querySelectorAll('.g-ico')) : [];
+  var gMascot = act && act.querySelector('.g-mascot');
 
   function lerp(a, b, t) { return a + (b - a) * t; }
+  function easeInOut(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
 
-  function updateScrub() {
-    if (!scrub || isMobile.matches) return;
-    var rect = scrub.getBoundingClientRect();
-    var total = scrub.offsetHeight - window.innerHeight;
-    var p = clamp(-rect.top / total, 0, 1);
-
-    var vw = window.innerWidth, vh = window.innerHeight;
-
-    // Маскот «дышит» (CSS), здесь только проявляем
-    if (gMascot) gMascot.style.opacity = String(range(p, 0.12, 0.4));
-
-    // Заметки летят из стартового смещения в центр своей плитки (t: 0→1),
-    // затем гаснут, передавая место плитке.
+  // Замер дельты «заметка → её плитка». Обе внутри одного sticky —
+  // двигаются вместе, поэтому дельта постоянна и меряется единожды.
+  function measureAct() {
+    if (!act) return;
+    gNotes.forEach(function (n) { n.style.transform = 'none'; });
     gNotes.forEach(function (n) {
-      var t = range(p, 0.06, 0.5);
-      var sx = parseFloat(n.getAttribute('data-sx')) || 0;
-      var sy = parseFloat(n.getAttribute('data-sy')) || 0;
-      var dx = sx / 100 * vw * (1 - t);
-      var dy = sy / 100 * vh * (1 - t);
-      var s = lerp(0.85, 1, t);
-      n.style.transform = 'translate(calc(-50% + ' + dx + 'px), calc(-50% + ' + dy + 'px)) scale(' + s + ')';
-      n.style.opacity = String(1 - range(p, 0.42, 0.6));
+      var mk = aGrid.querySelector('.g-mark[data-mark="' + n.getAttribute('data-to') + '"]');
+      if (!mk) { n._dx = 0; n._dy = 0; return; }
+      var nr = n.getBoundingClientRect();
+      var mr = mk.getBoundingClientRect();
+      n._dx = (mr.left + mr.width / 2) - (nr.left + nr.width / 2);
+      n._dy = (mr.top + mr.height / 2) - (nr.top + nr.height / 2);
     });
-
-    // Плитки и иконки проявляются по мере «приземления» заметок
-    var tileIn = range(p, 0.4, 0.62);
-    gTiles.forEach(function (el) {
-      el.style.opacity = String(tileIn);
-      el.style.transform = 'scale(' + lerp(0.9, 1, tileIn) + ')';
-    });
-    var icoIn = range(p, 0.5, 0.7);
-    gIcos.forEach(function (el) { el.style.opacity = String(icoIn); });
   }
 
-  function initScrubStatic() {
-    // мобайл/reduced-motion: финальное состояние — плитки/иконки/маскот видны, заметки скрыты
-    if (!scrub) return;
-    gNotes.forEach(function (n) { n.style.opacity = '0'; });
-    gTiles.forEach(function (el) { el.style.opacity = '1'; el.style.transform = 'none'; });
+  function updateAct() {
+    if (!act || isMobile.matches) return;
+    var rect = act.getBoundingClientRect();
+    var total = act.offsetHeight - window.innerHeight;
+    var p = clamp(-rect.top / total, 0, 1);
+
+    // Тексты: hero гаснет, решения проявляются
+    if (aHero) aHero.style.opacity = String(1 - range(p, 0.10, 0.28));
+    if (aSol) aSol.style.opacity = String(range(p, 0.34, 0.52));
+
+    // Заметки летят из hero-позиций в центр своей плитки, затем гаснут
+    gNotes.forEach(function (n) {
+      var t = easeInOut(range(p, 0.16, 0.56));
+      var dx = (n._dx || 0) * t;
+      var dy = (n._dy || 0) * t;
+      var s = lerp(1, 0.86, t);
+      n.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(' + s + ')';
+      n.style.opacity = String(1 - range(p, 0.5, 0.6));
+    });
+
+    // Плитки, иконки, маскот проявляются по мере приземления заметок
+    var tileIn = range(p, 0.46, 0.62);
+    gTiles.forEach(function (el) { el.style.opacity = String(tileIn); });
+    var icoIn = range(p, 0.54, 0.7);
+    gIcos.forEach(function (el) { el.style.opacity = String(icoIn); });
+    if (gMascot) gMascot.style.opacity = String(range(p, 0.44, 0.6));
+  }
+
+  function initActStatic() {
+    // мобайл/reduced-motion: hero-текст и заметки видны, грид — финальный ниже
+    if (!act) return;
+    if (aHero) aHero.style.opacity = '1';
+    if (aSol) aSol.style.opacity = '1';
+    gNotes.forEach(function (n) { n.style.transform = 'none'; n.style.opacity = '1'; });
+    gTiles.forEach(function (el) { el.style.opacity = '1'; });
     gIcos.forEach(function (el) { el.style.opacity = '1'; });
     if (gMascot) gMascot.style.opacity = '1';
   }
@@ -135,7 +150,7 @@
     ticking = true;
     requestAnimationFrame(function () {
       onNav();
-      updateScrub();
+      updateAct();
       updateRail();
       ticking = false;
     });
@@ -143,7 +158,8 @@
 
   function onResize() {
     measureRail();
-    if (isMobile.matches || reduce.matches) initScrubStatic();
+    if (isMobile.matches || reduce.matches) { initActStatic(); }
+    else { measureAct(); }
     onScroll();
   }
 
@@ -158,9 +174,10 @@
 
   if (wordEl && words.length) { wordEl.textContent = words[0]; curWord = words[0]; }
 
-  // картинки/шрифты могут менять scrollWidth — меряем после загрузки
+  // картинки/шрифты могут менять размеры — меряем после загрузки
   window.addEventListener('load', onResize);
   measureRail();
-  if (isMobile.matches || reduce.matches) initScrubStatic();
+  if (isMobile.matches || reduce.matches) { initActStatic(); }
+  else { measureAct(); }
   onScroll();
 })();
