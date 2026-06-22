@@ -23,32 +23,54 @@
 
   /* ── Блок 2: scroll-scrubbed (сетка → день) ─────────────────── */
   var scrub = document.querySelector('[data-scrub]');
-  var grid = scrub && scrub.querySelector('[data-grid]');
-  var day = scrub && scrub.querySelector('[data-day]');
+  var gNotes = scrub ? Array.prototype.slice.call(scrub.querySelectorAll('.g-note')) : [];
+  var gTiles = scrub ? Array.prototype.slice.call(scrub.querySelectorAll('.g-tile')) : [];
+  var gIcos = scrub ? Array.prototype.slice.call(scrub.querySelectorAll('.g-ico')) : [];
+  var gMascot = scrub && scrub.querySelector('.g-mascot');
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
 
   function updateScrub() {
     if (!scrub || isMobile.matches) return;
     var rect = scrub.getBoundingClientRect();
     var total = scrub.offsetHeight - window.innerHeight;
-    // p: 0 в момент, когда секция прилипла сверху; 1 — когда уезжает
     var p = clamp(-rect.top / total, 0, 1);
 
-    // Сетка живёт в первой половине, день — во второй, с перекрытием.
-    var gridOut = range(p, 0.10, 0.55);   // 0→1 насколько сетка ушла
-    var dayIn = range(p, 0.45, 0.90);     // 0→1 насколько день пришёл
+    var vw = window.innerWidth, vh = window.innerHeight;
 
-    grid.style.opacity = String(1 - gridOut);
-    grid.style.transform = 'scale(' + (1 - gridOut * 0.12) + ')';
+    // Маскот «дышит» (CSS), здесь только проявляем
+    if (gMascot) gMascot.style.opacity = String(range(p, 0.12, 0.4));
 
-    day.style.opacity = String(dayIn);
-    day.style.transform = 'translateY(' + ((1 - dayIn) * 24) + 'px)';
+    // Заметки летят из стартового смещения в центр своей плитки (t: 0→1),
+    // затем гаснут, передавая место плитке.
+    gNotes.forEach(function (n) {
+      var t = range(p, 0.06, 0.5);
+      var sx = parseFloat(n.getAttribute('data-sx')) || 0;
+      var sy = parseFloat(n.getAttribute('data-sy')) || 0;
+      var dx = sx / 100 * vw * (1 - t);
+      var dy = sy / 100 * vh * (1 - t);
+      var s = lerp(0.85, 1, t);
+      n.style.transform = 'translate(calc(-50% + ' + dx + 'px), calc(-50% + ' + dy + 'px)) scale(' + s + ')';
+      n.style.opacity = String(1 - range(p, 0.42, 0.6));
+    });
+
+    // Плитки и иконки проявляются по мере «приземления» заметок
+    var tileIn = range(p, 0.4, 0.62);
+    gTiles.forEach(function (el) {
+      el.style.opacity = String(tileIn);
+      el.style.transform = 'scale(' + lerp(0.9, 1, tileIn) + ')';
+    });
+    var icoIn = range(p, 0.5, 0.7);
+    gIcos.forEach(function (el) { el.style.opacity = String(icoIn); });
   }
 
   function initScrubStatic() {
-    // мобайл/reduced-motion: оба кадра видимы, без трансформаций
+    // мобайл/reduced-motion: финальное состояние — плитки/иконки/маскот видны, заметки скрыты
     if (!scrub) return;
-    grid.style.opacity = day.style.opacity = '1';
-    grid.style.transform = day.style.transform = 'none';
+    gNotes.forEach(function (n) { n.style.opacity = '0'; });
+    gTiles.forEach(function (el) { el.style.opacity = '1'; el.style.transform = 'none'; });
+    gIcos.forEach(function (el) { el.style.opacity = '1'; });
+    if (gMascot) gMascot.style.opacity = '1';
   }
 
   /* ── Блок 3: scroll-jack (вертикаль → горизонталь) ──────────── */

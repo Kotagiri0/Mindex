@@ -1,8 +1,18 @@
 /* ════════════════════════════════════════════════════════════════
    Мысль — лендинг v2. Палитра и композиция со скринов:
-   нейтральный серый фон + пастельные стикеры, шрифт Manrope.
+   нейтральный серый фон + пастельные стикеры, шрифт Muller.
    ════════════════════════════════════════════════════════════════ */
 
+@font-face {
+  font-family: 'Muller';
+  src: url('/landing/assets/fonts/MullerRegular.ttf') format('truetype');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Muller';
+  src: url('/landing/assets/fonts/MullerMedium.ttf') format('truetype');
+  font-weight: 500; font-style: normal; font-display: swap;
+}
 :root {
   --bg: #ececec;
   --surface: #ffffff;
@@ -35,7 +45,7 @@
 html { scroll-behavior: smooth; }
 
 body {
-  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Muller', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--bg);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
@@ -62,20 +72,19 @@ body {
 }
 .nav-logo {
   display: inline-flex; align-items: center; gap: 9px;
-  font-weight: 700; font-size: 18px; color: var(--ink); text-decoration: none;
+  font-weight: 500; font-size: 18px; color: var(--ink); text-decoration: none;
 }
-.nav-mark { display: inline-flex; width: 22px; height: 22px; color: var(--ink); }
-.nav-mark svg { width: 100%; height: 100%; }
+.logo-img { height: 26px; width: auto; display: block; }
 .nav-links { display: flex; gap: 30px; }
 .nav-link { font-size: 15px; font-weight: 500; color: var(--ink-soft); text-decoration: none; transition: color .2s; }
 .nav-link:hover { color: var(--ink); }
 .nav-cta { display: flex; align-items: center; gap: 18px; }
-.nav-login { font-size: 15px; font-weight: 600; color: var(--ink); text-decoration: none; }
+.nav-login { font-size: 15px; font-weight: 500; color: var(--ink); text-decoration: none; }
 
 .btn-dark {
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--ink); color: #fff; text-decoration: none;
-  font-weight: 600; font-size: 15px;
+  font-weight: 500; font-size: 15px;
   padding: 11px 22px; border-radius: 999px;
   transition: transform .2s var(--ease), opacity .2s;
 }
@@ -90,7 +99,7 @@ body {
 }
 .hero-content { position: relative; z-index: 2; text-align: center; }
 .hero-title {
-  font-size: clamp(34px, 5vw, 60px); font-weight: 700; line-height: 1.08;
+  font-size: clamp(34px, 5vw, 60px); font-weight: 500; line-height: 1.08;
   letter-spacing: -.02em; color: var(--ink);
 }
 .hero-sub {
@@ -101,81 +110,72 @@ body {
 .hero-cards { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
 .note {
   position: absolute; left: var(--x); top: var(--y);
-  width: 132px; min-height: 96px;
-  padding: 12px 14px; border-radius: var(--radius-m);
-  transform: rotate(var(--r));
-  box-shadow: var(--shadow-soft);
+  width: clamp(120px, 11vw, 168px); height: auto;
+  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, .10));
   animation: float 7s ease-in-out infinite;
   animation-delay: calc(var(--y) * -.06s);
 }
-.note-title { display: block; font-weight: 700; font-size: 14px; margin-bottom: 8px; }
-.note-lines { display: block; height: 36px; border-radius: 6px;
-  background: repeating-linear-gradient(transparent 0 6px, rgba(0,0,0,.07) 6px 7px); }
-.note-green  { background: var(--green); } .note-green  .note-title { color: var(--green-deep); }
-.note-blue   { background: var(--blue);  } .note-blue   .note-title { color: var(--blue-deep); }
-.note-peach  { background: var(--peach); } .note-peach  .note-title { color: var(--peach-deep); }
-.note-pink   { background: var(--pink);  } .note-pink   .note-title { color: var(--pink-deep); }
-.note-white  { background: var(--surface); border: 1px solid var(--line); } .note-white .note-title { color: var(--ink); }
 
 @keyframes float {
-  0%, 100% { transform: rotate(var(--r)) translateY(0); }
-  50%      { transform: rotate(var(--r)) translateY(-12px); }
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-12px); }
 }
 
 /* ─── Общие заголовки секций ─────────────────────────────────── */
 .section-title {
-  font-size: clamp(28px, 3.4vw, 44px); font-weight: 700; line-height: 1.12;
+  font-size: clamp(28px, 3.4vw, 44px); font-weight: 500; line-height: 1.12;
   letter-spacing: -.02em; color: var(--ink);
 }
 .section-sub { margin-top: 18px; font-size: 17px; font-weight: 500; color: var(--ink-soft); max-width: 30ch; }
 
-/* ─── БЛОК 2: scroll-scrubbed ────────────────────────────────── */
-.scrub { position: relative; height: 220vh; }      /* запас прокрутки для скраба */
-.scrub-sticky { position: sticky; top: 0; height: 100vh; display: flex; align-items: center; }
-.scrub-inner {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; width: 100%;
-}
-.scrub-stage { position: relative; height: 420px; }
-.scrub-stage > * { position: absolute; inset: 0; }
+/* ─── БЛОК 2: сцена «заметки → плитки» (scroll-scrubbed) ──────── */
+.scrub { position: relative; height: 260vh; }      /* запас прокрутки для скраба */
+.scrub-sticky { position: sticky; top: 0; height: 100vh; overflow: hidden; }
 
-/* Кадр 1 — сетка */
-.stage-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
-  place-content: center; max-width: 380px; margin: 0 auto;
+/* Текст слева, поверх пустой левой части холста */
+.scrub-text {
+  position: absolute; left: max(32px, calc((100% - var(--wrap)) / 2 + 32px));
+  top: 50%; transform: translateY(-50%); z-index: 5; max-width: 30ch;
 }
-.tile {
-  aspect-ratio: 1; background: var(--surface); border-radius: var(--radius-m);
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: var(--shadow-soft);
-  transition: transform .4s var(--ease);
-}
-.tile svg { width: 28px; height: 28px; fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-.tile-play svg { stroke: var(--ink); stroke-width: 1.8; }
 
-/* Кадр 2 — память + день */
-.stage-day { max-width: 440px; margin: 0 auto; display: flex; flex-direction: column; justify-content: center; gap: 18px; }
-.day-memory {
-  display: flex; align-items: center; gap: 12px;
-  background: var(--surface); border-radius: var(--radius-m); padding: 14px 16px; box-shadow: var(--shadow-soft);
+/* Сцена = холст block2-1 (5802×2858). Соотношение запекает позиции плиток. */
+.grid {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(100%, 1320px); aspect-ratio: 5802 / 2858;
 }
-.day-memory-tag { font-weight: 700; font-size: 13px; white-space: nowrap; }
-.day-memory-line { flex: 1; height: 24px; border-radius: 6px;
-  background: repeating-linear-gradient(transparent 0 5px, rgba(0,0,0,.06) 5px 6px); }
-.day-rows { display: flex; flex-direction: column; gap: 12px; }
-.day-row { display: flex; align-items: center; gap: 14px; }
-.day-ax { width: 22px; font-size: 13px; font-weight: 600; color: var(--ink-faint); text-align: right; }
-.day-pill { flex: 1; padding: 14px 16px; border-radius: var(--radius-m); font-weight: 600; font-size: 14px; }
-.day-pill-green { background: var(--green); color: var(--green-deep); }
-.day-pill-peach { background: var(--peach); color: var(--peach-deep); }
-.day-pill-blue  { background: var(--blue);  color: var(--blue-deep); }
+.grid > * { position: absolute; }
+
+/* подложки и маскот — full-bleed, тайлы стоят на запечённых местах */
+.g-tile, .g-mascot { inset: 0; width: 100%; height: 100%; }
+.g-tile { opacity: 0; transform: scale(.9); transition: none; }
+.g-mascot { opacity: 0; transform-origin: 68.99% 50%; animation: breathe 3s var(--ease) infinite; }
+
+/* иконки — в центрах плиток (--cx/--cy в % холста) */
+.g-ico {
+  left: var(--cx); top: var(--cy); width: 3.4%;
+  transform: translate(-50%, -50%); opacity: 0;
+}
+.g-ico img { width: 100%; height: auto; display: block; }
+
+/* заметки, летящие в плитки */
+.g-note {
+  left: var(--cx); top: var(--cy); width: 11%;
+  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, .10));
+  will-change: transform, opacity;
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.05); }
+}
 
 /* ─── БЛОК 3: горизонтальная лента (scroll-jack) ─────────────── */
 .rail { position: relative; }                       /* высота задаётся из JS */
 .rail-sticky { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
 .rail-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 30px; }
-.rail-title { font-size: clamp(26px, 3.2vw, 40px); font-weight: 700; letter-spacing: -.02em; }
+.rail-title { font-size: clamp(26px, 3.2vw, 40px); font-weight: 500; letter-spacing: -.02em; }
 .rail-word { display: inline-block; transition: opacity .3s var(--ease), transform .3s var(--ease); }
-.rail-word-dim { color: var(--ink-faint); font-weight: 700; }
+.rail-word-dim { color: var(--ink-faint); font-weight: 500; }
 .rail-nav { display: flex; gap: 10px; }
 .rail-arrow {
   width: 42px; height: 42px; border-radius: 999px; border: 1px solid var(--line);
@@ -192,7 +192,7 @@ body {
   background: var(--surface); border-radius: var(--radius-l); padding: 22px;
   box-shadow: var(--shadow); display: flex; flex-direction: column;
 }
-.rc-title { font-size: 20px; font-weight: 700; margin: 20px 0 10px; }
+.rc-title { font-size: 20px; font-weight: 500; margin: 20px 0 10px; }
 .rc-desc { font-size: 14px; color: var(--ink-soft); line-height: 1.55; }
 
 /* мок чата внутри карточки */
@@ -206,16 +206,16 @@ body {
 
 .rc-mock-kb { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .rc-kb { background: var(--surface); border-radius: 12px; padding: 10px 12px; box-shadow: var(--shadow-soft); }
-.rc-kb-h { display: block; font-weight: 700; font-size: 12px; margin-bottom: 4px; }
+.rc-kb-h { display: block; font-weight: 500; font-size: 12px; margin-bottom: 4px; }
 .rc-kb-t { display: block; font-size: 10.5px; color: var(--ink-faint); line-height: 1.4; }
 
 .rail-card-soon { align-items: flex-start; justify-content: center; opacity: .85; }
-.rc-soon { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-faint); border: 1px dashed var(--line); border-radius: 999px; padding: 5px 12px; }
+.rc-soon { font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-faint); border: 1px dashed var(--line); border-radius: 999px; padding: 5px 12px; }
 
 /* ─── БЛОК 4: Ассистент растёт ───────────────────────────────── */
 .grow { padding: 120px 0 0; }
 .grow-inner { min-height: 70vh; display: flex; flex-direction: column; justify-content: center; align-items: flex-end; text-align: right; }
-.grow-title { font-size: clamp(30px, 4vw, 52px); font-weight: 700; line-height: 1.1; letter-spacing: -.02em; }
+.grow-title { font-size: clamp(30px, 4vw, 52px); font-weight: 500; line-height: 1.1; letter-spacing: -.02em; }
 .grow-note { margin-top: 18px; font-size: 14px; color: var(--ink-faint); }
 .grow-cta { margin-top: 32px; }
 
@@ -223,7 +223,7 @@ body {
 .foot { border-top: 1px solid var(--line); margin-top: 80px; }
 .foot-inner { display: flex; align-items: center; justify-content: space-between; padding-top: 26px; padding-bottom: 26px; gap: 16px; flex-wrap: wrap; }
 .foot-copy { font-size: 13px; color: var(--ink-faint); }
-.foot-tg { font-size: 14px; font-weight: 600; color: var(--ink); text-decoration: none; }
+.foot-tg { font-size: 14px; font-weight: 500; color: var(--ink); text-decoration: none; }
 
 /* ─── Mobile ─────────────────────────────────────────────────── */
 @media (max-width: 860px) {
@@ -231,15 +231,14 @@ body {
   .nav-inner { padding: 14px 20px; }
   .wrap { padding: 0 20px; }
 
-  .note { width: 104px; min-height: 76px; transform: scale(.82) rotate(var(--r)); }
+  .note { width: 104px; }
 
-  /* На мобиле скраб не пиним — показываем оба кадра стопкой */
+  /* На мобиле скраб не пиним — текст сверху, готовая сетка снизу */
   .scrub { height: auto; }
-  .scrub-sticky { position: static; height: auto; padding: 70px 0; }
-  .scrub-inner { grid-template-columns: 1fr; gap: 36px; }
-  .scrub-stage { position: static; height: auto; display: flex; flex-direction: column; gap: 28px; }
-  .scrub-stage > * { position: static; inset: auto; opacity: 1 !important; transform: none !important; }
-  .stage-grid { max-width: 320px; }
+  .scrub-sticky { position: static; height: auto; padding: 64px 0; }
+  .scrub-text { position: static; transform: none; max-width: none; margin-bottom: 28px; }
+  .grid { position: relative; top: auto; left: auto; transform: none; width: 100%; margin: 0 auto; }
+  .g-note { display: none; }
 
   /* Лента — нативный горизонтальный скролл со снапом */
   .rail { height: auto !important; }

@@ -9,9 +9,6 @@
 <meta property="og:description" content="AI планирует, не ты. Агент видит день целиком и действует проактивно." />
 <meta property="og:type" content="website" />
 
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="/landing/v2.css" />
 <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
 
@@ -41,10 +38,7 @@
 <nav id="nav">
   <div class="nav-inner">
     <a class="nav-logo" href="#top" aria-label="Мысль">
-      <span class="nav-mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="11" stroke="currentColor" stroke-width="1.5"/><path d="M12 7.5v9M7.5 12h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-      </span>
-      <span>мысль</span>
+      <img src="/landing/assets/logos/landing_logo.svg" alt="Мысль" class="logo-img" />
     </a>
     <div class="nav-links">
       <a class="nav-link" href="#top">О нас</a>
@@ -63,14 +57,14 @@
 <!-- ═════ БЛОК 1 — HERO ═════ -->
 <section class="hero" id="top">
   <div class="hero-cards" aria-hidden="true">
-    <div class="note note-green"  style="--x:8%;  --y:13%;  --r:-7deg;"><span class="note-title">Задача</span><span class="note-lines"></span></div>
-    <div class="note note-blue"   style="--x:43%; --y:5%;   --r:-4deg;"><span class="note-title">Событие</span><span class="note-lines"></span></div>
-    <div class="note note-pink"   style="--x:78%; --y:9%;   --r:6deg;"><span class="note-title">Дедлайн</span><span class="note-lines"></span></div>
-    <div class="note note-peach"  style="--x:19%; --y:30%;  --r:5deg;"><span class="note-title">Подсказка</span><span class="note-lines"></span></div>
-    <div class="note note-peach"  style="--x:69%; --y:30%;  --r:-5deg;"><span class="note-title">Вебинар</span><span class="note-lines"></span></div>
-    <div class="note note-white"  style="--x:83%; --y:40%;  --r:4deg;"><span class="note-title">Заметка</span><span class="note-lines"></span></div>
-    <div class="note note-blue"   style="--x:9%;  --y:46%;  --r:6deg;"><span class="note-title">Встреча</span><span class="note-lines"></span></div>
-    <div class="note note-green"  style="--x:44%; --y:48%;  --r:-6deg;"><span class="note-title">Мысль</span><span class="note-lines"></span></div>
+    <img class="note" src="/landing/assets/hero/note_task.svg"     alt="" style="--x:7%;  --y:13%;" />
+    <img class="note" src="/landing/assets/hero/note_event.svg"    alt="" style="--x:42%; --y:4%;" />
+    <img class="note" src="/landing/assets/hero/note_deadline.svg" alt="" style="--x:77%; --y:8%;" />
+    <img class="note" src="/landing/assets/hero/note_reminder.svg" alt="" style="--x:18%; --y:30%;" />
+    <img class="note" src="/landing/assets/hero/note_webinar.svg"  alt="" style="--x:68%; --y:29%;" />
+    <img class="note" src="/landing/assets/hero/note_note.svg"     alt="" style="--x:82%; --y:40%;" />
+    <img class="note" src="/landing/assets/hero/note_meeting.svg"  alt="" style="--x:8%;  --y:46%;" />
+    <img class="note" src="/landing/assets/hero/note_thought.svg"  alt="" style="--x:43%; --y:48%;" />
   </div>
 
   <div class="hero-content">
@@ -79,42 +73,48 @@
   </div>
 </section>
 
-<!-- ═════ БЛОК 2 — Анимация «Дай волю мыслям» (scroll-scrubbed) ═════ -->
+<!-- ═════ БЛОК 2 — Сцена: заметки слетают в плитки (scroll-scrubbed) ═════ -->
 <section class="scrub" id="solutions" data-scrub>
   <div class="scrub-sticky">
-    <div class="wrap scrub-inner">
-      <div class="scrub-text">
-        <h2 class="section-title">Дай волю мыслям,<br>а рутину — агенту</h2>
-        <p class="section-sub">Люди тратят так много времени на то, чтобы просто
-          запомнить или спланировать что-то. Мысль берёт это на себя.</p>
-      </div>
+    <div class="scrub-text">
+      <h2 class="section-title">Дай волю мыслям,<br>а рутину — агенту</h2>
+      <p class="section-sub">Люди тратят так много времени на то, чтобы просто
+        запомнить или спланировать что-то. Мысль берёт это на себя.</p>
+    </div>
 
-      <div class="scrub-stage" aria-hidden="true">
-        <!-- Кадр 1: сетка иконок -->
-        <div class="stage-grid" data-grid>
-          <div class="tile"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M16 4v3h3"/></svg></div>
-          <div class="tile"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9h16M8 3v4M16 3v4"/></svg></div>
-          <div class="tile"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg></div>
-          <div class="tile"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg></div>
-          <div class="tile tile-play" data-play>
-            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M10 9v6M14 9v6"/></svg>
-          </div>
-          <div class="tile"><svg viewBox="0 0 24 24"><path d="M5 5h14v10H9l-4 4z"/></svg></div>
-          <div class="tile"><svg viewBox="0 0 24 24"><path d="M5 5h14v10H9l-4 4z"/></svg></div>
-          <div class="tile"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></div>
-          <div class="tile"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9h16M8 3v4M16 3v4"/></svg></div>
-        </div>
+    <div class="grid" data-grid aria-hidden="true">
+      <!-- подложки плиток (full-bleed, позиции запечены в SVG) -->
+      <img class="g-tile" data-tile="1" src="/landing/assets/block2-1/title_bg_1.svg" alt="" />
+      <img class="g-tile" data-tile="2" src="/landing/assets/block2-1/title_bg_2.svg" alt="" />
+      <img class="g-tile" data-tile="3" src="/landing/assets/block2-1/title_bg_3.svg" alt="" />
+      <img class="g-tile" data-tile="4" src="/landing/assets/block2-1/title_bg_4.svg" alt="" />
+      <img class="g-tile" data-tile="5" src="/landing/assets/block2-1/title_bg_5.svg" alt="" />
+      <img class="g-tile" data-tile="6" src="/landing/assets/block2-1/title_bg_6.svg" alt="" />
+      <img class="g-tile" data-tile="7" src="/landing/assets/block2-1/title_bg_7.svg" alt="" />
+      <img class="g-tile" data-tile="8" src="/landing/assets/block2-1/title_bg_8.svg" alt="" />
 
-        <!-- Кадр 2: память + таймлайн -->
-        <div class="stage-day" data-day>
-          <div class="day-memory"><span class="day-memory-tag">память&nbsp;обновлена&nbsp;→</span><span class="day-memory-line"></span></div>
-          <div class="day-rows">
-            <div class="day-row"><span class="day-ax">10</span><span class="day-pill day-pill-green">Составить текст для креативов в канал</span></div>
-            <div class="day-row"><span class="day-ax">12</span><span class="day-pill day-pill-peach">Посмотреть вебинар</span></div>
-            <div class="day-row"><span class="day-ax">14</span><span class="day-pill day-pill-blue">Важная встреча + подготовка</span></div>
-          </div>
-        </div>
-      </div>
+      <!-- маскот (full-bleed) -->
+      <img class="g-mascot" src="/landing/assets/block2-1/mascott.svg" alt="" />
+
+      <!-- иконки в центрах плиток -->
+      <div class="g-ico" style="--cx:57.856%;--cy:27.264%"><img src="/landing/assets/block2-1/icon_note.svg" alt="" /></div>
+      <div class="g-ico" style="--cx:68.990%;--cy:27.264%"><img src="/landing/assets/block2-1/icon_calendar.svg" alt="" /></div>
+      <div class="g-ico" style="--cx:80.124%;--cy:27.264%"><img src="/landing/assets/block2-1/icon_camera.svg" alt="" /></div>
+      <div class="g-ico" style="--cx:80.124%;--cy:50.007%"><img src="/landing/assets/block2-1/icon_chat.svg" alt="" /></div>
+      <div class="g-ico" style="--cx:80.124%;--cy:72.750%"><img src="/landing/assets/block2-1/icon_calendar.svg" alt="" /></div>
+      <div class="g-ico" style="--cx:68.990%;--cy:72.750%"><img src="/landing/assets/block2-1/icon_clock.svg" alt="" /></div>
+      <div class="g-ico" style="--cx:57.856%;--cy:72.750%"><img src="/landing/assets/block2-1/icon_chat.svg" alt="" /></div>
+      <div class="g-ico" style="--cx:57.856%;--cy:50.007%"><img src="/landing/assets/block2-1/icon_settings.svg" alt="" /></div>
+
+      <!-- заметки, слетающие в плитки. --cx/--cy = центр целевой плитки, data-sx/sy = старт (vw/vh) -->
+      <img class="g-note" src="/landing/assets/hero/note_task.svg"     style="--cx:57.856%;--cy:27.264%" data-sx="-10" data-sy="-70" alt="" />
+      <img class="g-note" src="/landing/assets/hero/note_event.svg"    style="--cx:68.990%;--cy:27.264%" data-sx="0"   data-sy="-85" alt="" />
+      <img class="g-note" src="/landing/assets/hero/note_deadline.svg" style="--cx:80.124%;--cy:27.264%" data-sx="12"  data-sy="-70" alt="" />
+      <img class="g-note" src="/landing/assets/hero/note_reminder.svg" style="--cx:57.856%;--cy:50.007%" data-sx="-22" data-sy="-45" alt="" />
+      <img class="g-note" src="/landing/assets/hero/note_webinar.svg"  style="--cx:80.124%;--cy:50.007%" data-sx="20"  data-sy="-45" alt="" />
+      <img class="g-note" src="/landing/assets/hero/note_note.svg"     style="--cx:80.124%;--cy:72.750%" data-sx="25"  data-sy="-20" alt="" />
+      <img class="g-note" src="/landing/assets/hero/note_meeting.svg"  style="--cx:57.856%;--cy:72.750%" data-sx="-25" data-sy="-20" alt="" />
+      <img class="g-note" src="/landing/assets/hero/note_thought.svg"  style="--cx:68.990%;--cy:72.750%" data-sx="0"   data-sy="-30" alt="" />
     </div>
   </div>
 </section>
@@ -190,7 +190,7 @@
   </div>
   <footer class="foot">
     <div class="wrap foot-inner">
-      <a class="nav-logo" href="#top"><span class="nav-mark"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="11" stroke="currentColor" stroke-width="1.5"/><path d="M12 7.5v9M7.5 12h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span><span>мысль</span></a>
+      <a class="nav-logo" href="#top"><img src="/landing/assets/logos/landing_logo.svg" alt="Мысль" class="logo-img" /></a>
       <span class="foot-copy">Сделано в России · 2026 · © Mindex</span>
       <a class="foot-tg" href="https://t.me/mysle_app" target="_blank" rel="noopener">Telegram</a>
     </div>
