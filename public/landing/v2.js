@@ -47,6 +47,43 @@
       n._dx = (mr.left + mr.width / 2) - (nr.left + nr.width / 2);
       n._dy = (mr.top + mr.height / 2) - (nr.top + nr.height / 2);
     });
+    applyNotes(notesCur);   // вернуть transform после замера (он сбрасывался в none)
+  }
+
+  /* ── Полёт заметок: развязан со скроллом ─────────────────────────
+     Скролл лишь триггерит цель (0 = дома, 1 = на плитках). Сам полёт
+     проигрывается по таймеру с ease-in-out, поэтому он быстрый, ровный
+     и его нельзя «заморозить» на середине, остановив колесо. */
+  var NOTES_TRIG = 0.18;   // порог прогресса ≈ один «шаг» колеса
+  var NOTES_DUR = 700;     // длительность полёта, мс
+  var notesCur = 0;        // текущее сглаженное значение 0..1
+  var notesTarget = 0;     // куда летим: 0 или 1
+  var notesFrom = 0, notesTo = 0, notesStart = 0, notesRAF = 0;
+
+  function applyNotes(v) {
+    gNotes.forEach(function (n) {
+      var dx = (n._dx || 0) * v;
+      var dy = (n._dy || 0) * v;
+      var s = lerp(1, 0.86, v);
+      n.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(' + s + ')';
+    });
+  }
+
+  function tickNotes() {
+    var t = clamp((performance.now() - notesStart) / NOTES_DUR, 0, 1);
+    notesCur = lerp(notesFrom, notesTo, easeInOut(t));
+    applyNotes(notesCur);
+    if (t < 1) { notesRAF = requestAnimationFrame(tickNotes); }
+    else { notesRAF = 0; }
+  }
+
+  function setNotesTarget(target) {
+    if (target === notesTarget) return;
+    notesTarget = target;
+    notesFrom = notesCur;          // стартуем с текущей позиции → плавный реверс
+    notesTo = target;
+    notesStart = performance.now();
+    if (!notesRAF) notesRAF = requestAnimationFrame(tickNotes);
   }
 
   function updateAct() {
@@ -59,15 +96,11 @@
     if (aHero) aHero.style.opacity = String(1 - range(p, 0.10, 0.28));
     if (aSol) aSol.style.opacity = String(range(p, 0.34, 0.52));
 
-    // Заметки летят из hero-позиций в центр своей плитки, затем гаснут
-    gNotes.forEach(function (n) {
-      var t = easeInOut(range(p, 0.16, 0.56));
-      var dx = (n._dx || 0) * t;
-      var dy = (n._dy || 0) * t;
-      var s = lerp(1, 0.86, t);
-      n.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(' + s + ')';
-      n.style.opacity = String(1 - range(p, 0.5, 0.6));
-    });
+    // Заметки: скролл лишь триггерит цель; полёт сам доигрывает по таймеру.
+    setNotesTarget(p >= NOTES_TRIG ? 1 : 0);
+    // Гаснут при передаче эстафеты плиткам (это можно оставить на скролле)
+    var nFade = String(1 - range(p, 0.5, 0.6));
+    gNotes.forEach(function (n) { n.style.opacity = nFade; });
 
     // Плитки, иконки, маскот проявляются по мере приземления заметок
     var tileIn = range(p, 0.46, 0.62);
