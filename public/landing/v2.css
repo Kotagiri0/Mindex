@@ -194,9 +194,14 @@ body {
 .rail-arrow:hover { transform: translateY(-1px); background: #fff; }
 
 .rail-viewport { width: 100%; overflow: hidden; }
-.rail-track { display: flex; gap: 24px; padding: 0 32px; will-change: transform; }
+/* старт ленты выровнен по левому краю контента (как заголовок), а не по краю экрана */
+.rail-track {
+  display: flex; gap: 24px; will-change: transform;
+  padding-left: max(32px, calc((100% - var(--wrap)) / 2 + 32px));
+  padding-right: 32px;
+}
 .rail-card {
-  flex: 0 0 clamp(300px, 30vw, 380px);
+  flex: 0 0 clamp(300px, 30vw, 420px);
   background: var(--surface); border-radius: var(--radius-l); padding: 22px;
   display: flex; flex-direction: column;
   filter: drop-shadow(0 12px 34px rgba(0, 0, 0, .045));
