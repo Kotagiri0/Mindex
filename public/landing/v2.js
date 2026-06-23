@@ -201,7 +201,7 @@
       wordEl.style.opacity = '0';
       wordEl.style.transform = 'translateY(-6px)';
       setTimeout(function () {
-        wordEl.textContent = curWord;
+        wordEl.innerHTML = curWord;
         wordEl.style.opacity = '1';
         wordEl.style.transform = 'none';
       }, 150);
@@ -310,7 +310,7 @@
   if (prevBtn) prevBtn.addEventListener('click', function () { railScrollTo(-1); });
   if (nextBtn) nextBtn.addEventListener('click', function () { railScrollTo(1); });
 
-  if (wordEl && words.length) { wordEl.textContent = words[0]; curWord = words[0]; }
+  if (wordEl && words.length) { wordEl.innerHTML = words[0]; curWord = words[0]; }
 
   // картинки/шрифты могут менять размеры — меряем после загрузки
   window.addEventListener('load', onResize);
