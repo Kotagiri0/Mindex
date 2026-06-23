@@ -98,25 +98,40 @@
     gTiles.forEach(function (el) { el.style.opacity = String(tileIn); });
     var icoIn = easeInOut(range(p, 0.54, 0.7));
     gIcos.forEach(function (el) { el.style.opacity = String(icoIn); });
-    if (gMascot) gMascot.style.opacity = String(easeInOut(range(p, 0.44, 0.6)));
+
+    /* ── Акцент: кольцо плиток проворачивается на 90° по часовой,
+       маскот «следит» взглядом. Иконки контр-вращаю — остаются прямыми. */
+    var spin = easeInOut(range(p, 0.60, 0.70)) * 90;     // 0 → 90° по часовой
+    if (aGrid) aGrid.style.transform = 'rotate(' + spin + 'deg)';
+    var icoRot = ' rotate(' + (-spin) + 'deg)';
+    gIcos.forEach(function (el) { el.style.transform = 'translate(-50%, -50%)' + icoRot; });
+    if (gMascot) {
+      gMascot.style.opacity = String(easeInOut(range(p, 0.44, 0.6)));
+      if (p > 0.60) {
+        var watch = easeInOut(range(p, 0.60, 0.70)) * 14;   // лёгкий доворот взгляда
+        gMascot.style.transform = 'rotate(' + (-spin + watch) + 'deg)';
+      } else {
+        gMascot.style.transform = '';   // вернуть CSS-«дыхание» до акцента
+      }
+    }
 
     /* ── Part 2: плитки → день. Строго последовательно, без перелётов:
        сначала плитки чисто уходят, затем день собирается НА МЕСТЕ.
        На любом шаге колеса — цельный кадр, ничего не наслаивается. */
     // 1) Плитки/иконки/маскот уходят целиком (часть «в следующие дни»)
-    if (aGrid) aGrid.style.opacity = String(1 - easeInOut(range(p, 0.62, 0.72)));
+    if (aGrid) aGrid.style.opacity = String(1 - easeInOut(range(p, 0.72, 0.80)));
     // 2) Память проявляется сверху
-    if (sMemory) sMemory.style.opacity = String(easeInOut(range(p, 0.72, 0.82)));
+    if (sMemory) sMemory.style.opacity = String(easeInOut(range(p, 0.80, 0.87)));
     // 3) Таймлайн въезжает снизу
     if (sTimeline) {
-      var tl = easeInOut(range(p, 0.73, 0.84));
+      var tl = easeInOut(range(p, 0.81, 0.89));
       sTimeline.style.opacity = String(tl);
       sTimeline.style.transform = 'translateY(' + lerp(16, 0, tl) + 'px)';
     }
     // 4) События проявляются на своих местах (лёгкий подъём + укрупнение), каскадом
     sEvents.forEach(function (e, i) {
-      var w0 = 0.74 + i * 0.035;
-      var te = easeInOut(range(p, w0, w0 + 0.12));
+      var w0 = 0.82 + i * 0.03;
+      var te = easeInOut(range(p, w0, w0 + 0.10));
       e.style.opacity = String(te);
       e.style.transform = 'translateY(' + lerp(14, 0, te) + 'px) scale(' + lerp(0.94, 1, te) + ')';
     });

@@ -137,8 +137,9 @@ body {
   transform-origin: center; will-change: transform;
 }
 
-/* Сетка = холст block2-1, позиции плиток запечены */
-.grid { position: absolute; inset: 0; }
+/* Сетка = холст block2-1, позиции плиток запечены.
+   Пивот вращения — центр кольца (там маскот), чтобы плитки орбитили вокруг него. */
+.grid { position: absolute; inset: 0; transform-origin: 68.99% 50%; will-change: transform; }
 .grid > * { position: absolute; }
 .g-tile, .g-mascot { inset: 0; width: 100%; height: 100%; }
 .g-tile { opacity: 0; }
