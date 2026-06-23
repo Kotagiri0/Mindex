@@ -249,9 +249,61 @@
     onScroll();
   }
 
+  /* ── Squircle (iOS smooth corners) — алгоритм из figma-squircle,
+     равные углы. Применяем clip-path к [data-squircle] по факт. размеру. */
+  function squirclePath(w, h, radius, smoothing) {
+    var budget = Math.min(w, h) / 2;
+    var r = Math.min(radius, budget);
+    var s = Math.min(smoothing, budget / r - 1);
+    var p = Math.min((1 + s) * r, budget);
+    var rad = Math.PI / 180;
+    var arc = 90 * (1 - s);
+    var arcLen = Math.sin((arc / 2) * rad) * r * Math.SQRT2;
+    var alpha = (90 - arc) / 2;
+    var p3p4 = r * Math.tan((alpha / 2) * rad);
+    var beta = 45 * s;
+    var c = p3p4 * Math.cos(beta * rad);
+    var d = c * Math.tan(beta * rad);
+    var b = (p - arcLen - c - d) / 3;
+    var a = 2 * b;
+    function n(x) { return x.toFixed(4); }
+    return 'path("M ' + n(w - p) + ' 0 ' +
+      'c ' + n(a) + ' 0 ' + n(a + b) + ' 0 ' + n(a + b + c) + ' ' + n(d) + ' ' +
+      'a ' + n(r) + ' ' + n(r) + ' 0 0 1 ' + n(arcLen) + ' ' + n(arcLen) + ' ' +
+      'c ' + n(d) + ' ' + n(c) + ' ' + n(d) + ' ' + n(b + c) + ' ' + n(d) + ' ' + n(a + b + c) + ' ' +
+      'L ' + n(w) + ' ' + n(h - p) + ' ' +
+      'c 0 ' + n(a) + ' 0 ' + n(a + b) + ' ' + n(-d) + ' ' + n(a + b + c) + ' ' +
+      'a ' + n(r) + ' ' + n(r) + ' 0 0 1 ' + n(-arcLen) + ' ' + n(arcLen) + ' ' +
+      'c ' + n(-c) + ' ' + n(d) + ' ' + n(-(b + c)) + ' ' + n(d) + ' ' + n(-(a + b + c)) + ' ' + n(d) + ' ' +
+      'L ' + n(p) + ' ' + n(h) + ' ' +
+      'c ' + n(-a) + ' 0 ' + n(-(a + b)) + ' 0 ' + n(-(a + b + c)) + ' ' + n(-d) + ' ' +
+      'a ' + n(r) + ' ' + n(r) + ' 0 0 1 ' + n(-arcLen) + ' ' + n(-arcLen) + ' ' +
+      'c ' + n(-d) + ' ' + n(-c) + ' ' + n(-d) + ' ' + n(-(b + c)) + ' ' + n(-d) + ' ' + n(-(a + b + c)) + ' ' +
+      'L 0 ' + n(p) + ' ' +
+      'c 0 ' + n(-a) + ' 0 ' + n(-(a + b)) + ' ' + n(d) + ' ' + n(-(a + b + c)) + ' ' +
+      'a ' + n(r) + ' ' + n(r) + ' 0 0 1 ' + n(arcLen) + ' ' + n(-arcLen) + ' ' +
+      'c ' + n(c) + ' ' + n(-d) + ' ' + n(b + c) + ' ' + n(-d) + ' ' + n(a + b + c) + ' ' + n(-d) + ' ' +
+      'Z")';
+  }
+  var sqEls = Array.prototype.slice.call(document.querySelectorAll('[data-squircle]'));
+  function applySquircle(el) {
+    var w = el.offsetWidth, h = el.offsetHeight;
+    if (!w || !h) return;
+    var r = parseFloat(el.getAttribute('data-sq-radius')) || 32;
+    el.style.clipPath = squirclePath(w, h, r, 0.6);
+  }
+  function applySquircles() { sqEls.forEach(applySquircle); }
+  if (sqEls.length && 'ResizeObserver' in window) {
+    var sqRO = new ResizeObserver(function (entries) {
+      entries.forEach(function (e) { applySquircle(e.target); });
+    });
+    sqEls.forEach(function (el) { sqRO.observe(el); });
+  }
+
   /* ── Init ───────────────────────────────────────────────────── */
   window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', onResize);
+  window.addEventListener('load', applySquircles);
 
   var prevBtn = rail && rail.querySelector('[data-rail-prev]');
   var nextBtn = rail && rail.querySelector('[data-rail-next]');
