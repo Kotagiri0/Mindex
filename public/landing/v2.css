@@ -154,8 +154,10 @@ body {
 /* маркеры целей — невидимы, нужны только для замера координат */
 .g-mark { left: var(--cx); top: var(--cy); width: 1px; height: 1px; }
 
-/* block2-2: память / события / таймлайн — поверх гаснущих плиток */
-.scene2 { position: absolute; inset: 0; z-index: 2; }
+/* block2-2: память / события / таймлайн — поверх гаснущих плиток.
+   Масштаб 1.29 вокруг центра кластера → день занимает тот же квадрат,
+   что и сетка плиток block2-1 (одинаковый размер сцены). */
+.scene2 { position: absolute; inset: 0; z-index: 2; transform: scale(1.29); transform-origin: 69% 50%; }
 .scene2 > * { position: absolute; opacity: 0; }
 .s2-memory { inset: 0; width: 100%; }              /* полный холст, позиция запечена */
 .s2-timeline { left: 53.7%; top: 38%; width: 30.7%; height: auto; will-change: transform, opacity; }
