@@ -1943,6 +1943,16 @@ app.post("/api/summarize", requireAuth, aiRateLimit, async (req, res) => {
   }
 });
 
+// ── ПОЛИСАД: публичный HTTP-API (B2B-граница для внешних потребителей) ───────
+// Монтируется только если задан POLISAD_API_KEY (иначе guard внутри вернёт 503).
+app.use('/polisad', polisad.createPolisadApi({
+  db,
+  callChat: (body) => callRouterAI(process.env.ROUTERAI_API_KEY!, body),
+  apiKey: process.env.ROUTERAI_API_KEY,
+  isVectorEnabled: () => vectorEnabled,
+}));
+console.log('[polisad] HTTP API смонтирован на /polisad' + (process.env.POLISAD_API_KEY ? '' : ' (выключен: нет POLISAD_API_KEY)'));
+
 // ── Sweep: авто-саммаризация остывших тредов (ПОЛИСАД) ───────────────────────
 setInterval(() => {
   const apiKey = process.env.ROUTERAI_API_KEY;
