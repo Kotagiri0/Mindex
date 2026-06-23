@@ -31,6 +31,7 @@
   var gIcos = act ? Array.prototype.slice.call(act.querySelectorAll('.g-ico')) : [];
   var gMascot = act && act.querySelector('.g-mascot');
   var mEyes = act && act.querySelector('[data-mascot-eyes]');
+  var stage = act && act.querySelector('[data-stage]');   // холст-обёртка (для замера размера)
   // block2-2: слой «день» (память / события / таймлайн)
   var sMemory = act && act.querySelector('.s2-memory');
   var sTimeline = act && act.querySelector('.s2-timeline');
