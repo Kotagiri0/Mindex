@@ -222,14 +222,13 @@ body {
   background: var(--surface); border-radius: var(--radius-l); padding: 22px;
   display: flex; flex-direction: column;
   filter: drop-shadow(0 12px 34px rgba(0, 0, 0, .045));
+  transition: transform .3s var(--ease), filter .3s var(--ease);
 }
-/* shimmer: при наведении по карточке проезжает диагональный блик (clip-path обрезает по squircle) */
-.rail-card::after {
-  content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none;
-  background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, .5) 50%, transparent 62%);
-  transform: translateX(-135%); transition: transform .6s ease;
+/* hover: карточка плавно приподнимается, тень глубже */
+.rail-card:hover {
+  transform: translateY(-6px);
+  filter: drop-shadow(0 22px 46px rgba(0, 0, 0, .09));
 }
-.rail-card:hover::after { transform: translateX(135%); }
 /* squircle-форма карточек и моков считается в JS (figma-squircle), clip-path */
 [data-squircle] { border-radius: var(--radius-l); }   /* фолбэк без JS */
 .rc-title { font-size: 20px; font-weight: 500; margin: 20px 0 10px; }
