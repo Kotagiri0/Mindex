@@ -193,19 +193,17 @@
     rail.style.height = (window.innerHeight + maxShift) + 'px';
   }
 
-  function setWord(p) {
-    if (!words.length) return;
-    var idx = clamp(Math.round(p * (words.length - 1)), 0, words.length - 1);
-    if (words[idx] !== curWord) {
-      curWord = words[idx];
-      wordEl.style.opacity = '0';
-      wordEl.style.transform = 'translateY(-6px)';
-      setTimeout(function () {
-        wordEl.innerHTML = curWord;
-        wordEl.style.opacity = '1';
-        wordEl.style.transform = 'none';
-      }, 150);
-    }
+  // слово в шапке меняется по наведению на карточку (дефолт — первое слово)
+  function setWordHTML(word) {
+    if (!word || !wordEl || word === curWord) return;
+    curWord = word;
+    wordEl.style.opacity = '0';
+    wordEl.style.transform = 'translateY(-6px)';
+    setTimeout(function () {
+      wordEl.innerHTML = curWord;
+      wordEl.style.opacity = '1';
+      wordEl.style.transform = 'none';
+    }, 150);
   }
 
   function updateRail() {
@@ -214,7 +212,6 @@
     var total = rail.offsetHeight - window.innerHeight;
     var p = clamp(-rect.top / total, 0, 1);
     track.style.transform = 'translateX(' + (-p * maxShift) + 'px)';
-    setWord(p);
   }
 
   // стрелки: прокручиваем страницу так, чтобы прогресс ленты сместился к нужной карточке
@@ -309,6 +306,12 @@
   var nextBtn = rail && rail.querySelector('[data-rail-next]');
   if (prevBtn) prevBtn.addEventListener('click', function () { railScrollTo(-1); });
   if (nextBtn) nextBtn.addEventListener('click', function () { railScrollTo(1); });
+
+  // наведение на карточку → её слово в шапке; уход с ленты → дефолтное (первое)
+  cards.forEach(function (c) {
+    c.addEventListener('mouseenter', function () { setWordHTML(c.getAttribute('data-word')); });
+  });
+  if (rail) rail.addEventListener('mouseleave', function () { setWordHTML(words[0]); });
 
   if (wordEl && words.length) { wordEl.innerHTML = words[0]; curWord = words[0]; }
 
