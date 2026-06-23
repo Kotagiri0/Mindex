@@ -104,7 +104,10 @@ body {
   font-size: clamp(28px, 3.4vw, 44px); font-weight: 500; line-height: 1.12;
   letter-spacing: -.02em; color: var(--ink);
 }
-.section-sub { margin-top: 18px; font-size: 17px; font-weight: 500; color: var(--ink-soft); max-width: 30ch; }
+.section-sub {
+  margin-top: 18px; font-size: 19px; font-weight: 500; color: var(--ink-soft);
+  line-height: 1.5; text-align: justify; hyphens: auto;
+}
 
 @keyframes float {
   0%, 100% { transform: translateY(0); }
@@ -127,7 +130,7 @@ body {
 /* Текст решений — слева, поверх пустой части холста */
 .act-sol {
   position: absolute; left: max(32px, calc((100% - var(--wrap)) / 2 + 32px));
-  top: 50%; transform: translateY(-50%); z-index: 5; max-width: 30ch; opacity: 0;
+  top: 50%; transform: translateY(-50%); z-index: 5; max-width: min(440px, 42vw); opacity: 0;
 }
 
 /* Камера: общий холст block2-1 + block2-2 (5802×2858). Наезд — из JS. */
