@@ -154,7 +154,8 @@ body {
 .note {
   position: absolute; left: var(--x); top: var(--y);
   width: clamp(96px, 8vw, 132px); height: auto;
-  will-change: transform, opacity;
+  transform-origin: center;
+  will-change: transform, opacity, filter;
 }
 
 /* ─── БЛОК 3: горизонтальная лента (scroll-jack) ─────────────── */

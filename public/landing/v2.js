@@ -36,6 +36,20 @@
 
   // Замер дельты «заметка → её плитка». Обе внутри одного sticky —
   // двигаются вместе, поэтому дельта постоянна и меряется единожды.
+  // Параметры «оживления» полёта
+  var NOTE_REST = 1.3;     // масштаб заметок в hero (увеличены)
+  var NOTE_LAND = 0.86;    // масштаб при посадке на плитку
+  var NOTE_BLUR = 3;       // пик смаза (px) на максимальной скорости
+  var NOTE_W0 = 0.16, NOTE_W1 = 0.56;   // базовое окно полёта по прогрессу
+  // лёгкий разворот в hero (град), уходит в 0 при посадке — «укладываются ровно»
+  var NOTE_ROTS = [-6, 5, -4, 7, -5, 6, -7, 4];
+
+  // фаза каскада + стартовый угол — раздаём по DOM-порядку
+  gNotes.forEach(function (n, i) {
+    n._phase = (i - (gNotes.length - 1) / 2) * 0.012;   // ±~0.04
+    n._rot = NOTE_ROTS[i % NOTE_ROTS.length];
+  });
+
   function measureAct() {
     if (!act) return;
     gNotes.forEach(function (n) { n.style.transform = 'none'; });
@@ -55,26 +69,32 @@
     var total = act.offsetHeight - window.innerHeight;
     var p = clamp(-rect.top / total, 0, 1);
 
-    // Тексты: hero гаснет, решения проявляются
-    if (aHero) aHero.style.opacity = String(1 - range(p, 0.10, 0.28));
-    if (aSol) aSol.style.opacity = String(range(p, 0.34, 0.52));
+    // Тексты: hero гаснет, решения проявляются (по ease-кривой, не линейно)
+    if (aHero) aHero.style.opacity = String(1 - easeInOut(range(p, 0.10, 0.28)));
+    if (aSol) aSol.style.opacity = String(easeInOut(range(p, 0.34, 0.52)));
 
-    // Заметки летят из hero-позиций в центр своей плитки, затем гаснут
+    // Заметки летят из hero в центр своей плитки: каскадом, со смазом и доворотом
+    var nFade = String(1 - range(p, 0.5, 0.6));
     gNotes.forEach(function (n) {
-      var t = easeInOut(range(p, 0.16, 0.56));
+      var lin = range(p, NOTE_W0 + n._phase, NOTE_W1 + n._phase);  // линейный прогресс заметки
+      var t = easeInOut(lin);
       var dx = (n._dx || 0) * t;
       var dy = (n._dy || 0) * t;
-      var s = lerp(1, 0.86, t);
-      n.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(' + s + ')';
-      n.style.opacity = String(1 - range(p, 0.5, 0.6));
+      var s = lerp(NOTE_REST, NOTE_LAND, t);
+      var rot = n._rot * (1 - t);
+      // смаз ∝ скорости: 0 на концах, пик в середине полёта
+      var blur = NOTE_BLUR * Math.sin(Math.PI * lin);
+      n.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(' + s + ') rotate(' + rot + 'deg)';
+      n.style.filter = blur > 0.05 ? 'blur(' + blur.toFixed(2) + 'px)' : 'none';
+      n.style.opacity = nFade;
     });
 
-    // Плитки, иконки, маскот проявляются по мере приземления заметок
-    var tileIn = range(p, 0.46, 0.62);
+    // Плитки, иконки, маскот проявляются по мере приземления заметок (по ease-кривой)
+    var tileIn = easeInOut(range(p, 0.46, 0.62));
     gTiles.forEach(function (el) { el.style.opacity = String(tileIn); });
-    var icoIn = range(p, 0.54, 0.7);
+    var icoIn = easeInOut(range(p, 0.54, 0.7));
     gIcos.forEach(function (el) { el.style.opacity = String(icoIn); });
-    if (gMascot) gMascot.style.opacity = String(range(p, 0.44, 0.6));
+    if (gMascot) gMascot.style.opacity = String(easeInOut(range(p, 0.44, 0.6)));
   }
 
   function initActStatic() {
