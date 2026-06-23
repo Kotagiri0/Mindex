@@ -30,8 +30,7 @@
   var gTiles = act ? Array.prototype.slice.call(act.querySelectorAll('.g-tile')) : [];
   var gIcos = act ? Array.prototype.slice.call(act.querySelectorAll('.g-ico')) : [];
   var gMascot = act && act.querySelector('.g-mascot');
-  // block2-2: камера + слой день (память / события / таймлайн)
-  var stage = act && act.querySelector('[data-stage]');
+  // block2-2: слой «день» (память / события / таймлайн)
   var sMemory = act && act.querySelector('.s2-memory');
   var sTimeline = act && act.querySelector('.s2-timeline');
   var sEvents = act ? Array.prototype.slice.call(act.querySelectorAll('.s2-event')) : [];
@@ -55,11 +54,8 @@
     n._rot = NOTE_ROTS[i % NOTE_ROTS.length];
   });
 
-  // block2-2: камера-наезд на правый кластер плиток (где рождается день)
-  var CAM_S = 1.8;            // масштаб наезда
-  var CAM_TX = -34.2;         // сдвиг % чтобы центрировать кластер (x≈69%)
-  var CAM_TY = -4.5;          // сдвиг % по вертикали (y≈52.5%)
-  var EVENT_START = 0.4;      // стартовый масштаб события (≈ размер плитки)
+  // block2-2: событие стартует размером с плитку и растёт до полного
+  var EVENT_START = 0.4;     // стартовый масштаб события (≈ размер плитки)
 
   function measureAct() {
     if (!act) return;
@@ -117,13 +113,9 @@
     gIcos.forEach(function (el) { el.style.opacity = String(icoIn); });
     if (gMascot) gMascot.style.opacity = String(easeInOut(range(p, 0.44, 0.6)));
 
-    /* ── Part 2: плитки → память / события / таймлайн ───────────── */
-    // Камера наезжает на правый кластер
-    var cam = easeInOut(range(p, 0.60, 0.84));
-    if (stage) {
-      stage.style.transform = 'translate(-50%, -50%) translate(' +
-        lerp(0, CAM_TX, cam) + '%, ' + lerp(0, CAM_TY, cam) + '%) scale(' + lerp(1, CAM_S, cam) + ')';
-    }
+    /* ── Part 2: плитки → память / события / таймлайн ───────────────
+       Без камеры: день остаётся в той же правой зоне и того же размера,
+       что плитки в block2-1 — просто плитки сменяются содержимым дня. */
     // События вылетают из своих плиток в стопку (каскадом) — пока плитки ещё видны
     sEvents.forEach(function (e, i) {
       var w0 = 0.66 + i * 0.04;
