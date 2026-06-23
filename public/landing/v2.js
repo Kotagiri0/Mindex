@@ -119,31 +119,31 @@
 
     /* ── Part 2: плитки → память / события / таймлайн ───────────── */
     // Камера наезжает на правый кластер
-    var cam = easeInOut(range(p, 0.60, 0.82));
+    var cam = easeInOut(range(p, 0.60, 0.84));
     if (stage) {
       stage.style.transform = 'translate(-50%, -50%) translate(' +
         lerp(0, CAM_TX, cam) + '%, ' + lerp(0, CAM_TY, cam) + '%) scale(' + lerp(1, CAM_S, cam) + ')';
     }
-    // Плитки уходят (часть превращается в день, остальное — «в следующие дни»)
-    if (aGrid) aGrid.style.opacity = String(1 - easeInOut(range(p, 0.62, 0.78)));
-    // Память проявляется сверху
-    if (sMemory) sMemory.style.opacity = String(easeInOut(range(p, 0.66, 0.82)));
-    // Таймлайн въезжает снизу
-    if (sTimeline) {
-      var tl = easeInOut(range(p, 0.68, 0.86));
-      sTimeline.style.opacity = String(tl);
-      sTimeline.style.transform = 'translateY(' + lerp(24, 0, tl) + 'px)';
-    }
-    // События вылетают из своих плиток в стопку (каскадом)
+    // События вылетают из своих плиток в стопку (каскадом) — пока плитки ещё видны
     sEvents.forEach(function (e, i) {
-      var w0 = 0.70 + i * 0.04;
+      var w0 = 0.66 + i * 0.04;
       var te = easeInOut(range(p, w0, w0 + 0.20));
       var dx = (e._dx || 0) * (1 - te);
       var dy = (e._dy || 0) * (1 - te);
       var sc = lerp(EVENT_START, 1, te);
       e.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(' + sc + ')';
-      e.style.opacity = String(easeInOut(range(p, w0, w0 + 0.12)));
+      e.style.opacity = String(easeInOut(range(p, w0, w0 + 0.14)));
     });
+    // Память проявляется сверху
+    if (sMemory) sMemory.style.opacity = String(easeInOut(range(p, 0.66, 0.82)));
+    // Таймлайн въезжает снизу
+    if (sTimeline) {
+      var tl = easeInOut(range(p, 0.68, 0.84));
+      sTimeline.style.opacity = String(tl);
+      sTimeline.style.transform = 'translateY(' + lerp(24, 0, tl) + 'px)';
+    }
+    // Плитки уходят уже ПОСЛЕ старта событий — без пустого провала в середине
+    if (aGrid) aGrid.style.opacity = String(1 - easeInOut(range(p, 0.74, 0.90)));
   }
 
   function initActStatic() {
