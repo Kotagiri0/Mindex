@@ -30,6 +30,7 @@
   var gTiles = act ? Array.prototype.slice.call(act.querySelectorAll('.g-tile')) : [];
   var gIcos = act ? Array.prototype.slice.call(act.querySelectorAll('.g-ico')) : [];
   var gMascot = act && act.querySelector('.g-mascot');
+  var mEyes = act && act.querySelector('[data-mascot-eyes]');
   // block2-2: слой «день» (память / события / таймлайн)
   var sMemory = act && act.querySelector('.s2-memory');
   var sTimeline = act && act.querySelector('.s2-timeline');
@@ -53,6 +54,20 @@
     n._start = 0.16 + NOTE_PHASES[i % NOTE_PHASES.length];   // момент старта заметки
     n._rot = NOTE_ROTS[i % NOTE_ROTS.length];
   });
+
+  // Акцент: кольцо слотов (по часовой) в % холста. Блоки едут по этим рельсам,
+  // оставаясь прямыми. Порядок плиток/иконок в DOM = порядок слотов.
+  var RING = [
+    [57.856, 27.264], [68.990, 27.264], [80.124, 27.264], [80.124, 50.007],
+    [80.124, 72.750], [68.990, 72.750], [57.856, 72.750], [57.856, 50.007]
+  ];
+  var RING_STEP = 2;       // на сколько слотов проезжают (2 = чисто, без диагоналей)
+  // позиция блока, стартовавшего в слоте k, проехавшего долю f пути в RING_STEP слотов
+  function ringPos(k, f) {
+    var t = k + f * RING_STEP, seg = Math.floor(t), fr = t - seg;
+    var a = RING[((seg % 8) + 8) % 8], b = RING[(((seg + 1) % 8) + 8) % 8];
+    return [lerp(a[0], b[0], fr), lerp(a[1], b[1], fr)];
+  }
 
   function measureAct() {
     if (!act) return;
@@ -99,20 +114,30 @@
     var icoIn = easeInOut(range(p, 0.54, 0.7));
     gIcos.forEach(function (el) { el.style.opacity = String(icoIn); });
 
-    /* ── Акцент: кольцо плиток проворачивается на 90° по часовой,
-       маскот «следит» взглядом. Иконки контр-вращаю — остаются прямыми. */
-    var spin = easeInOut(range(p, 0.60, 0.70)) * 90;     // 0 → 90° по часовой
-    if (aGrid) aGrid.style.transform = 'rotate(' + spin + 'deg)';
-    var icoRot = ' rotate(' + (-spin) + 'deg)';
-    gIcos.forEach(function (el) { el.style.transform = 'translate(-50%, -50%)' + icoRot; });
-    if (gMascot) {
-      gMascot.style.opacity = String(easeInOut(range(p, 0.44, 0.6)));
-      if (p > 0.60) {
-        var watch = easeInOut(range(p, 0.60, 0.70)) * 14;   // лёгкий доворот взгляда
-        gMascot.style.transform = 'rotate(' + (-spin + watch) + 'deg)';
-      } else {
-        gMascot.style.transform = '';   // вернуть CSS-«дыхание» до акцента
-      }
+    /* ── Акцент: блоки едут по кольцу как по рельсам (прямые, без поворота
+       конструкции). Маскот не наклоняется — двигаются только глаза. */
+    var ride = easeInOut(range(p, 0.60, 0.70));            // 0 → 1: проезд по рельсам
+    var sb = stage ? stage.getBoundingClientRect() : { width: 0, height: 0 };
+    gTiles.forEach(function (el, i) {
+      var pos = ringPos(i, ride);
+      var dx = (pos[0] - RING[i][0]) / 100 * sb.width;
+      var dy = (pos[1] - RING[i][1]) / 100 * sb.height;
+      el.style.transform = 'translate(' + dx + 'px, ' + dy + 'px)';
+    });
+    gIcos.forEach(function (el, i) {
+      var pos = ringPos(i, ride);
+      var dx = (pos[0] - RING[i][0]) / 100 * sb.width;
+      var dy = (pos[1] - RING[i][1]) / 100 * sb.height;
+      el.style.transform = 'translate(-50%, -50%) translate(' + dx + 'px, ' + dy + 'px)';
+    });
+    if (gMascot) gMascot.style.opacity = String(easeInOut(range(p, 0.44, 0.6)));
+    // Глаза: смотрят вверх и ведут по часовой за блоками, затем возвращаются
+    if (mEyes) {
+      var mag = 52 * Math.sin(Math.PI * ride);             // 0 → пик → 0 (взгляд возвращается)
+      var ang = ride * 2.8;                                // дуга по часовой (~160°)
+      var ex = mag * Math.sin(ang);
+      var ey = -mag * Math.cos(ang);                       // старт — вверх
+      mEyes.setAttribute('transform', 'translate(' + ex.toFixed(1) + ' ' + ey.toFixed(1) + ')');
     }
 
     /* ── Part 2: плитки → день. Строго последовательно, без перелётов:
