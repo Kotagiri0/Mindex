@@ -43,19 +43,16 @@
   // Параметры «оживления» полёта
   var NOTE_REST = 1;       // масштаб заметок в hero (1 = без увеличения, чтобы не мылило)
   var NOTE_LAND = 0.86;    // масштаб при посадке на плитку
-  var NOTE_BLUR = 3;       // пик смаза (px) на максимальной скорости
-  var NOTE_W0 = 0.16, NOTE_W1 = 0.41;   // окно полёта (уже → быстрее в ~1.6×)
-  // лёгкий разворот в hero (град), уходит в 0 при посадке — «укладываются ровно»
-  var NOTE_ROTS = [-6, 5, -4, 7, -5, 6, -7, 4];
+  var NOTE_BLUR = 2;       // пик смаза (px) на максимальной скорости
+  var NOTE_W = 0.16;       // длина полёта одной заметки по прогрессу (короче → быстрее)
+  // случайные сдвиги старта (не равномерный каскад) + углы — «живее», без сырости
+  var NOTE_PHASES = [0.00, 0.07, 0.02, 0.05, 0.09, 0.01, 0.06, 0.03];
+  var NOTE_ROTS   = [-6, 5, -4, 7, -5, 6, -7, 4];
 
-  // фаза каскада + стартовый угол — раздаём по DOM-порядку
   gNotes.forEach(function (n, i) {
-    n._phase = (i - (gNotes.length - 1) / 2) * 0.012;   // ±~0.04
+    n._start = 0.16 + NOTE_PHASES[i % NOTE_PHASES.length];   // момент старта заметки
     n._rot = NOTE_ROTS[i % NOTE_ROTS.length];
   });
-
-  // block2-2: событие стартует размером с плитку и растёт до полного
-  var EVENT_START = 0.4;     // стартовый масштаб события (≈ размер плитки)
 
   function measureAct() {
     if (!act) return;
@@ -67,16 +64,6 @@
       var mr = mk.getBoundingClientRect();
       n._dx = (mr.left + mr.width / 2) - (nr.left + nr.width / 2);
       n._dy = (mr.top + mr.height / 2) - (nr.top + nr.height / 2);
-    });
-    // дельта «событие (дом) → его плитка»: событие стартует на плитке, едет в стопку
-    sEvents.forEach(function (e) {
-      e.style.transform = 'none';
-      var mk = aGrid.querySelector('.g-mark[data-mark="' + e.getAttribute('data-from') + '"]');
-      if (!mk) { e._dx = 0; e._dy = 0; return; }
-      var er = e.getBoundingClientRect();
-      var mr = mk.getBoundingClientRect();
-      e._dx = (mr.left + mr.width / 2) - (er.left + er.width / 2);
-      e._dy = (mr.top + mr.height / 2) - (er.top + er.height / 2);
     });
   }
 
@@ -90,19 +77,19 @@
     if (aHero) aHero.style.opacity = String(1 - easeInOut(range(p, 0.10, 0.28)));
     if (aSol) aSol.style.opacity = String(easeInOut(range(p, 0.34, 0.52)));
 
-    // Заметки летят из hero в центр своей плитки: каскадом, со смазом и доворотом
+    // Заметки летят из hero в центр своей плитки: случайный старт, смаз, доворот
     var nFade = String(1 - range(p, 0.5, 0.6));
     gNotes.forEach(function (n) {
-      var lin = range(p, NOTE_W0 + n._phase, NOTE_W1 + n._phase);  // линейный прогресс заметки
+      var lin = range(p, n._start, n._start + NOTE_W);  // линейный прогресс заметки
       var t = easeInOut(lin);
       var dx = (n._dx || 0) * t;
       var dy = (n._dy || 0) * t;
       var s = lerp(NOTE_REST, NOTE_LAND, t);
       var rot = n._rot * (1 - t);
-      // смаз ∝ скорости: 0 на концах, пик в середине полёта
-      var blur = NOTE_BLUR * Math.sin(Math.PI * lin);
+      // смаз ∝ скорости: строго 0 в покое и на посадке, пик в середине полёта
+      var blur = (lin > 0.04 && lin < 0.96) ? NOTE_BLUR * Math.sin(Math.PI * lin) : 0;
       n.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(' + s + ') rotate(' + rot + 'deg)';
-      n.style.filter = blur > 0.05 ? 'blur(' + blur.toFixed(2) + 'px)' : 'none';
+      n.style.filter = blur > 0.3 ? 'blur(' + blur.toFixed(2) + 'px)' : 'none';
       n.style.opacity = nFade;
     });
 
@@ -113,29 +100,26 @@
     gIcos.forEach(function (el) { el.style.opacity = String(icoIn); });
     if (gMascot) gMascot.style.opacity = String(easeInOut(range(p, 0.44, 0.6)));
 
-    /* ── Part 2: плитки → память / события / таймлайн ───────────────
-       Без камеры: день остаётся в той же правой зоне и того же размера,
-       что плитки в block2-1 — просто плитки сменяются содержимым дня. */
-    // События вылетают из своих плиток в стопку (каскадом) — пока плитки ещё видны
-    sEvents.forEach(function (e, i) {
-      var w0 = 0.66 + i * 0.04;
-      var te = easeInOut(range(p, w0, w0 + 0.20));
-      var dx = (e._dx || 0) * (1 - te);
-      var dy = (e._dy || 0) * (1 - te);
-      var sc = lerp(EVENT_START, 1, te);
-      e.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(' + sc + ')';
-      e.style.opacity = String(easeInOut(range(p, w0, w0 + 0.14)));
-    });
-    // Память проявляется сверху
-    if (sMemory) sMemory.style.opacity = String(easeInOut(range(p, 0.66, 0.82)));
-    // Таймлайн въезжает снизу
+    /* ── Part 2: плитки → день. Строго последовательно, без перелётов:
+       сначала плитки чисто уходят, затем день собирается НА МЕСТЕ.
+       На любом шаге колеса — цельный кадр, ничего не наслаивается. */
+    // 1) Плитки/иконки/маскот уходят целиком (часть «в следующие дни»)
+    if (aGrid) aGrid.style.opacity = String(1 - easeInOut(range(p, 0.62, 0.72)));
+    // 2) Память проявляется сверху
+    if (sMemory) sMemory.style.opacity = String(easeInOut(range(p, 0.72, 0.82)));
+    // 3) Таймлайн въезжает снизу
     if (sTimeline) {
-      var tl = easeInOut(range(p, 0.68, 0.84));
+      var tl = easeInOut(range(p, 0.73, 0.84));
       sTimeline.style.opacity = String(tl);
-      sTimeline.style.transform = 'translateY(' + lerp(24, 0, tl) + 'px)';
+      sTimeline.style.transform = 'translateY(' + lerp(16, 0, tl) + 'px)';
     }
-    // Плитки уходят уже ПОСЛЕ старта событий — без пустого провала в середине
-    if (aGrid) aGrid.style.opacity = String(1 - easeInOut(range(p, 0.74, 0.90)));
+    // 4) События проявляются на своих местах (лёгкий подъём + укрупнение), каскадом
+    sEvents.forEach(function (e, i) {
+      var w0 = 0.74 + i * 0.035;
+      var te = easeInOut(range(p, w0, w0 + 0.12));
+      e.style.opacity = String(te);
+      e.style.transform = 'translateY(' + lerp(14, 0, te) + 'px) scale(' + lerp(0.94, 1, te) + ')';
+    });
   }
 
   function initActStatic() {
