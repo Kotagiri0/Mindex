@@ -116,7 +116,7 @@ body {
 }
 
 /* ─── АКТ 1: Hero → сцена (заметки → плитки) ──────────────────── */
-.act { position: relative; height: 320vh; }   /* запас прокрутки для сцены */
+.act { position: relative; height: 480vh; }   /* запас прокрутки: part1 (заметки) + part2 (день) */
 .act-sticky { position: sticky; top: 0; height: 100vh; overflow: hidden; }
 
 /* Текст hero — по центру */
@@ -130,11 +130,15 @@ body {
   top: 50%; transform: translateY(-50%); z-index: 5; max-width: 30ch; opacity: 0;
 }
 
-/* Сетка = холст block2-1 (5802×2858), позиции плиток запечены */
-.grid {
+/* Камера: общий холст block2-1 + block2-2 (5802×2858). Наезд — из JS. */
+.stage {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   width: min(100%, 1320px); aspect-ratio: 5802 / 2858; z-index: 3;
+  transform-origin: center; will-change: transform;
 }
+
+/* Сетка = холст block2-1, позиции плиток запечены */
+.grid { position: absolute; inset: 0; }
 .grid > * { position: absolute; }
 .g-tile, .g-mascot { inset: 0; width: 100%; height: 100%; }
 .g-tile { opacity: 0; }
@@ -148,6 +152,16 @@ body {
 
 /* маркеры целей — невидимы, нужны только для замера координат */
 .g-mark { left: var(--cx); top: var(--cy); width: 1px; height: 1px; }
+
+/* block2-2: память / события / таймлайн — поверх гаснущих плиток */
+.scene2 { position: absolute; inset: 0; z-index: 2; }
+.scene2 > * { position: absolute; opacity: 0; }
+.s2-memory { inset: 0; width: 100%; }              /* полный холст, позиция запечена */
+.s2-timeline { left: 53.7%; top: 38%; width: 30.7%; height: auto; will-change: transform, opacity; }
+.s2-event {
+  left: var(--ex); top: var(--ey); width: 28.3%; height: auto;
+  transform-origin: center; will-change: transform, opacity;
+}
 
 /* заметки: дом = разброс hero (--x/--y), летят в маркеры (transform из JS) */
 .act-notes { position: absolute; inset: 0; z-index: 4; pointer-events: none; }

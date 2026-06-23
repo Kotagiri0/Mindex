@@ -71,6 +71,9 @@
         запомнить или спланировать что-то. Мысль берёт это на себя.</p>
     </div>
 
+    <!-- Камера: общий холст block2-1 (плитки) + block2-2 (память/события) -->
+    <div class="stage" data-stage>
+
     <!-- Сетка плиток + маскот + иконки + маркеры целей -->
     <div class="grid" data-grid aria-hidden="true">
       <img class="g-tile" src="/landing/assets/block2-1/title_bg_1.svg" alt="" />
@@ -103,6 +106,20 @@
       <i class="g-mark" data-mark="7" style="--cx:57.856%;--cy:72.750%"></i>
       <i class="g-mark" data-mark="8" style="--cx:57.856%;--cy:50.007%"></i>
     </div>
+
+    <!-- block2-2: финал раскадровки — плитки превращаются в день -->
+    <div class="scene2" data-scene2 aria-hidden="true">
+      <!-- память: полноразмерный холст, позиция плашки запечена -->
+      <img class="s2-memory" src="/landing/assets/block2-2/memory.svg" alt="" />
+      <!-- календарная сетка под событиями -->
+      <img class="s2-timeline" src="/landing/assets/block2-2/timeline.svg" alt="" />
+      <!-- события: летят из своих плиток (data-from = mark) в стопку -->
+      <img class="s2-event" data-from="4" src="/landing/assets/block2-2/event1.svg" style="--ex:55.5%; --ey:41.0%;" alt="" />
+      <img class="s2-event" data-from="3" src="/landing/assets/block2-2/event2.svg" style="--ex:55.5%; --ey:53.7%;" alt="" />
+      <img class="s2-event" data-from="5" src="/landing/assets/block2-2/event3.svg" style="--ex:55.5%; --ey:66.4%;" alt="" />
+    </div>
+
+    </div><!-- /.stage -->
 
     <!-- Заметки: дом = разброс hero, летят в маркер data-to -->
     <div class="act-notes" data-notes>

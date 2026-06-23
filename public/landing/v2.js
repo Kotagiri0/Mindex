@@ -30,6 +30,11 @@
   var gTiles = act ? Array.prototype.slice.call(act.querySelectorAll('.g-tile')) : [];
   var gIcos = act ? Array.prototype.slice.call(act.querySelectorAll('.g-ico')) : [];
   var gMascot = act && act.querySelector('.g-mascot');
+  // block2-2: камера + слой день (память / события / таймлайн)
+  var stage = act && act.querySelector('[data-stage]');
+  var sMemory = act && act.querySelector('.s2-memory');
+  var sTimeline = act && act.querySelector('.s2-timeline');
+  var sEvents = act ? Array.prototype.slice.call(act.querySelectorAll('.s2-event')) : [];
 
   function lerp(a, b, t) { return a + (b - a) * t; }
   function easeInOut(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
@@ -50,6 +55,12 @@
     n._rot = NOTE_ROTS[i % NOTE_ROTS.length];
   });
 
+  // block2-2: камера-наезд на правый кластер плиток (где рождается день)
+  var CAM_S = 1.8;            // масштаб наезда
+  var CAM_TX = -34.2;         // сдвиг % чтобы центрировать кластер (x≈69%)
+  var CAM_TY = -4.5;          // сдвиг % по вертикали (y≈52.5%)
+  var EVENT_START = 0.4;      // стартовый масштаб события (≈ размер плитки)
+
   function measureAct() {
     if (!act) return;
     gNotes.forEach(function (n) { n.style.transform = 'none'; });
@@ -60,6 +71,16 @@
       var mr = mk.getBoundingClientRect();
       n._dx = (mr.left + mr.width / 2) - (nr.left + nr.width / 2);
       n._dy = (mr.top + mr.height / 2) - (nr.top + nr.height / 2);
+    });
+    // дельта «событие (дом) → его плитка»: событие стартует на плитке, едет в стопку
+    sEvents.forEach(function (e) {
+      e.style.transform = 'none';
+      var mk = aGrid.querySelector('.g-mark[data-mark="' + e.getAttribute('data-from') + '"]');
+      if (!mk) { e._dx = 0; e._dy = 0; return; }
+      var er = e.getBoundingClientRect();
+      var mr = mk.getBoundingClientRect();
+      e._dx = (mr.left + mr.width / 2) - (er.left + er.width / 2);
+      e._dy = (mr.top + mr.height / 2) - (er.top + er.height / 2);
     });
   }
 
@@ -95,6 +116,34 @@
     var icoIn = easeInOut(range(p, 0.54, 0.7));
     gIcos.forEach(function (el) { el.style.opacity = String(icoIn); });
     if (gMascot) gMascot.style.opacity = String(easeInOut(range(p, 0.44, 0.6)));
+
+    /* ── Part 2: плитки → память / события / таймлайн ───────────── */
+    // Камера наезжает на правый кластер
+    var cam = easeInOut(range(p, 0.60, 0.82));
+    if (stage) {
+      stage.style.transform = 'translate(-50%, -50%) translate(' +
+        lerp(0, CAM_TX, cam) + '%, ' + lerp(0, CAM_TY, cam) + '%) scale(' + lerp(1, CAM_S, cam) + ')';
+    }
+    // Плитки уходят (часть превращается в день, остальное — «в следующие дни»)
+    if (aGrid) aGrid.style.opacity = String(1 - easeInOut(range(p, 0.62, 0.78)));
+    // Память проявляется сверху
+    if (sMemory) sMemory.style.opacity = String(easeInOut(range(p, 0.66, 0.82)));
+    // Таймлайн въезжает снизу
+    if (sTimeline) {
+      var tl = easeInOut(range(p, 0.68, 0.86));
+      sTimeline.style.opacity = String(tl);
+      sTimeline.style.transform = 'translateY(' + lerp(24, 0, tl) + 'px)';
+    }
+    // События вылетают из своих плиток в стопку (каскадом)
+    sEvents.forEach(function (e, i) {
+      var w0 = 0.70 + i * 0.04;
+      var te = easeInOut(range(p, w0, w0 + 0.20));
+      var dx = (e._dx || 0) * (1 - te);
+      var dy = (e._dy || 0) * (1 - te);
+      var sc = lerp(EVENT_START, 1, te);
+      e.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(' + sc + ')';
+      e.style.opacity = String(easeInOut(range(p, w0, w0 + 0.12)));
+    });
   }
 
   function initActStatic() {
