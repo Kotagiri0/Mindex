@@ -172,10 +172,25 @@ body {
 .act-notes { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
 .note {
   position: absolute; left: var(--x); top: var(--y);
-  width: clamp(96px, 8vw, 132px); height: auto;
+  width: clamp(96px, 8vw, 132px); height: auto; display: block;
   transform-origin: center;
   will-change: transform, opacity, filter;
 }
+/* картинка внутри: лёгкое «живое» покачивание (не влияет на замер обёртки) */
+.note-inner { display: block; width: 100%; height: auto; will-change: transform; animation: noteFloat 7s ease-in-out infinite; }
+@keyframes noteFloat {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50%      { transform: translate(var(--fx, 4px), var(--fy, -7px)) rotate(var(--fr, 1.2deg)); }
+}
+/* разнобой: своя амплитуда, длительность и фаза у каждой заметки */
+.note:nth-child(1) .note-inner { --fx: 5px;  --fy: -8px; --fr: 1.4deg;  animation-duration: 6.5s; animation-delay: -0.4s; }
+.note:nth-child(2) .note-inner { --fx: -4px; --fy: -6px; --fr: -1.2deg; animation-duration: 7.8s; animation-delay: -2.1s; }
+.note:nth-child(3) .note-inner { --fx: 6px;  --fy: -5px; --fr: 1.8deg;  animation-duration: 7.1s; animation-delay: -1.3s; }
+.note:nth-child(4) .note-inner { --fx: -5px; --fy: -9px; --fr: -1.6deg; animation-duration: 8.4s; animation-delay: -3.0s; }
+.note:nth-child(5) .note-inner { --fx: 4px;  --fy: -7px; --fr: 1.1deg;  animation-duration: 6.9s; animation-delay: -0.9s; }
+.note:nth-child(6) .note-inner { --fx: -6px; --fy: -5px; --fr: -1.9deg; animation-duration: 7.6s; animation-delay: -2.7s; }
+.note:nth-child(7) .note-inner { --fx: 5px;  --fy: -8px; --fr: 1.5deg;  animation-duration: 8.0s; animation-delay: -1.7s; }
+.note:nth-child(8) .note-inner { --fx: -4px; --fy: -6px; --fr: -1.3deg; animation-duration: 7.3s; animation-delay: -3.4s; }
 
 /* ─── БЛОК 3: горизонтальная лента (scroll-jack) ─────────────── */
 .rail { position: relative; }                       /* высота задаётся из JS */
@@ -260,6 +275,6 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .note { animation: none; }
+  .note, .note-inner { animation: none; }
   html { scroll-behavior: auto; }
 }
