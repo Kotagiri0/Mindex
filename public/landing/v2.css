@@ -42,7 +42,7 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; scroll-padding-top: 76px; }
 
 body {
   font-family: 'Muller', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -384,47 +384,121 @@ body {
 .foot-copy { font-size: 13px; color: var(--ink-faint); }
 .foot-tg { font-size: 14px; font-weight: 500; color: var(--ink); text-decoration: none; }
 
-/* ─── Mobile ─────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════
+   MOBILE (<=860px) — мобильный лендинг переработан целиком.
+   Принцип: ничего не вылезает за экран, тач-цели ≥44px, safe-area,
+   десктопная раскадровка hero отключена в пользу чистого текста.
+   ════════════════════════════════════════════════════════════════ */
 @media (max-width: 860px) {
-  .nav-links { display: none; }
-  .nav-inner { padding: 14px 20px; }
+  /* — Глобально — */
   .wrap { padding: 0 20px; }
 
-  /* На мобиле сцену не пиним: hero-текст → текст решений → готовая сетка */
+  /* — Навигация: логотип + одна кнопка, safe-area по бокам — */
+  #nav { background: rgba(236, 236, 236, .86); }
+  .nav-inner {
+    padding: 12px max(20px, env(safe-area-inset-right)) 12px max(20px, env(safe-area-inset-left));
+    gap: 12px;
+  }
+  .nav-links { display: none; }
+  .nav-login { display: none; }                /* убираем второй CTA — причина тесноты и обрезки */
+  .logo-img { height: 24px; }
+  .nav-cta .btn-dark { padding: 10px 18px; font-size: 14px; }
+
+  /* — Hero: десктопная раскадровка (сцена + летящие заметки) выключена,
+       остаётся чистый, читаемый текстовый герой по центру — */
   .act { height: auto; }
   .act-sticky { position: static; height: auto; overflow: visible; }
-  .act-hero { position: relative; left: auto; top: auto; transform: none; padding: 96px 0 48px; }
-  .act-sol { position: relative; left: auto; top: auto; transform: none; opacity: 1 !important; max-width: none; padding: 20px 0 24px; }
-  .grid { position: relative; top: auto; left: auto; transform: none; width: 100%; margin: 0 0 48px; }
-  .act-notes, .g-note { display: none; }   /* полёт заметок — только на десктопе */
+  .stage, .act-notes { display: none; }
+  .act-hero {
+    position: relative; inset: auto; transform: none; text-align: center;
+    padding: calc(80px + env(safe-area-inset-top)) 20px 4px;
+  }
+  .hero-title { font-size: clamp(30px, 8.4vw, 42px); }
+  .hero-sub { margin-top: 16px; }
+  .act-sol {
+    position: relative; inset: auto; transform: none; opacity: 1 !important;
+    max-width: none; padding: 40px 20px 8px;
+  }
+  .section-title { font-size: clamp(26px, 7.4vw, 36px); }
+  .section-sub { text-align: left; hyphens: none; margin-top: 14px; font-size: 16px; }
 
-  /* Лента — нативный горизонтальный скролл со снапом */
+  /* — Блок 3: лента — нативный горизонтальный скролл со снапом — */
   .rail { height: auto !important; }
-  .rail-sticky { position: static; height: auto; padding: 70px 0; overflow: visible; }
+  .rail-sticky { position: static; height: auto; padding: 60px 0; overflow: visible; }
+  .rail-head { padding: 0 20px; margin-bottom: 22px; }
+  .rail-title { font-size: clamp(24px, 6.6vw, 34px); }
   .rail-nav { display: none; }
-  .rail-viewport { clip-path: none; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
-  .rail-track { transform: none !important; padding: 4px 20px 16px; }
-  .rail-card { scroll-snap-align: center; flex-basis: 80vw; }
+  .rail-viewport {
+    clip-path: none; overflow-x: auto; scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .rail-viewport::-webkit-scrollbar { display: none; }
+  .rail-track { transform: none !important; padding: 4px 20px 16px; gap: 16px; }
+  .rail-card { scroll-snap-align: center; flex-basis: 84vw; padding: 18px; }
+  .rc-mock { height: 240px; }
+  .rc-title { font-size: 18px; }
 
-  .think { padding: 70px 0 20px; }
-  .think-grid { grid-template-columns: 1fr; gap: 36px; margin-top: 40px; }
-  .think-phone { order: 2; }
-  .phone-frame { max-width: 260px; }
-  .think-body { order: 1; }
-  /* Цепочка на мобиле: стрелки вниз, шаги в столбик слева */
-  .chain { flex-direction: column; align-items: stretch; gap: 4px; margin-top: 24px; }
-  .chain-step { flex-direction: row; gap: 14px; text-align: left; }
-  .chain-label { font-size: 14px; }
-  .chain-arrow { width: 18px; height: 18px; margin: 2px 0 2px 15px; transform: rotate(90deg); }
+  /* — Блок 4: «Ассистент думает» — телефон сверху, текст, цепочка — */
+  .think { padding: 56px 0 12px; }
+  .think-title { padding: 0 4px; }
+  .think-grid { grid-template-columns: 1fr; gap: 28px; margin-top: 30px; }
+  .think-phone { order: 1; }
+  .phone-frame { max-width: 230px; }
+  .think-body { order: 2; }
+  .think-text { font-size: 16px; padding: 24px 22px; }
+  .chain { flex-direction: column; align-items: stretch; gap: 2px; margin-top: 18px; }
+  .chain-step { flex-direction: row; gap: 14px; text-align: left; align-items: center; }
+  .chain-ico { width: 44px; height: 44px; flex: 0 0 44px; }
+  .chain-label { font-size: 15px; }
+  .chain-arrow { width: 16px; height: 16px; margin: 4px 0 4px 14px; transform: rotate(90deg); }
   .chain.is-in .chain-step { transform: none; }
 
-  /* Онбординг и платформы — в столбик */
-  .onb { padding: 64px 0 56px; }
-  .onb-steps { grid-template-columns: 1fr; gap: 32px; margin-top: 40px; }
-  .onb-step-desc { max-width: none; }
-  .plat { padding: 20px 0 64px; }
-  .plat-grid { grid-template-columns: 1fr; gap: 16px; margin-top: 36px; }
-  .final { padding: 40px 0 80px; }
+  /* — Онбординг: компактный список (иконка слева, текст справа) — */
+  .onb { padding: 52px 0 44px; }
+  .onb-title { padding: 0 4px; }
+  .onb-steps { grid-template-columns: 1fr; gap: 0; margin-top: 28px; }
+  .onb-step {
+    display: grid; grid-template-columns: 32px 1fr; column-gap: 16px; row-gap: 4px;
+    align-items: start; padding: 20px 0; border-bottom: 1px solid var(--line);
+  }
+  .onb-step:last-child { border-bottom: 0; }
+  .onb-ico { grid-column: 1; grid-row: 1 / span 3; width: 30px; height: 30px; margin: 4px 0 0; }
+  .onb-num { grid-column: 2; }
+  .onb-step-title { grid-column: 2; font-size: 18px; }
+  .onb-step-desc { grid-column: 2; margin-top: 4px; max-width: none; font-size: 14px; }
+
+  /* — Платформы: компактные карточки (иконка · название · тег, описание ниже) — */
+  .plat { padding: 8px 0 52px; }
+  .plat-title { padding: 0 4px; }
+  .plat-grid { grid-template-columns: 1fr; gap: 12px; margin-top: 28px; }
+  .plat-card {
+    display: grid; grid-template-columns: 32px 1fr auto; column-gap: 14px; row-gap: 8px;
+    align-items: center; padding: 18px 20px;
+  }
+  .plat-card:hover { transform: none; }        /* hover не нужен на тач-устройствах */
+  .plat-ico { grid-row: 1; width: 30px; height: 30px; }
+  .plat-name { grid-column: 2; grid-row: 1; margin: 0; font-size: 17px; }
+  .plat-tag { grid-column: 3; grid-row: 1; margin: 0; align-self: center; }
+  .plat-desc { grid-column: 1 / -1; grid-row: 2; margin: 0; font-size: 13.5px; }
+
+  /* — Финальный CTA: кнопка во всю ширину (крупная тач-цель) — */
+  .final { padding: 36px 0 64px; }
+  .final-inner { gap: 24px; padding: 0 20px; }
+  .final .btn-dark { width: 100%; max-width: 340px; padding: 17px; font-size: 16px; }
+
+  /* — Footer: в столбик, по центру, с нижним safe-area — */
+  .foot { margin-top: 52px; }
+  .foot-inner {
+    flex-direction: column; align-items: center; text-align: center; gap: 10px;
+    padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
+  }
+}
+
+/* — Совсем узкие экраны — */
+@media (max-width: 380px) {
+  .hero-title { font-size: 30px; }
+  .rail-card { flex-basis: 86vw; }
+  .think-text { padding: 20px 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
