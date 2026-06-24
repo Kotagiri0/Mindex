@@ -209,7 +209,9 @@ body {
 }
 .rail-arrow:hover { transform: translateY(-1px); background: #fff; }
 
-.rail-viewport { width: 100%; overflow: hidden; }
+/* клипуем только по бокам (прячем горизонтальный вынос ленты),
+   сверху/снизу — запас, чтобы hover-подъём и тень карточек не срезались */
+.rail-viewport { width: 100%; clip-path: inset(-90px 0); }
 /* старт ленты выровнен по левому краю контента (как заголовок), а не по краю экрана */
 .rail-track {
   display: flex; gap: 24px; will-change: transform;
@@ -299,7 +301,7 @@ body {
   .rail { height: auto !important; }
   .rail-sticky { position: static; height: auto; padding: 70px 0; overflow: visible; }
   .rail-nav { display: none; }
-  .rail-viewport { overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
+  .rail-viewport { clip-path: none; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
   .rail-track { transform: none !important; padding: 4px 20px 16px; }
   .rail-card { scroll-snap-align: center; flex-basis: 80vw; }
 
