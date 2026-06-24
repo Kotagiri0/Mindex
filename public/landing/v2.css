@@ -192,6 +192,9 @@ body {
 .note:nth-child(7) .note-inner { --fx: 5px;  --fy: -8px; --fr: 1.5deg;  animation-duration: 8.0s; animation-delay: -1.7s; }
 .note:nth-child(8) .note-inner { --fx: -4px; --fy: -6px; --fr: -1.3deg; animation-duration: 7.3s; animation-delay: -3.4s; }
 
+/* hero-визуал (телефон) — только на мобиле, на десктопе работает сцена */
+.hero-phone { display: none; }
+
 /* ─── БЛОК 3: горизонтальная лента (scroll-jack) ─────────────── */
 .rail { position: relative; }                       /* высота задаётся из JS */
 .rail-sticky { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
@@ -411,20 +414,25 @@ body {
   .stage, .act-notes { display: none; }
   .act-hero {
     position: relative; inset: auto; transform: none; text-align: center;
-    padding: calc(80px + env(safe-area-inset-top)) 20px 4px;
+    padding: calc(76px + env(safe-area-inset-top)) 20px 0;
   }
   .hero-title { font-size: clamp(30px, 8.4vw, 42px); }
   .hero-sub { margin-top: 16px; }
+
+  /* Продуктовый кадр в hero — заполняет место десктопной сцены */
+  .hero-phone { display: flex; justify-content: center; padding: 30px 20px 6px; }
+  .hero-phone .phone-frame { width: 100%; max-width: 248px; }
+
   .act-sol {
     position: relative; inset: auto; transform: none; opacity: 1 !important;
-    max-width: none; padding: 40px 20px 8px;
+    max-width: none; padding: 30px 20px 0;
   }
   .section-title { font-size: clamp(26px, 7.4vw, 36px); }
   .section-sub { text-align: left; hyphens: none; margin-top: 14px; font-size: 16px; }
 
   /* — Блок 3: лента — нативный горизонтальный скролл со снапом — */
   .rail { height: auto !important; }
-  .rail-sticky { position: static; height: auto; padding: 60px 0; overflow: visible; }
+  .rail-sticky { position: static; height: auto; padding: 44px 0 56px; overflow: visible; }
   .rail-head { padding: 0 20px; margin-bottom: 22px; }
   .rail-title { font-size: clamp(24px, 6.6vw, 34px); }
   .rail-nav { display: none; }
