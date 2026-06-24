@@ -297,6 +297,21 @@
     sqEls.forEach(function (el) { sqRO.observe(el); });
   }
 
+  /* ── Появление при скролле со stagger (цепочка, шаги, платформы) */
+  var revealEls = [].slice.call(document.querySelectorAll('[data-chain], [data-reveal]'));
+  if (revealEls.length) {
+    if (reduce.matches || !('IntersectionObserver' in window)) {
+      revealEls.forEach(function (el) { el.classList.add('is-in'); });
+    } else {
+      var revealIO = new IntersectionObserver(function (entries, obs) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) { e.target.classList.add('is-in'); obs.unobserve(e.target); }
+        });
+      }, { threshold: 0.3 });
+      revealEls.forEach(function (el) { revealIO.observe(el); });
+    }
+  }
+
   /* ── Init ───────────────────────────────────────────────────── */
   window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', onResize);

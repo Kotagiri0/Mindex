@@ -212,23 +212,177 @@
   </div>
 </section>
 
-<!-- ═════ БЛОК 4 — Ассистент, который растёт ═════ -->
-<section class="grow" id="download">
-  <div class="wrap grow-inner">
-    <h2 class="grow-title">Ассистент, который<br>растёт вместе с тобой</h2>
-    <p class="grow-note">здесь показываем возможности памяти и контекста анимированно</p>
-    <div class="grow-cta">
-      <a class="btn-dark btn-lg" href="/app#/signup">Попробовать бесплатно</a>
+<!-- ═════ БЛОК 4 — Ассистент думает вместе с тобой ═════ -->
+<section class="think" id="download">
+  <div class="wrap think-inner">
+    <h2 class="think-title">Ассистент думает вместе с тобой</h2>
+
+    <div class="think-grid">
+      <!-- Левая часть — мокап телефона -->
+      <div class="think-phone">
+        <div class="phone-frame">
+          <img class="phone-screen" src="/landing/assets/block4/screen1.svg" alt="Экран приложения Мысль" />
+          <img class="phone-shell" src="/landing/assets/mockups/phone_mockup.png" alt="" aria-hidden="true" />
+        </div>
+      </div>
+
+      <!-- Правая часть — текст + цепочка -->
+      <div class="think-body">
+        <p class="think-text">У мысли есть память, и этим всё сказано. Чем больше ты общаешься
+          с ассистентом, планируешь дела или рефлексируешь – тем лучше будет каждый последующий
+          ответ. Со временем агент может планировать дела сам, помогая выбрать лучшее время</p>
+
+        <div class="chain" data-chain>
+          <div class="chain-step" data-chain-step>
+            <span class="chain-ico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 11.5a8 8 0 0 1-11.6 7.1L4 20l1.4-4.4A8 8 0 1 1 20 11.5Z"/>
+              </svg>
+            </span>
+            <span class="chain-label">Ты сказал</span>
+          </div>
+
+          <svg class="chain-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+
+          <div class="chain-step" data-chain-step>
+            <span class="chain-ico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m12 3 2.5 5.5L20 11l-5.5 2.5L12 19l-2.5-5.5L4 11l5.5-2.5L12 3Z"/>
+              </svg>
+            </span>
+            <span class="chain-label">Мысль запомнила</span>
+          </div>
+
+          <svg class="chain-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+
+          <div class="chain-step" data-chain-step>
+            <span class="chain-ico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="9" r="2.4"/><circle cx="9" cy="18" r="2.4"/>
+                <path d="M8 7.2 16 8.4M7.7 16.2l8.7-5.4"/>
+              </svg>
+            </span>
+            <span class="chain-label">Связала с контекстом</span>
+          </div>
+
+          <svg class="chain-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+
+          <div class="chain-step" data-chain-step>
+            <span class="chain-ico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3M8.5 14.5l2.5 2.5 4.5-4.5"/>
+              </svg>
+            </span>
+            <span class="chain-label">Ответила точно</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
-  <footer class="foot">
-    <div class="wrap foot-inner">
-      <a class="nav-logo" href="#top"><img src="/landing/assets/logos/landing_logo.svg" alt="Мысль" class="logo-img" /></a>
-      <span class="foot-copy">Сделано в России · 2026 · © Mindex</span>
-      <a class="foot-tg" href="https://t.me/mysle_app" target="_blank" rel="noopener">Telegram</a>
-    </div>
-  </footer>
 </section>
+
+<!-- ═════ Онбординг — три шага ═════ -->
+<section class="onb">
+  <div class="wrap">
+    <h2 class="section-title onb-title">Минута до первого замысла</h2>
+
+    <ol class="onb-steps" data-reveal>
+      <li class="onb-step" data-reveal-item>
+        <span class="onb-num">01</span>
+        <svg class="onb-ico" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="18" cy="10" r="7"/>
+          <path d="M6 30c0-6.627 5.373-12 12-12s12 5.373 12 12"/>
+          <line x1="18" y1="3" x2="18" y2="1"/>
+          <line x1="25" y1="5" x2="27" y2="3"/>
+        </svg>
+        <h3 class="onb-step-title">Зарегистрируйся</h3>
+        <p class="onb-step-desc">Через гугл или по почте и паролю — быстро и безопасно</p>
+      </li>
+      <li class="onb-step" data-reveal-item>
+        <span class="onb-num">02</span>
+        <svg class="onb-ico" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 8h24a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H10l-6 4V10a2 2 0 0 1 2-2z"/>
+          <line x1="12" y1="16" x2="24" y2="16"/>
+          <line x1="12" y1="21" x2="19" y2="21"/>
+        </svg>
+        <h3 class="onb-step-title">Начни первую мысль</h3>
+        <p class="onb-step-desc">Расскажи ассистенту о себе и запланируй первую задачу</p>
+      </li>
+      <li class="onb-step" data-reveal-item>
+        <span class="onb-num">03</span>
+        <svg class="onb-ico" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5" y="5" width="26" height="26" rx="3"/>
+          <line x1="11" y1="13" x2="25" y2="13"/>
+          <line x1="11" y1="18" x2="25" y2="18"/>
+          <line x1="11" y1="23" x2="19" y2="23"/>
+          <polyline points="21 20 24 23 29 17"/>
+        </svg>
+        <h3 class="onb-step-title">Мысль разберётся</h3>
+        <p class="onb-step-desc">Расставит задачи в календаре и сформулирует планы сама</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ═════ Платформы ═════ -->
+<section class="plat">
+  <div class="wrap">
+    <h2 class="section-title plat-title">Везде, где ты работаешь</h2>
+
+    <div class="plat-grid" data-reveal>
+      <article class="plat-card" data-reveal-item>
+        <svg class="plat-ico" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="6" width="30" height="24" rx="3"/>
+          <line x1="3" y1="12" x2="33" y2="12"/>
+          <circle cx="7.5" cy="9" r="1" fill="currentColor" stroke="none"/>
+          <circle cx="11.5" cy="9" r="1" fill="currentColor" stroke="none"/>
+          <circle cx="15.5" cy="9" r="1" fill="currentColor" stroke="none"/>
+        </svg>
+        <h3 class="plat-name">Веб-приложение</h3>
+        <p class="plat-desc">Полный интерфейс в браузере — работает на любом устройстве без установки</p>
+        <span class="plat-tag is-live">уже доступно</span>
+      </article>
+
+      <article class="plat-card" data-reveal-item>
+        <svg class="plat-ico" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="10" y="3" width="16" height="30" rx="3"/>
+          <line x1="15" y1="28" x2="21" y2="28"/>
+        </svg>
+        <h3 class="plat-name">Мобильное приложение</h3>
+        <p class="plat-desc">iOS и Android — голосовой ввод, уведомления, доступ к архиву</p>
+        <span class="plat-tag">скоро</span>
+      </article>
+
+      <article class="plat-card" data-reveal-item>
+        <svg class="plat-ico" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="18" cy="18" r="15"/>
+          <path d="M8 18 L28 10 L22 28 L16 22 L8 18Z"/>
+          <line x1="16" y1="22" x2="28" y2="10"/>
+        </svg>
+        <h3 class="plat-name">Telegram-бот</h3>
+        <p class="plat-desc">Быстрый доступ без открытия приложения — скинул мысль, Мысль поняла</p>
+        <span class="plat-tag is-live">уже доступно</span>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ═════ Финальный CTA ═════ -->
+<section class="final" id="join">
+  <div class="wrap final-inner">
+    <h2 class="final-title">есть мысли?</h2>
+    <a class="btn-dark btn-lg" href="/app#/signup">узнать сейчас</a>
+  </div>
+</section>
+
+<!-- ═════ Footer ═════ -->
+<footer class="foot">
+  <div class="wrap foot-inner">
+    <a class="nav-logo" href="#top"><img src="/landing/assets/logos/landing_logo.svg" alt="Мысль" class="logo-img" /></a>
+    <span class="foot-copy">Сделано в России · 2026 · © Mindex</span>
+    <a class="foot-tg" href="https://t.me/mysle_app" target="_blank" rel="noopener">Telegram</a>
+  </div>
+</footer>
 
 <script src="/landing/v2.js" defer></script>
 </body>

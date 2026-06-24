@@ -270,12 +270,113 @@ body {
 }
 .rc-soon-tag + .rc-title { margin-top: 10px; }
 
-/* ─── БЛОК 4: Ассистент растёт ───────────────────────────────── */
-.grow { padding: 120px 0 0; }
-.grow-inner { min-height: 70vh; display: flex; flex-direction: column; justify-content: center; align-items: flex-end; text-align: right; }
-.grow-title { font-size: clamp(30px, 4vw, 52px); font-weight: 500; line-height: 1.1; letter-spacing: -.02em; }
-.grow-note { margin-top: 18px; font-size: 14px; color: var(--ink-faint); }
-.grow-cta { margin-top: 32px; }
+/* ─── БЛОК 4: Ассистент думает вместе с тобой ─────────────────── */
+.think { padding: 120px 0 40px; }
+.think-title { text-align: center; font-size: clamp(26px, 3vw, 40px); font-weight: 500; line-height: 1.12; letter-spacing: -.02em; color: var(--ink); }
+.think-grid { margin-top: 64px; display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 64px; align-items: stretch; }
+
+/* Мокап телефона: скрин внутри, рамка сверху */
+.think-phone { display: flex; justify-content: center; }
+.phone-frame { position: relative; width: 100%; max-width: 320px; aspect-ratio: 974 / 2034; }
+.phone-screen {
+  position: absolute; top: 2.6%; left: 4.4%; width: 91.2%; height: 94.8%;
+  object-fit: cover; object-position: top; border-radius: 13% / 6.2%;
+}
+.phone-shell { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+/* Правая часть */
+.think-body { display: flex; flex-direction: column; justify-content: flex-start; }
+.think-card-pad { }
+.think-text {
+  font-size: clamp(16px, 1.4vw, 19px); line-height: 1.6; color: var(--ink);
+  background: var(--surface); border-radius: var(--radius-l); padding: 30px 32px;
+  box-shadow: var(--shadow-soft);
+}
+
+/* Цепочка из 4 шагов */
+.chain { margin-top: 28px; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.chain-step {
+  flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  text-align: center;
+  opacity: 0; transform: translateY(10px); transition: opacity .5s var(--ease), transform .5s var(--ease);
+}
+.chain-ico {
+  width: 48px; height: 48px; display: grid; place-items: center;
+  border-radius: var(--radius-m); background: var(--surface); color: var(--ink);
+  box-shadow: var(--shadow-soft);
+}
+.chain-ico svg { width: 24px; height: 24px; }
+.chain-label { font-size: 13px; line-height: 1.3; color: var(--ink-soft); font-weight: 500; }
+.chain-arrow {
+  flex: 0 0 auto; width: 22px; height: 22px; margin-top: 13px; color: var(--blue-deep);
+  opacity: 0; transition: opacity .5s var(--ease);
+}
+.chain.is-in .chain-step,
+.chain.is-in .chain-arrow { opacity: 1; transform: none; }
+.chain.is-in .chain-step:nth-child(1) { transition-delay: 0ms; }
+.chain.is-in .chain-arrow:nth-child(2) { transition-delay: 110ms; }
+.chain.is-in .chain-step:nth-child(3) { transition-delay: 150ms; }
+.chain.is-in .chain-arrow:nth-child(4) { transition-delay: 260ms; }
+.chain.is-in .chain-step:nth-child(5) { transition-delay: 300ms; }
+.chain.is-in .chain-arrow:nth-child(6) { transition-delay: 410ms; }
+.chain.is-in .chain-step:nth-child(7) { transition-delay: 450ms; }
+
+/* ─── Reveal при скролле (stagger) ───────────────────────────── */
+[data-reveal-item] {
+  opacity: 0; transform: translateY(16px);
+  transition: opacity .55s var(--ease), transform .55s var(--ease);
+}
+[data-reveal].is-in [data-reveal-item] { opacity: 1; transform: none; }
+[data-reveal].is-in [data-reveal-item]:nth-child(1) { transition-delay: 0ms; }
+[data-reveal].is-in [data-reveal-item]:nth-child(2) { transition-delay: 110ms; }
+[data-reveal].is-in [data-reveal-item]:nth-child(3) { transition-delay: 220ms; }
+
+/* ─── Онбординг: три шага ─────────────────────────────────────── */
+.onb { padding: 100px 0 90px; }
+.onb-title { text-align: center; }
+.onb-steps {
+  list-style: none; margin-top: 64px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px;
+}
+.onb-step { display: flex; flex-direction: column; align-items: flex-start; }
+.onb-num {
+  font-size: 14px; font-weight: 500; letter-spacing: .08em;
+  color: var(--ink-faint);
+}
+.onb-ico { width: 36px; height: 36px; color: var(--ink); margin: 18px 0 20px; }
+.onb-step-title { font-size: 21px; font-weight: 500; letter-spacing: -.01em; color: var(--ink); }
+.onb-step-desc { margin-top: 10px; font-size: 15px; line-height: 1.55; color: var(--ink-soft); max-width: 30ch; }
+
+/* ─── Платформы ──────────────────────────────────────────────── */
+.plat { padding: 30px 0 100px; }
+.plat-title { text-align: center; }
+.plat-grid {
+  margin-top: 56px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;
+}
+.plat-card {
+  position: relative;
+  background: var(--surface); border-radius: var(--radius-l); padding: 30px 28px 28px;
+  display: flex; flex-direction: column; align-items: flex-start;
+  filter: drop-shadow(0 12px 34px rgba(0, 0, 0, .045));
+  transition: transform .3s var(--ease), filter .3s var(--ease);
+}
+.plat-card:hover { transform: translateY(-6px); filter: drop-shadow(0 22px 46px rgba(0, 0, 0, .09)); }
+.plat-ico { width: 36px; height: 36px; color: var(--ink); }
+.plat-name { margin-top: 22px; font-size: 19px; font-weight: 500; color: var(--ink); }
+.plat-desc { margin-top: 10px; font-size: 14px; line-height: 1.55; color: var(--ink-soft); flex: 1 1 auto; }
+.plat-tag {
+  margin-top: 22px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--ink-faint); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px;
+}
+.plat-tag.is-live { color: var(--green-deep); border-color: rgba(79, 125, 87, .26); background: rgba(205, 236, 207, .35); }
+
+/* ─── Финальный CTA ──────────────────────────────────────────── */
+.final { padding: 60px 0 120px; }
+.final-inner { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 32px; }
+.final-title { font-size: clamp(34px, 5vw, 60px); font-weight: 500; line-height: 1.08; letter-spacing: -.02em; color: var(--ink); }
 
 /* ─── Footer ─────────────────────────────────────────────────── */
 .foot { border-top: 1px solid var(--line); margin-top: 80px; }
@@ -305,7 +406,25 @@ body {
   .rail-track { transform: none !important; padding: 4px 20px 16px; }
   .rail-card { scroll-snap-align: center; flex-basis: 80vw; }
 
-  .grow-inner { align-items: flex-start; text-align: left; min-height: auto; padding: 20px 0 0; }
+  .think { padding: 70px 0 20px; }
+  .think-grid { grid-template-columns: 1fr; gap: 36px; margin-top: 40px; }
+  .think-phone { order: 2; }
+  .phone-frame { max-width: 260px; }
+  .think-body { order: 1; }
+  /* Цепочка на мобиле: стрелки вниз, шаги в столбик слева */
+  .chain { flex-direction: column; align-items: stretch; gap: 4px; margin-top: 24px; }
+  .chain-step { flex-direction: row; gap: 14px; text-align: left; }
+  .chain-label { font-size: 14px; }
+  .chain-arrow { width: 18px; height: 18px; margin: 2px 0 2px 15px; transform: rotate(90deg); }
+  .chain.is-in .chain-step { transform: none; }
+
+  /* Онбординг и платформы — в столбик */
+  .onb { padding: 64px 0 56px; }
+  .onb-steps { grid-template-columns: 1fr; gap: 32px; margin-top: 40px; }
+  .onb-step-desc { max-width: none; }
+  .plat { padding: 20px 0 64px; }
+  .plat-grid { grid-template-columns: 1fr; gap: 16px; margin-top: 36px; }
+  .final { padding: 40px 0 80px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
