@@ -192,8 +192,17 @@ body {
 .note:nth-child(7) .note-inner { --fx: 5px;  --fy: -8px; --fr: 1.5deg;  animation-duration: 8.0s; animation-delay: -1.7s; }
 .note:nth-child(8) .note-inner { --fx: -4px; --fy: -6px; --fr: -1.3deg; animation-duration: 7.3s; animation-delay: -3.4s; }
 
-/* hero-визуал (телефон) — только на мобиле, на десктопе работает сцена */
-.hero-phone { display: none; }
+/* hero-визуал (статичный кадр «день») — только на мобиле; десктоп играет сцену */
+.hero-scene { display: none; }
+.scene-day {
+  position: relative; background: var(--surface); border-radius: var(--radius-l);
+  padding: 18px; box-shadow: var(--shadow-soft);
+}
+.sd-grid { width: 100%; display: block; }
+.sd-ev { position: absolute; left: 14%; width: 82%; }
+.sd-ev:nth-of-type(2) { top: 18%; }
+.sd-ev:nth-of-type(3) { top: 40%; }
+.sd-ev:nth-of-type(4) { top: 62%; }
 
 /* ─── БЛОК 3: горизонтальная лента (scroll-jack) ─────────────── */
 .rail { position: relative; }                       /* высота задаётся из JS */
@@ -419,9 +428,8 @@ body {
   .hero-title { font-size: clamp(30px, 8.4vw, 42px); }
   .hero-sub { margin-top: 16px; }
 
-  /* Продуктовый кадр в hero — заполняет место десктопной сцены */
-  .hero-phone { display: flex; justify-content: center; padding: 30px 20px 6px; }
-  .hero-phone .phone-frame { width: 100%; max-width: 248px; }
+  /* Статичный кадр «день» в hero — результат десктопной анимации */
+  .hero-scene { display: block; padding: 30px 4px 6px; }
 
   .act-sol {
     position: relative; inset: auto; transform: none; opacity: 1 !important;
