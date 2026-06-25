@@ -337,3 +337,42 @@
   else { measureAct(); }
   onScroll();
 })();
+
+/* ── Маскот в финальном CTA: «просыпается» и поднимает глаза при скролле ── */
+(function () {
+  var mascot = document.querySelector('[data-cta-mascot]');
+  if (!mascot) return;
+  var block = document.querySelector('.final');
+  var le = mascot.querySelector('[data-eye-l]');
+  var re = mascot.querySelector('[data-eye-r]');
+  if (!block || !le || !re) return;
+
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  // p=0 — сонные глаза (низко, узкие); p=1 — открыты и подняты
+  function setEyes(p) {
+    var y = 34 - 11 * p;        // 34 → 23 (поднимаются)
+    var h = 4 + 13 * p;         // 4  → 17 (открываются)
+    le.setAttribute('y', y); le.setAttribute('height', h);
+    re.setAttribute('y', y); re.setAttribute('height', h);
+  }
+
+  if (reduce.matches) { setEyes(1); return; }
+
+  var ticking = false;
+  function update() {
+    ticking = false;
+    var r = block.getBoundingClientRect();
+    var vh = window.innerHeight || document.documentElement.clientHeight;
+    // глаза поднимаются, пока блок проходит от низа экрана к ~45% высоты
+    var p = (vh - r.top) / (vh - vh * 0.45);
+    p = p < 0 ? 0 : p > 1 ? 1 : p;
+    setEyes(p);
+  }
+  function onScroll() { if (!ticking) { ticking = true; requestAnimationFrame(update); } }
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', onScroll);
+  setEyes(0);
+  update();
+})();
