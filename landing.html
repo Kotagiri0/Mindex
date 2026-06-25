@@ -5,9 +5,31 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Мысль — агент, который живёт в календаре</title>
 <meta name="description" content="Мысль — AI-агент, который живёт в твоём календаре: запоминает, напоминает, видит день целиком и помогает стать продуктивнее. Прямо в Telegram, без VPN." />
+<meta name="keywords" content="ИИ планировщик, AI ассистент, планирование задач, Telegram бот планировщик, ИИ календарь, тайм-менеджмент, список дел, продуктивность, ассистент Мысль" />
+<meta name="robots" content="index, follow, max-image-preview:large" />
+<link rel="canonical" href="https://mysle.ru/" />
+
+<!-- Open Graph (превью в Telegram, соцсетях, мессенджерах) -->
 <meta property="og:title" content="Мысль — агент, который живёт в календаре" />
-<meta property="og:description" content="AI планирует, не ты. Агент видит день целиком и действует проактивно." />
+<meta property="og:description" content="AI планирует, не ты. Агент видит день целиком и действует проактивно. Прямо в Telegram, без VPN." />
 <meta property="og:type" content="website" />
+<meta property="og:url" content="https://mysle.ru/" />
+<meta property="og:site_name" content="Мысль" />
+<meta property="og:locale" content="ru_RU" />
+<meta property="og:image" content="https://mysle.ru/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Мысль — AI-агент, который живёт в календаре" />
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Мысль — агент, который живёт в календаре" />
+<meta name="twitter:description" content="AI планирует, не ты. Агент видит день целиком и действует проактивно. Прямо в Telegram." />
+<meta name="twitter:image" content="https://mysle.ru/og-image.png" />
+
+<meta name="theme-color" content="#ececec" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="apple-touch-icon" href="/icons/icon-180.png" />
 
 <link rel="stylesheet" href="/landing/v2.css" />
 <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
@@ -27,6 +49,77 @@
       if (user) window.location.replace('/app');
     } catch (e) {}
   })();
+</script>
+
+<!-- Структурированные данные: продукт, организация, частые вопросы.
+     Помогает Google (rich results) и AI-движкам (ChatGPT/Perplexity) цитировать факты о Мысли. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "Мысль",
+      "applicationCategory": "BusinessApplication",
+      "applicationSubCategory": "AI-планировщик задач",
+      "operatingSystem": "Web, Telegram, iOS, Android",
+      "description": "Персональный ИИ-агент для планирования. Живёт в календаре, запоминает контекст, разбирает свободный текст в задачи и планирует день сам. Работает в Telegram, без VPN.",
+      "url": "https://mysle.ru/",
+      "inLanguage": "ru",
+      "offers": {
+        "@type": "Offer",
+        "price": "399",
+        "priceCurrency": "RUB",
+        "description": "Единый тариф без лимитов. Первый месяц бесплатно.",
+        "category": "subscription"
+      },
+      "featureList": [
+        "Планирование задач из свободного текста",
+        "Агентный календарь, который планирует день сам",
+        "Память контекста между сессиями",
+        "Голосовой ввод через Telegram-бот",
+        "Личная база знаний"
+      ],
+      "publisher": { "@type": "Organization", "name": "Mindex" }
+    },
+    {
+      "@type": "Organization",
+      "name": "Mindex",
+      "url": "https://mysle.ru/",
+      "logo": "https://mysle.ru/thelogooo.png",
+      "sameAs": ["https://t.me/mysle_app"]
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Что такое Мысль?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Мысль — персональный ИИ-агент для планирования. Пишешь или говоришь свободным текстом, а ассистент сам разбирает информацию, выделяет задачи и расставляет их в календаре. Работает в Telegram без VPN."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Сколько стоит Мысль?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Первый месяц бесплатно, далее единый тариф 399 ₽ в месяц без скрытых лимитов и без разделения на тарифы."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Чем Мысль отличается от Todoist и Notion?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Мысль не требует настройки, шаблонов и рабочих пространств. Не ты учишься работать с инструментом — инструмент подстраивается под тебя: понимает свободный текст, помнит контекст и планирует день сам."
+          }
+        }
+      ]
+    }
+  ]
+}
 </script>
 </head>
 <body>
