@@ -14,7 +14,7 @@
   font-weight: 500; font-style: normal; font-display: swap;
 }
 :root {
-  --bg: #ececec;
+  --bg: #f0f0f0;
   --surface: #ffffff;
   --ink: #1c1c1e;
   --ink-soft: #6f6f74;
@@ -61,11 +61,11 @@ body {
 #nav {
   position: fixed; inset: 0 0 auto 0; z-index: 100;
   backdrop-filter: blur(12px);
-  background: rgba(236, 236, 236, .72);
+  background: rgba(240, 240, 240,.72);
   border-bottom: 1px solid transparent;
   transition: border-color .3s var(--ease), background .3s var(--ease);
 }
-#nav.scrolled { border-color: var(--line); background: rgba(236, 236, 236, .9); }
+#nav.scrolled { border-color: var(--line); background: rgba(240, 240, 240,.9); }
 .nav-inner {
   max-width: var(--wrap); margin: 0 auto; padding: 16px 32px;
   display: flex; align-items: center; justify-content: space-between; gap: 24px;
@@ -407,7 +407,7 @@ body {
   .wrap { padding: 0 20px; }
 
   /* — Навигация: логотип + одна кнопка, safe-area по бокам — */
-  #nav { background: rgba(236, 236, 236, .86); }
+  #nav { background: rgba(240, 240, 240,.86); }
   .nav-inner {
     padding: 12px max(20px, env(safe-area-inset-right)) 12px max(20px, env(safe-area-inset-left));
     gap: 12px;
