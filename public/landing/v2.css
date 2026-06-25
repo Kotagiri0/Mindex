@@ -90,6 +90,17 @@ body {
 }
 .btn-dark:hover { transform: translateY(-1px); opacity: .92; }
 .btn-lg { padding: 15px 32px; font-size: 16px; }
+.btn-ghost {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--ink); border: 1px solid var(--line);
+  text-decoration: none; font-weight: 500; font-size: 15px;
+  padding: 11px 22px; border-radius: 999px;
+  transition: background .2s var(--ease), transform .2s var(--ease), border-color .2s;
+}
+.btn-ghost:hover { background: rgba(0, 0, 0, .035); border-color: rgba(0, 0, 0, .16); transform: translateY(-1px); }
+
+/* CTA в герое — только мобайл (на десктопе CTA живёт в навбаре) */
+.hero-cta { display: none; }
 
 /* ─── Общие заголовки ────────────────────────────────────────── */
 .hero-title {
@@ -255,10 +266,10 @@ body {
 }
 .rc-scene { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
 
-/* card 4 — чат (дизайн scene2): синий градиентный пузырь + белый ответ */
+/* card 4 — чат: тёмный пузырь (язык кнопок) + белый ответ, без градиентов */
 .rc-chat { flex-direction: column; align-items: stretch; justify-content: center; gap: 14px; }
 .rc-msg { max-width: 88%; padding: 12px 15px; border-radius: 18px; font-size: 13px; font-weight: 500; line-height: 1.33; }
-.rc-msg-out { align-self: flex-end; background: linear-gradient(96deg, #4398d9, #388bd9); color: #fffbff; border-bottom-right-radius: 6px; }
+.rc-msg-out { align-self: flex-end; background: var(--ink); color: #fff; border-bottom-right-radius: 6px; }
 .rc-msg-in { align-self: flex-start; background: var(--surface); color: var(--ink); box-shadow: var(--shadow-soft); border-bottom-left-radius: 6px; }
 
 /* card 5 — автономные задачи: чекбоксы агентного цикла (дизайн строк scene1) */
@@ -269,9 +280,9 @@ body {
 .rc-task.is-done .rc-check::after { content: ''; position: absolute; left: 6px; top: 2.5px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
 .rc-task.is-done .rc-task-t { color: var(--ink-soft); text-decoration: line-through; text-decoration-color: var(--ink-faint); }
 .rc-task.is-active { opacity: .75; }
-.rc-task.is-active .rc-check { border-style: dashed; border-color: #4398d9; }
+.rc-task.is-active .rc-check { border-style: dashed; border-color: var(--blue-deep); }
 .rc-agent { display: flex; align-items: center; gap: 8px; margin-top: 2px; font-size: 11px; color: var(--ink-faint); }
-.rc-agent-dot { flex: 0 0 14px; width: 14px; height: 14px; border-radius: 50%; background: linear-gradient(135deg, #4398d9, #388bd9); }
+.rc-agent-dot { flex: 0 0 14px; width: 14px; height: 14px; border-radius: 50%; background: var(--blue-deep); }
 
 /* бейдж «скоро» — в потоке между моком и заголовком (не режется squircle) */
 .rc-soon-tag {
@@ -421,21 +432,30 @@ body {
   .act { height: auto; }
   .act-sticky { position: static; height: auto; overflow: visible; }
   .stage, .act-notes { display: none; }
+  /* Hero — editorial: левое выравнивание, крупный шрифт, явные CTA */
   .act-hero {
-    position: relative; inset: auto; transform: none; text-align: center;
-    padding: calc(76px + env(safe-area-inset-top)) 20px 0;
+    position: relative; inset: auto; transform: none; text-align: left;
+    padding: calc(84px + env(safe-area-inset-top)) 20px 0;
   }
-  .hero-title { font-size: clamp(30px, 8.4vw, 42px); }
-  .hero-sub { margin-top: 16px; }
+  .hero-title { font-size: clamp(36px, 10vw, 50px); line-height: 1.03; }
+  .hero-sub { margin-top: 18px; max-width: 30ch; }
+  .hero-sub br { display: none; }
 
-  /* Статичный кадр «день» в hero — результат десктопной анимации */
-  .hero-scene { display: block; padding: 30px 4px 6px; }
+  .hero-cta { display: flex; flex-direction: column; gap: 12px; margin-top: 30px; }
+  .hero-cta .btn-dark, .hero-cta .btn-ghost { width: 100%; padding: 16px; font-size: 16px; }
+
+  /* Статичный кадр «день» — с глубиной, лёгкий вынос за край (editorial) */
+  .hero-scene { display: block; padding: 34px 0 6px; }
+  .hero-scene .scene-day {
+    margin-right: -20px; border-top-right-radius: 0; border-bottom-right-radius: 0;
+    box-shadow: 0 30px 60px -24px rgba(0, 0, 0, .22);
+  }
 
   .act-sol {
     position: relative; inset: auto; transform: none; opacity: 1 !important;
-    max-width: none; padding: 30px 20px 0;
+    max-width: none; padding: 44px 20px 0;
   }
-  .section-title { font-size: clamp(26px, 7.4vw, 36px); }
+  .section-title { font-size: clamp(28px, 8vw, 38px); }
   .section-sub { text-align: left; hyphens: none; margin-top: 14px; font-size: 16px; }
 
   /* — Блок 3: лента — нативный горизонтальный скролл со снапом — */
