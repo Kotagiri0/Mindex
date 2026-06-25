@@ -283,9 +283,9 @@ body {
 .rc-soon-tag + .rc-title { margin-top: 10px; }
 
 /* ─── БЛОК 4: Ассистент думает вместе с тобой ─────────────────── */
-.think { padding: 120px 0 40px; }
-.think-title { text-align: center; font-size: clamp(26px, 3vw, 40px); font-weight: 500; line-height: 1.12; letter-spacing: -.02em; color: var(--ink); }
-.think-grid { margin-top: 64px; display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 64px; align-items: stretch; }
+.think { padding: 120px 0; }
+.think-title { font-size: clamp(28px, 2.6vw, 40px); font-weight: 500; line-height: 1.12; letter-spacing: -.02em; color: var(--ink); }
+.think-grid { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 72px; align-items: center; }
 
 /* Мокап телефона: скрин внутри, рамка сверху */
 .think-phone { display: flex; justify-content: center; }
@@ -296,14 +296,15 @@ body {
 }
 .phone-shell { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
-/* Правая часть */
-.think-body { display: flex; flex-direction: column; justify-content: flex-start; }
-.think-card-pad { }
+/* Правая часть — заголовок + текст прямо на фоне (без карточки) */
+.think-body { display: flex; flex-direction: column; justify-content: center; }
 .think-text {
-  font-size: clamp(16px, 1.4vw, 19px); line-height: 1.6; color: var(--ink);
-  background: var(--surface); border-radius: var(--radius-l); padding: 30px 32px;
-  box-shadow: var(--shadow-soft);
+  margin-top: 22px; max-width: 52ch;
+  font-size: clamp(16px, 1.3vw, 19px); line-height: 1.6; color: var(--ink-soft);
 }
+
+/* Цепочка скрыта на ПК (дизайн без неё); остаётся на мобайле */
+@media (min-width: 861px) { .chain { display: none; } }
 
 /* Цепочка из 4 шагов */
 .chain { margin-top: 28px; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
