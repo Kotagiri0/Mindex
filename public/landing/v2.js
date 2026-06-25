@@ -368,41 +368,52 @@
   });
 })();
 
-/* ── Маскот в финальном CTA: «просыпается» и поднимает глаза при скролле ── */
+/* ── Маскот «Прайм» в финальном CTA: просыпается (закрытые глаза → открытые)
+     один раз, когда появляется на экране. Геометрия 1:1 с PrimeMascot. ── */
 (function () {
   var mascot = document.querySelector('[data-cta-mascot]');
   if (!mascot) return;
-  var block = document.querySelector('.final');
   var le = mascot.querySelector('[data-eye-l]');
   var re = mascot.querySelector('[data-eye-r]');
-  if (!block || !le || !re) return;
+  if (!le || !re) return;
 
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-  // p=0 — сонные глаза (низко, узкие); p=1 — открыты и подняты
-  function setEyes(p) {
-    var y = 34 - 11 * p;        // 34 → 23 (поднимаются)
-    var h = 4 + 13 * p;         // 4  → 17 (открываются)
+  // Состояния глаз (система viewBox 70×70): закрытые → открытые
+  var Y_CLOSED = 40, H_CLOSED = 0;   // EYE_BOTTOM, height 0
+  var Y_OPEN = 23,   H_OPEN = 17;    // EYE_TOP, EYE_H
+
+  function setEyes(y, h) {
     le.setAttribute('y', y); le.setAttribute('height', h);
     re.setAttribute('y', y); re.setAttribute('height', h);
   }
+  setEyes(Y_CLOSED, H_CLOSED);
 
-  if (reduce.matches) { setEyes(1); return; }
+  if (reduce.matches) { setEyes(Y_OPEN, H_OPEN); return; }
 
-  var ticking = false;
-  function update() {
-    ticking = false;
-    var r = block.getBoundingClientRect();
-    var vh = window.innerHeight || document.documentElement.clientHeight;
-    // глаза поднимаются, пока блок проходит от низа экрана к ~45% высоты
-    var p = (vh - r.top) / (vh - vh * 0.45);
-    p = p < 0 ? 0 : p > 1 ? 1 : p;
-    setEyes(p);
+  // easeOutCubic ≈ cubic-bezier(0.215, 0.61, 0.355, 1) — как в PrimeMascot
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+  var played = false;
+  function wake() {
+    if (played) return;
+    played = true;
+    var dur = 1800, start = null;
+    function frame(ts) {
+      if (start === null) start = ts;
+      var t = Math.min((ts - start) / dur, 1);
+      var e = easeOutCubic(t);
+      setEyes(Y_CLOSED + (Y_OPEN - Y_CLOSED) * e, H_CLOSED + (H_OPEN - H_CLOSED) * e);
+      if (t < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
   }
-  function onScroll() { if (!ticking) { ticking = true; requestAnimationFrame(update); } }
 
-  window.addEventListener('scroll', onScroll, { passive: true });
-  window.addEventListener('resize', onScroll);
-  setEyes(0);
-  update();
+  if (!('IntersectionObserver' in window)) { wake(); return; }
+  var io = new IntersectionObserver(function (entries, obs) {
+    entries.forEach(function (en) {
+      if (en.isIntersecting) { wake(); obs.disconnect(); }
+    });
+  }, { threshold: 0.6 });
+  io.observe(mascot);
 })();
