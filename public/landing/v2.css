@@ -19,6 +19,7 @@
   --ink: #1c1c1e;
   --ink-soft: #6f6f74;
   --ink-faint: #a8a8ad;
+  --sub: rgba(34, 34, 36, .6);   /* подзаголовки: #222224 @ 60% */
   --line: rgba(0, 0, 0, .08);
 
   --green: #cdeccf;
@@ -103,15 +104,15 @@ body {
   letter-spacing: -.02em; color: var(--ink);
 }
 .hero-sub {
-  margin-top: 22px; font-size: clamp(15px, 1.6vw, 19px); font-weight: 500;
-  color: var(--ink-soft); line-height: 1.5;
+  margin-top: 22px; font-size: clamp(15px, 1.6vw, 19px); font-weight: 400;
+  color: var(--sub); line-height: 1.5;
 }
 .section-title {
   font-size: clamp(28px, 3.4vw, 44px); font-weight: 500; line-height: 1.12;
   letter-spacing: -.02em; color: var(--ink);
 }
 .section-sub {
-  margin-top: 18px; font-size: 19px; font-weight: 500; color: var(--ink-soft);
+  margin-top: 18px; font-size: 19px; font-weight: 400; color: var(--sub);
   line-height: 1.5; text-align: justify; hyphens: auto;
 }
 
@@ -309,8 +310,8 @@ body {
 /* Правая часть — заголовок + текст прямо на фоне (без карточки) */
 .think-body { display: flex; flex-direction: column; justify-content: center; }
 .think-text {
-  margin-top: 22px; max-width: 52ch;
-  font-size: clamp(16px, 1.3vw, 19px); line-height: 1.6; color: var(--ink-soft);
+  margin-top: 22px; max-width: 52ch; font-weight: 400;
+  font-size: clamp(16px, 1.3vw, 19px); line-height: 1.6; color: var(--sub);
 }
 
 /* Цепочка скрыта на ПК (дизайн без неё); остаётся на мобайле */
