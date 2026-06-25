@@ -338,6 +338,36 @@
   onScroll();
 })();
 
+/* ── Бургер-меню (мобайл): выезд сверху + морфинг палок в крестик ── */
+(function () {
+  var burger = document.querySelector('[data-burger]');
+  var menu = document.querySelector('[data-menu]');
+  if (!burger || !menu) return;
+
+  function setOpen(open) {
+    burger.classList.toggle('is-open', open);
+    menu.classList.toggle('is-open', open);
+    burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    menu.setAttribute('aria-hidden', open ? 'false' : 'true');
+    document.body.classList.toggle('menu-open', open);
+  }
+
+  burger.addEventListener('click', function () {
+    setOpen(!menu.classList.contains('is-open'));
+  });
+  // клик по пункту меню — закрыть
+  menu.querySelectorAll('[data-menu-link]').forEach(function (a) {
+    a.addEventListener('click', function () { setOpen(false); });
+  });
+  // Esc и переход на десктоп — закрыть
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') setOpen(false);
+  });
+  window.matchMedia('(max-width: 860px)').addEventListener('change', function (e) {
+    if (!e.matches) setOpen(false);
+  });
+})();
+
 /* ── Маскот в финальном CTA: «просыпается» и поднимает глаза при скролле ── */
 (function () {
   var mascot = document.querySelector('[data-cta-mascot]');
