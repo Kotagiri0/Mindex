@@ -128,13 +128,13 @@
       <img src="/landing/assets/logos/landing_logo.svg" alt="Мысль" class="logo-img logo-full" />
       <svg class="logo-mark" viewBox="0 0 350 350" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <rect x="12.25" y="12.25" width="325.5" height="325.5" rx="162.75" stroke="#1c1c1e" stroke-width="24.5"/>
-        <path d="M280 175H70" stroke="#1c1c1e" stroke-width="24.5"/>
-        <path d="M224.5 125.5L125.5 224.5" stroke="#1c1c1e" stroke-width="24.5"/>
-        <path d="M224.5 224.5L125.5 125.5" stroke="#1c1c1e" stroke-width="24.5"/>
+        <path d="M280.004 175H70.0039" stroke="#1c1c1e" stroke-width="24.5"/>
+        <path d="M224.5 125.504L125.505 224.499" stroke="#1c1c1e" stroke-width="24.5"/>
+        <path d="M224.504 224.499L125.509 125.504" stroke="#1c1c1e" stroke-width="24.5"/>
+        <path d="M175.004 280L175.004 70" stroke="#1c1c1e" stroke-width="24.5"/>
       </svg>
     </a>
     <div class="nav-links">
-      <a class="nav-link" href="#top">О нас</a>
       <a class="nav-link" href="#solutions">Решения</a>
       <a class="nav-link" href="#tech">Технологии</a>
       <a class="nav-link" href="#start">Скачать</a>
@@ -154,7 +154,6 @@
 <!-- ═════ Мобильное меню (выезжает сверху) ═════ -->
 <div class="mobile-menu" id="mobile-menu" data-menu aria-hidden="true">
   <nav class="mm-links">
-    <a class="mm-link" href="#top" data-menu-link>О нас</a>
     <a class="mm-link" href="#solutions" data-menu-link>Решения</a>
     <a class="mm-link" href="#tech" data-menu-link>Технологии</a>
     <a class="mm-link" href="#start" data-menu-link>Скачать</a>
@@ -169,27 +168,32 @@
 <section class="act" id="top" data-act>
   <div class="act-sticky">
 
-    <!-- Мобильный hero: коллаж заметок + play/pause (только мобайл) -->
-    <div class="m-collage" aria-hidden="true">
-      <span class="m-note m-note--note"><img src="/landing/assets/hero/note_note.svg" alt="" /></span>
-      <span class="m-note m-note--webinar"><img src="/landing/assets/hero/note_webinar.svg" alt="" /></span>
-      <span class="m-note m-note--deadline"><img src="/landing/assets/hero/note_deadline.svg" alt="" /></span>
-      <span class="m-note m-note--event"><img src="/landing/assets/hero/note_event.svg" alt="" /></span>
-      <span class="m-note m-note--thought"><img src="/landing/assets/hero/note_thought.svg" alt="" /></span>
-      <span class="m-mascot">
-        <svg viewBox="0 0 426 426" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="14.9" y="14.9" width="396" height="396" rx="130" stroke="#222224" stroke-width="29.8"/>
-          <path d="M171 285V182" stroke="#222224" stroke-width="29.8"/>
-          <path d="M255 285V182" stroke="#222224" stroke-width="29.8"/>
+    <!-- Мобильный hero: занимает экран целиком, текст прижат к низу -->
+    <div class="m-hero-screen">
+      <!-- Коллаж заметок + маскот «Прайм», смотрящий вниз (только мобайл) -->
+      <div class="m-collage" aria-hidden="true">
+        <span class="m-note m-note--deadline"><img src="/landing/assets/hero/note_deadline.svg" alt="" /></span>
+        <span class="m-note m-note--note"><img src="/landing/assets/hero/note_note.svg" alt="" /></span>
+        <span class="m-note m-note--webinar"><img src="/landing/assets/hero/note_webinar.svg" alt="" /></span>
+        <span class="m-note m-note--event"><img src="/landing/assets/hero/note_event.svg" alt="" /></span>
+        <span class="m-note m-note--thought"><img src="/landing/assets/hero/note_thought.svg" alt="" /></span>
+      </div>
+
+      <!-- Маскот «Прайм» — вне коллажа, позиционируется относительно экрана -->
+      <span class="m-mascot" aria-hidden="true">
+        <svg width="56" height="56" viewBox="0 0 70 70" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="35" cy="35" r="32.55" stroke="#222224" stroke-width="4.9" />
+          <rect fill="#222224" width="4.9" x="26.55" y="30" height="17" />
+          <rect fill="#222224" width="4.9" x="38.55" y="30" height="17" />
         </svg>
       </span>
-    </div>
 
-    <!-- Текст hero (виден в начале, гаснет при прокрутке) -->
-    <div class="act-hero" data-hero-text>
-      <h2 class="hero-title">Агент, который<br>живёт в календаре</h2>
-      <p class="hero-sub">И помогает тебе стать продуктивнее,<br>следя за задачами и дедлайнами</p>
-      <a class="btn-dark btn-lg m-hero-cta" href="/app#/signup">Попробовать</a>
+      <!-- Текст hero (виден в начале, гаснет при прокрутке) -->
+      <div class="act-hero" data-hero-text>
+        <h2 class="hero-title">Агент, который<br>живёт в календаре</h2>
+        <p class="hero-sub">И помогает тебе стать продуктивнее,<br>следя за задачами и дедлайнами</p>
+        <a class="btn-dark m-hero-cta" href="/app#/signup">Попробовать</a>
+      </div>
     </div>
 
     <!-- Hero-визуал для мобильных: статичный финальный кадр анимации («день»).
@@ -212,9 +216,9 @@
             к экзаменам уже сейчас. запомню. также, работа с инвесто...</p>
         </div>
         <div class="mm-timeline">
-          <div class="mm-row"><span class="mm-hour">11</span><span class="mm-event mm-event--green">Составить текст для креативов в канал</span></div>
-          <div class="mm-row"><span class="mm-hour">12</span><span class="mm-event mm-event--peach">Посмотреть вебинар</span></div>
-          <div class="mm-row"><span class="mm-hour">13</span><span class="mm-event mm-event--blue">Важная встреча + подготовка</span></div>
+          <div class="mm-row"><span class="mm-hour">11</span><img class="mm-event" src="/landing/assets/block2-2/event1.svg" alt="11:00–12:00 Составить текст для креативов в канал" /></div>
+          <div class="mm-row"><span class="mm-hour">12</span><img class="mm-event" src="/landing/assets/block2-2/event2.svg" alt="12:00–13:00 Посмотреть вебинар" /></div>
+          <div class="mm-row"><span class="mm-hour">13</span><img class="mm-event" src="/landing/assets/block2-2/event3.svg" alt="13:00–14:00 Важная встреча и подготовка" /></div>
           <div class="mm-row mm-row--last"><span class="mm-hour">14</span></div>
         </div>
       </div>
@@ -394,7 +398,7 @@
 <!-- ═════ Запуск — ноутбук + три шага ═════ -->
 <section class="setup" id="start">
   <div class="wrap">
-    <h2 class="setup-title"><span class="setup-dim">Это всё</span> быстро, просто и бесплатно</h2>
+    <h2 class="setup-title"><span class="setup-dim">Это всё</span> быстро,<br class="m-br"> просто и бесплатно</h2>
 
     <div class="setup-grid">
       <div class="setup-mock">

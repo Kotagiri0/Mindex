@@ -83,7 +83,8 @@ body {
 
 /* Мобильные элементы — скрыты на ПК, включаются в @media ниже */
 .logo-mark, .nav-burger, .mobile-menu,
-.m-collage, .m-memory { display: none; }
+.m-collage, .m-mascot, .m-memory { display: none; }
+.m-br { display: none; }
 
 .btn-dark {
   display: inline-flex; align-items: center; justify-content: center;
@@ -393,11 +394,12 @@ body {
 @media (max-width: 860px) {
   /* — Глобально — */
   .wrap { padding: 0 20px; }
+  .m-br { display: inline; }
 
   /* — Навигация: знак слева + бургер справа — */
   #nav { background: rgba(240, 240, 240,.86); }
   .nav-inner {
-    padding: 12px max(20px, env(safe-area-inset-right)) 12px max(20px, env(safe-area-inset-left));
+    padding: 12px max(20px, env(safe-area-inset-right, 0px)) 12px max(20px, env(safe-area-inset-left, 0px));
     gap: 12px;
   }
   .nav-links { display: none; }
@@ -405,34 +407,37 @@ body {
   .logo-full { display: none; }                /* надпись «Мысль» убрана для баланса */
   .logo-mark { display: block; width: 34px; height: 34px; }
 
-  /* Бургер: две палки → крестик */
+  /* Burger icon */
   .nav-burger {
-    display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 7px;
+    display: flex !important; flex-direction: column; justify-content: center; align-items: center; gap: 7px;
     width: 44px; height: 44px; margin-right: -8px;
     background: none; border: 0; cursor: pointer; padding: 0;
   }
   .burger-bar {
-    display: block; width: 26px; height: 2px; border-radius: 2px; background: var(--ink);
+    display: block; width: 22px; height: 2.6px; border-radius: 2px; background: var(--ink);
     transition: transform .32s var(--ease), opacity .2s var(--ease);
   }
-  .nav-burger.is-open .burger-bar:nth-child(1) { transform: translateY(4.5px) rotate(45deg); }
-  .nav-burger.is-open .burger-bar:nth-child(2) { transform: translateY(-4.5px) rotate(-45deg); }
+  .nav-burger.is-open .burger-bar:nth-child(1) { transform: translateY(4.8px) rotate(45deg); }
+  .nav-burger.is-open .burger-bar:nth-child(2) { transform: translateY(-4.8px) rotate(-45deg); }
 
-  /* Меню выезжает сверху вниз */
+  /* Меню выезжает сверху вниз: пункты по центру, кнопки прижаты к низу */
   .mobile-menu {
-    display: flex; flex-direction: column; justify-content: center; gap: 40px;
+    display: flex; flex-direction: column; align-items: center;
     position: fixed; inset: 0; z-index: 90;
-    padding: calc(80px + env(safe-area-inset-top)) 28px calc(40px + env(safe-area-inset-bottom));
+    padding: calc(80px + env(safe-area-inset-top, 0px)) 28px calc(36px + env(safe-area-inset-bottom, 0px));
     background: var(--bg);
     transform: translateY(-100%);
     transition: transform .42s var(--ease);
     visibility: hidden;
   }
   .mobile-menu.is-open { transform: translateY(0); visibility: visible; }
-  .mm-links { display: flex; flex-direction: column; gap: 6px; }
+  .mm-links {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    margin: auto 0;                        /* центрирует пункты по вертикали */
+  }
   .mm-link {
     font-size: 34px; font-weight: 500; letter-spacing: -.02em; color: var(--ink);
-    text-decoration: none; padding: 8px 0;
+    text-decoration: none; padding: 8px 0; text-align: center;
     opacity: 0; transform: translateY(-14px);
     transition: opacity .4s var(--ease), transform .4s var(--ease);
   }
@@ -440,57 +445,59 @@ body {
   .mobile-menu.is-open .mm-link:nth-child(1) { transition-delay: .12s; }
   .mobile-menu.is-open .mm-link:nth-child(2) { transition-delay: .18s; }
   .mobile-menu.is-open .mm-link:nth-child(3) { transition-delay: .24s; }
-  .mobile-menu.is-open .mm-link:nth-child(4) { transition-delay: .30s; }
   .mm-cta {
-    display: flex; flex-direction: column; align-items: flex-start; gap: 18px;
+    display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%;
     opacity: 0; transform: translateY(-14px);
-    transition: opacity .4s var(--ease) .34s, transform .4s var(--ease) .34s;
+    transition: opacity .4s var(--ease) .30s, transform .4s var(--ease) .30s;
   }
   .mobile-menu.is-open .mm-cta { opacity: 1; transform: none; }
-  .mm-cta .btn-dark { width: 100%; max-width: 280px; }
+  .mm-cta .btn-dark { width: 100%; max-width: 320px; }
   .mm-login { font-size: 15px; font-weight: 500; color: var(--ink-soft); text-decoration: none; }
   body.menu-open { overflow: hidden; }
 
-  /* — Hero: коллаж заметок сверху, текст слева, кнопка — */
+  /* — Hero: занимает экран целиком; заметки парят сверху, текст прижат к низу — */
   .act { height: auto; }
-  .act-sticky { position: static; height: auto; overflow: visible;
-    display: flex; flex-direction: column; }
+  .act-sticky { position: static; height: auto; overflow: visible; }
   .stage, .act-notes, .hero-scene { display: none; }
 
-  .m-collage {
-    display: block; position: relative;
-    margin: calc(64px + env(safe-area-inset-top)) 0 0;
-    height: 68vw; min-height: 260px; max-height: 340px;
+  .m-hero-screen {
+    position: relative;
+    display: flex; flex-direction: column; align-items: stretch;
+    width: 100%; overflow: hidden;
+    min-height: 100vh; min-height: 100svh;
+    padding: calc(56px + env(safe-area-inset-top, 0px)) 0 calc(26px + env(safe-area-inset-bottom, 0px));
   }
-  .m-note { position: absolute; display: block; width: 40%; }
+
+  /* Коллаж занимает всё свободное место над текстом */
+  .m-collage { display: block; position: relative; flex: 1 1 auto; width: 100%; min-height: 340px; }
+  .m-note { position: absolute; display: block; width: 37%; }
   .m-note img { width: 100%; height: auto; display: block;
     filter: drop-shadow(0 14px 30px rgba(0,0,0,.10));
     animation: mNoteFloat 6s ease-in-out infinite; }
+  .m-note--deadline img { animation-duration: 6.8s; animation-delay: -1.2s; }
   .m-note--note img     { animation-duration: 6.4s; animation-delay: -.3s; }
   .m-note--webinar img  { animation-duration: 7.2s; animation-delay: -2.0s; }
-  .m-note--deadline img { animation-duration: 6.8s; animation-delay: -1.2s; }
   .m-note--event img    { animation-duration: 7.6s; animation-delay: -3.0s; }
   .m-note--thought img  { animation-duration: 6.9s; animation-delay: -.8s; }
-  .m-note--note     { left: 4%;  top: 2%;  transform: rotate(-8deg); z-index: 2; }
-  .m-note--webinar  { right: 6%; top: 0;   transform: rotate(6deg);  z-index: 1; }
-  .m-note--deadline { left: 2%;  top: 30%; transform: rotate(4deg);  z-index: 3; }
-  .m-note--event    { left: 33%; top: 24%; transform: rotate(-3deg); z-index: 4; width: 42%; }
-  .m-note--thought  { right: 3%; top: 38%; transform: rotate(7deg);  z-index: 3; }
+  .m-note--deadline { left: 7%;  top: 6%;  transform: rotate(-7deg); z-index: 3; }
+  .m-note--note     { left: 5%;  top: 36%; transform: rotate(5deg);  z-index: 2; }
+  .m-note--webinar  { right: 5%; top: 30%; transform: rotate(6deg);  z-index: 2; }
+  .m-note--event    { left: 9%;  top: 64%; transform: rotate(-4deg); z-index: 4; }
+  .m-note--thought  { right: 6%; top: 58%; transform: rotate(7deg);  z-index: 4; }
 
-  /* Маскот «Мысль» — скруглённый квадрат с глазами, поверх коллажа */
-  .m-mascot { position: absolute; top: 0; right: 4%; z-index: 6; width: 76px; }
-  .m-mascot svg { width: 100%; height: auto; display: block;
-    animation: breathe 3.4s var(--ease) infinite; }
+  /* Маскот «Прайм» — круг с глазами, смотрит вниз на заметки */
+  .m-mascot { display: block; position: absolute; top: calc(70px + env(safe-area-inset-top, 0px)); right: 22px; z-index: 6; width: 56px; height: 56px; }
+  .m-mascot svg { width: 100%; height: auto; display: block; animation: breathe 3.6s var(--ease) infinite; }
 
   .act-hero {
     position: relative; inset: auto; transform: none; text-align: left;
-    width: 100%; padding: 40px 20px 0; z-index: 5;
+    width: 100%; padding: 18px 20px 0; z-index: 5;
   }
-  .hero-title { font-size: clamp(32px, 9.2vw, 46px); }
-  .hero-sub { margin-top: 16px; }
+  .hero-title { font-size: clamp(30px, 8.6vw, 42px); line-height: 1.1; }
+  .hero-sub { margin-top: 12px; }
   .m-hero-cta {
-    display: inline-flex; margin-top: 26px;
-    width: auto; padding: 16px 40px; font-size: 16px;
+    display: inline-flex; margin-top: 20px;
+    width: auto; padding: 13px 30px; font-size: 15px;
   }
 
   /* — Блок «память обновлена» — карточка-таймлайн — */
@@ -509,17 +516,13 @@ body {
   .mm-note { font-size: 12px; line-height: 1.4; color: var(--ink-faint); }
   .mm-timeline { display: flex; flex-direction: column; }
   .mm-row {
-    display: grid; grid-template-columns: 26px 1fr; align-items: center; gap: 10px;
-    min-height: 52px; border-top: 1px solid var(--line); padding: 7px 0;
+    display: grid; grid-template-columns: 24px 1fr; align-items: center; gap: 10px;
+    border-top: 1px solid var(--line); padding: 9px 0;
   }
-  .mm-row--last { min-height: 24px; }
+  .mm-row--last { min-height: 22px; }
   .mm-hour { font-size: 13px; font-weight: 500; color: var(--ink-faint); }
-  .mm-event {
-    border-radius: 12px; padding: 11px 14px; font-size: 14px; font-weight: 500; color: var(--ink);
-  }
-  .mm-event--green { background: var(--green); }
-  .mm-event--peach { background: var(--peach); }
-  .mm-event--blue  { background: var(--blue); }
+  /* событие — готовая SVG-карточка из block2-2 (цвет/текст уже в файле) */
+  .mm-event { width: 100%; height: auto; display: block; border-radius: 12px; }
 
   .act-sol {
     position: relative; inset: auto; transform: none; opacity: 1 !important;
@@ -530,7 +533,7 @@ body {
 
   /* — Блок 3: лента — нативный горизонтальный скролл со снапом — */
   .rail { height: auto !important; }
-  .rail-sticky { position: static; height: auto; padding: 44px 0 56px; overflow: visible; }
+  .rail-sticky { position: static; height: auto; padding: 88px 0 28px; overflow: visible; }
   .rail-head { padding: 0 20px; margin-bottom: 22px; }
   .rail-title { font-size: clamp(24px, 6.6vw, 34px); }
   .rail-nav { display: none; }
@@ -545,7 +548,7 @@ body {
   .rc-title { font-size: 18px; }
 
   /* — Блок 4: «Ассистент думает» — заголовок по центру, телефон, текст — */
-  .think { padding: 64px 0 8px; }
+  .think { padding: 36px 0 8px; }
   .think-title { padding: 0 12px; text-align: center; font-size: clamp(28px, 8vw, 38px); }
   .think-grid { grid-template-columns: 1fr; gap: 32px; margin-top: 36px; }
   .think-phone { order: 1; }
@@ -573,7 +576,7 @@ body {
   .foot { margin-top: 52px; }
   .foot-inner {
     flex-direction: column; align-items: center; text-align: center; gap: 10px;
-    padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
+    padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px));
   }
 }
 
