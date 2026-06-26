@@ -487,7 +487,7 @@ body {
   .m-note--thought  { right: 6%; top: 58%; transform: rotate(7deg);  z-index: 4; }
 
   /* Маскот «Прайм» — круг с глазами, смотрит вниз на заметки */
-  .m-mascot { display: block; position: absolute; top: calc(66px + env(safe-area-inset-top, 0px)); right: 20px; z-index: 6; width: 64px; height: 64px; }
+  .m-mascot { display: block; position: absolute; top: calc(92px + env(safe-area-inset-top, 0px)); right: 28px; z-index: 6; width: 88px; height: 88px; }
   .m-mascot svg { width: 100%; height: auto; display: block; animation: breathe 3.6s var(--ease) infinite; }
 
   .act-hero {
