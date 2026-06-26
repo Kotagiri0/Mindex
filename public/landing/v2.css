@@ -501,29 +501,9 @@ body {
     width: auto; padding: 13px 30px; font-size: 15px;
   }
 
-  /* — Блок «память обновлена» — карточка-таймлайн — */
+  /* — Блок «память обновлена» — готовый ассет, без подложки — */
   .m-memory { display: block; padding: 56px 20px 0; }
-  .mm-card {
-    background: var(--surface); border-radius: var(--radius-l);
-    padding: 16px; box-shadow: var(--shadow-soft);
-  }
-  .mm-head { display: flex; align-items: flex-start; gap: 14px; padding: 4px 4px 16px; }
-  .mm-badge {
-    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
-    font-size: 12px; font-weight: 500; color: var(--ink); line-height: 1.2;
-    max-width: 92px;
-  }
-  .mm-arrow { color: var(--ink-faint); }
-  .mm-note { font-size: 12px; line-height: 1.4; color: var(--ink-faint); }
-  .mm-timeline { display: flex; flex-direction: column; }
-  .mm-row {
-    display: grid; grid-template-columns: 24px 1fr; align-items: center; gap: 10px;
-    border-top: 1px solid var(--line); padding: 9px 0;
-  }
-  .mm-row--last { min-height: 22px; }
-  .mm-hour { font-size: 13px; font-weight: 500; color: var(--ink-faint); }
-  /* событие — готовая SVG-карточка из block2-2 (цвет/текст уже в файле) */
-  .mm-event { width: 100%; height: auto; display: block; border-radius: 12px; }
+  .mm-img { width: 100%; height: auto; display: block; }
 
   .act-sol {
     position: relative; inset: auto; transform: none; opacity: 1 !important;
