@@ -3,10 +3,37 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Мысль — планировщик задач с ИИ</title>
-<meta name="description" content="Думай. Остальное — забота Мысли. Голосом или текстом — Мысль превращает идеи в план." />
-<link rel="stylesheet" href="/landing/styles.css" />
-<link rel="stylesheet" href="/landing/experience.css" />
+<title>Мысль — агент, который живёт в календаре</title>
+<meta name="description" content="Мысль — AI-агент, который живёт в твоём календаре: запоминает, напоминает, видит день целиком и помогает стать продуктивнее. Прямо в Telegram, без VPN." />
+<meta name="keywords" content="ИИ планировщик, AI ассистент, планирование задач, Telegram бот планировщик, ИИ календарь, тайм-менеджмент, список дел, продуктивность, ассистент Мысль" />
+<meta name="robots" content="index, follow, max-image-preview:large" />
+<link rel="canonical" href="https://mysle.ru/" />
+
+<!-- Open Graph (превью в Telegram, соцсетях, мессенджерах) -->
+<meta property="og:title" content="Мысль — агент, который живёт в календаре" />
+<meta property="og:description" content="AI планирует, не ты. Агент видит день целиком и действует проактивно. Прямо в Telegram, без VPN." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://mysle.ru/" />
+<meta property="og:site_name" content="Мысль" />
+<meta property="og:locale" content="ru_RU" />
+<meta property="og:image" content="https://mysle.ru/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Мысль — AI-агент, который живёт в календаре" />
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Мысль — агент, который живёт в календаре" />
+<meta name="twitter:description" content="AI планирует, не ты. Агент видит день целиком и действует проактивно. Прямо в Telegram." />
+<meta name="twitter:image" content="https://mysle.ru/og-image.png" />
+
+<meta name="theme-color" content="#f0f0f0" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="apple-touch-icon" href="/icons/icon-180.png" />
+
+<link rel="stylesheet" href="/landing/v2.css" />
+<link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+
 <script>
   /* Редирект в приложение при активной сессии */
   (function () {
@@ -16,547 +43,406 @@
         var sid = localStorage.getItem('mx_session_user_id');
         if (sid) {
           var users = JSON.parse(localStorage.getItem('mx_users') || '[]');
-          user = users.find(function(u) { return u.id === sid; }) || null;
+          user = users.find(function (u) { return u.id === sid; }) || null;
         }
       }
       if (user) window.location.replace('/app');
     } catch (e) {}
   })();
 </script>
+
+<!-- Структурированные данные: продукт, организация, частые вопросы.
+     Помогает Google (rich results) и AI-движкам (ChatGPT/Perplexity) цитировать факты о Мысли. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "Мысль",
+      "applicationCategory": "BusinessApplication",
+      "applicationSubCategory": "AI-планировщик задач",
+      "operatingSystem": "Web, Telegram, iOS, Android",
+      "description": "Персональный ИИ-агент для планирования. Живёт в календаре, запоминает контекст, разбирает свободный текст в задачи и планирует день сам. Работает в Telegram, без VPN.",
+      "url": "https://mysle.ru/",
+      "inLanguage": "ru",
+      "featureList": [
+        "Планирование задач из свободного текста",
+        "Агентный календарь, который планирует день сам",
+        "Память контекста между сессиями",
+        "Голосовой ввод через Telegram-бот",
+        "Личная база знаний"
+      ],
+      "publisher": { "@type": "Organization", "name": "Mindex" }
+    },
+    {
+      "@type": "Organization",
+      "name": "Mindex",
+      "url": "https://mysle.ru/",
+      "logo": "https://mysle.ru/thelogooo.png",
+      "sameAs": ["https://t.me/mysle_app"]
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Что такое Мысль?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Мысль — персональный ИИ-агент для планирования. Пишешь или говоришь свободным текстом, а ассистент сам разбирает информацию, выделяет задачи и расставляет их в календаре. Работает в Telegram без VPN."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Сколько стоит Мысль?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Сейчас Мысль бесплатна — идёт открытое тестирование. Позже появится единый тариф без скрытых лимитов и без разделения на планы."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Чем Мысль отличается от Todoist и Notion?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Мысль не требует настройки, шаблонов и рабочих пространств. Не ты учишься работать с инструментом — инструмент подстраивается под тебя: понимает свободный текст, помнит контекст и планирует день сам."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
 </head>
 <body>
 
-<!-- ═════ Header ═════ -->
-<header id="header">
-  <div class="wrap">
-    <a class="logo" href="#top" aria-label="Мысль">
-      <img src="/landing/assets/logo-full.svg" class="logo-full" alt="Мысль" height="28"/>
+<!-- GEO-якорь для парсеров -->
+<h1 class="geo-h1">Агент, который живёт в календаре</h1>
+
+<!-- ═════ Navigation ═════ -->
+<nav id="nav">
+  <div class="nav-inner">
+    <a class="nav-logo" href="#top" aria-label="Мысль">
+      <!-- ПК: полный логотип с надписью; мобайл: только знак (для баланса) -->
+      <img src="/landing/assets/logos/landing_logo.svg" alt="Мысль" class="logo-img logo-full" />
+      <svg class="logo-mark" viewBox="0 0 350 350" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="12.25" y="12.25" width="325.5" height="325.5" rx="162.75" stroke="#1c1c1e" stroke-width="24.5"/>
+        <path d="M280.004 175H70.0039" stroke="#1c1c1e" stroke-width="24.5"/>
+        <path d="M224.5 125.504L125.505 224.499" stroke="#1c1c1e" stroke-width="24.5"/>
+        <path d="M224.504 224.499L125.509 125.504" stroke="#1c1c1e" stroke-width="24.5"/>
+        <path d="M175.004 280L175.004 70" stroke="#1c1c1e" stroke-width="24.5"/>
+      </svg>
     </a>
-    <div style="display:flex;align-items:center;gap:12px;">
-      <a class="header-link" href="/app#/login">войти</a>
-      <a class="btn btn-outline" href="/app#/signup">попробовать</a>
+    <div class="nav-links">
+      <a class="nav-link" href="#solutions">Решения</a>
+      <a class="nav-link" href="#tech">Технологии</a>
+      <a class="nav-link" href="#start">Скачать</a>
     </div>
+    <div class="nav-cta">
+      <a class="nav-login" href="/app#/login">Войти</a>
+      <a class="btn-dark" href="/app#/signup">Попробовать</a>
+    </div>
+    <!-- Бургер (мобайл): две палки → крестик -->
+    <button class="nav-burger" data-burger aria-label="Меню" aria-expanded="false" aria-controls="mobile-menu">
+      <span class="burger-bar"></span>
+      <span class="burger-bar"></span>
+    </button>
   </div>
-</header>
+</nav>
 
-<!-- ═════ Hero ═════ -->
-<section class="hero" id="top">
-  <!-- Bubble chamber -->
-  <div class="hero-stage" aria-hidden="true">
-    <svg class="bubble-chamber" viewBox="0 0 1000 1000">
-      <defs>
-        <filter id="chalk" x="-20%" y="-20%" width="140%" height="140%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="4" seed="2" result="noise"/>
-          <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G"/>
-        </filter>
-      </defs>
-
-      <g class="atom-dim">
-        <circle cx="500" cy="500" r="340" class="ring" style="opacity:0.25"/>
-
-        <circle cx="500" cy="500" r="8" fill="#F0EDE6" filter="url(#chalk)" opacity="0.7">
-          <animate attributeName="r" values="8;11;7;10;8" dur="5s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
-          <animate attributeName="cx" values="500;503;498;501;500" dur="7s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
-          <animate attributeName="cy" values="500;498;502;499;500" dur="6s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
-        </circle>
-
-        <ellipse class="ring" cx="500" cy="500" rx="60" ry="24">
-          <animateTransform attributeName="transform" type="rotate" from="30 500 500" to="390 500 500" dur="10.2s" repeatCount="indefinite"/>
-          <animate attributeName="ry" values="24;54;8;54;24" dur="10.2s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
-          <animate attributeName="rx" values="60;48;60;72;60" dur="7.3s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
-        </ellipse>
-
-        <ellipse class="ring" cx="500" cy="500" rx="120" ry="48">
-          <animateTransform attributeName="transform" type="rotate" from="180 500 500" to="-180 500 500" dur="15.3s" repeatCount="indefinite"/>
-          <animate attributeName="ry" values="48;108;12;108;48" dur="15.3s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
-          <animate attributeName="rx" values="120;96;130;96;120" dur="11.1s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
-        </ellipse>
-
-        <ellipse class="ring" cx="500" cy="500" rx="220" ry="88">
-          <animateTransform attributeName="transform" type="rotate" from="90 500 500" to="450 500 500" dur="23.8s" repeatCount="indefinite"/>
-          <animate attributeName="ry" values="88;22;160;22;88" dur="23.8s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
-          <animate attributeName="rx" values="220;180;240;180;220" dur="17.6s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
-        </ellipse>
-
-        <ellipse class="ring" cx="500" cy="500" rx="340" ry="136">
-          <animateTransform attributeName="transform" type="rotate" from="45 500 500" to="-315 500 500" dur="34s" repeatCount="indefinite"/>
-          <animate attributeName="ry" values="136;34;220;34;136" dur="34s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
-          <animate attributeName="rx" values="340;280;360;280;340" dur="25.5s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
-        </ellipse>
-      </g>
-    </svg>
+<!-- ═════ Мобильное меню (выезжает сверху) ═════ -->
+<div class="mobile-menu" id="mobile-menu" data-menu aria-hidden="true">
+  <nav class="mm-links">
+    <a class="mm-link" href="#solutions" data-menu-link>Решения</a>
+    <a class="mm-link" href="#tech" data-menu-link>Технологии</a>
+    <a class="mm-link" href="#start" data-menu-link>Скачать</a>
+  </nav>
+  <div class="mm-cta">
+    <a class="btn-dark btn-lg" href="/app#/signup" data-menu-link>Попробовать</a>
+    <a class="mm-login" href="/app#/login" data-menu-link>Уже есть аккаунт? Войти</a>
   </div>
+</div>
 
-  <div class="hero-content">
-    <h1 class="hero-title">инструмент для<br>мыслящих людей</h1>
-    <p class="hero-sub">Личный планировщик с ИИ, который<br>помогает справиться с хаосом в голове</p>
-    <div class="hero-cta-wrap">
-      <a class="btn btn-solid btn-lg" href="/app#/signup">попробовать бесплатно</a>
-    </div>
-  </div>
+<!-- ═════ АКТ 1 — Hero → сцена (заметки летят в плитки) ═════ -->
+<section class="act" id="top" data-act>
+  <div class="act-sticky">
 
+    <!-- Мобильный hero: занимает экран целиком, текст прижат к низу -->
+    <div class="m-hero-screen">
+      <!-- Коллаж заметок + маскот «Прайм», смотрящий вниз (только мобайл) -->
+      <div class="m-collage" aria-hidden="true">
+        <span class="m-note m-note--deadline"><img src="/landing/assets/hero/note_deadline.svg" alt="" /></span>
+        <span class="m-note m-note--note"><img src="/landing/assets/hero/note_note.svg" alt="" /></span>
+        <span class="m-note m-note--webinar"><img src="/landing/assets/hero/note_webinar.svg" alt="" /></span>
+        <span class="m-note m-note--event"><img src="/landing/assets/hero/note_event.svg" alt="" /></span>
+        <span class="m-note m-note--thought"><img src="/landing/assets/hero/note_thought.svg" alt="" /></span>
+      </div>
 
-</section>
+      <!-- Маскот «Прайм» — вне коллажа, позиционируется относительно экрана -->
+      <span class="m-mascot" aria-hidden="true">
+        <svg width="64" height="64" viewBox="0 0 70 70" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="35" cy="35" r="32.55" stroke="#222224" stroke-width="4.9" />
+          <rect fill="#222224" width="4.9" x="26.55" y="38" height="18" />
+          <rect fill="#222224" width="4.9" x="38.55" y="38" height="18" />
+        </svg>
+      </span>
 
-<!-- ═════ Chaos / Pain ═════ -->
-<section class="chaos-section">
-
-  <!-- Хаотичные элементы — position absolute, разбросаны по всему блоку -->
-  <div class="chaos-field" aria-hidden="true">
-
-    <!-- 1. Список задач — левый верх, сильный наклон -->
-    <div class="chaos-el" data-delay="0" style="top:5%;left:2%;transform:rotate(-11deg);--dx:4px;--dy:-3px;--dr:-2deg;--dur:6.4s">
-      <div class="cel-tasklist">
-        <div class="cel-task cel-done">созвон с CEO</div>
-        <div class="cel-task">написать инвестору</div>
-        <div class="cel-task">подготовить деки</div>
-        <div class="cel-task cel-urgent">встреча в 14:00 !!!</div>
+      <!-- Текст hero (виден в начале, гаснет при прокрутке) -->
+      <div class="act-hero" data-hero-text>
+        <h2 class="hero-title">Агент, который<br>живёт в календаре</h2>
+        <p class="hero-sub">И помогает тебе стать продуктивнее,<br>следя за задачами и дедлайнами</p>
+        <a class="btn-dark m-hero-cta" href="/app#/signup">Попробовать</a>
       </div>
     </div>
 
-    <!-- 2. Плашка Notion — правый верх, слабый наклон -->
-    <div class="chaos-el" data-delay="60" style="top:3%;right:4%;transform:rotate(7deg);--dx:-5px;--dy:-4px;--dr:2deg;--dur:5.2s">
-      <div class="cel-badge">
-        <span class="cel-badge-name">Notion</span>
-        <span class="cel-badge-sub">47 страниц</span>
+    <!-- Hero-визуал для мобильных: статичный финальный кадр анимации («день»).
+         Десктоп проигрывает сцену целиком, мобиль показывает её результат. -->
+    <div class="hero-scene" aria-hidden="true">
+      <div class="scene-day">
+        <img class="sd-grid" src="/landing/assets/block2-2/timeline.svg" alt="" />
+        <img class="sd-ev" src="/landing/assets/block2-2/event1.svg" alt="" />
+        <img class="sd-ev" src="/landing/assets/block2-2/event2.svg" alt="" />
+        <img class="sd-ev" src="/landing/assets/block2-2/event3.svg" alt="" />
       </div>
     </div>
 
-    <!-- 3. "важно!!!" — левый верх ближе к центру, крупно -->
-    <div class="chaos-el" data-delay="30" style="top:8%;left:22%;transform:rotate(-6deg);--dx:3px;--dy:-5px;--dr:-3deg;--dur:7.1s">
-      <span class="cel-shout">важно!!!</span>
+    <!-- Мобильный блок «память обновлена» — готовый ассет (только мобайл) -->
+    <div class="m-memory" aria-hidden="true">
+      <img class="mm-img" src="/landing/assets/block2mobile/calendar_mobile.svg" alt="Мысль обновляет память и ведёт расписание дня" />
     </div>
 
-    <!-- 4. Плашка ChatGPT — правый верх, сильный наклон -->
-    <div class="chaos-el" data-delay="90" style="top:11%;right:18%;transform:rotate(-9deg);--dx:-4px;--dy:3px;--dr:-2deg;--dur:5.8s">
-      <div class="cel-badge">
-        <span class="cel-badge-name">ChatGPT</span>
-        <span class="cel-badge-sub">миллион чатов</span>
-      </div>
+    <!-- Текст решений (проявляется при прокрутке) -->
+    <div class="act-sol" data-sol-text>
+      <h2 class="section-title">Дай волю мыслям,<br>а рутину — агенту</h2>
+      <p class="section-sub" lang="ru">Мысль собирает задачи, заметки и планы в одном месте,
+        сама. Сама ведёт календарь, выполняет задачи.</p>
     </div>
 
-    <!-- 5. Вопрос — правый верх угол, очень крупно -->
-    <div class="chaos-el" data-delay="110" style="top:1%;right:1%;transform:rotate(4deg);--dx:-3px;--dy:-6px;--dr:4deg;--dur:4.9s">
-      <span class="cel-glyph">?</span>
+    <!-- Камера: общий холст block2-1 (плитки) + block2-2 (память/события) -->
+    <div class="stage" data-stage>
+
+    <!-- Сетка плиток + маскот + иконки + маркеры целей -->
+    <div class="grid" data-grid aria-hidden="true">
+      <img class="g-tile" src="/landing/assets/block2-1/title_bg_1.svg" alt="" />
+      <img class="g-tile" src="/landing/assets/block2-1/title_bg_2.svg" alt="" />
+      <img class="g-tile" src="/landing/assets/block2-1/title_bg_3.svg" alt="" />
+      <img class="g-tile" src="/landing/assets/block2-1/title_bg_4.svg" alt="" />
+      <img class="g-tile" src="/landing/assets/block2-1/title_bg_5.svg" alt="" />
+      <img class="g-tile" src="/landing/assets/block2-1/title_bg_6.svg" alt="" />
+      <img class="g-tile" src="/landing/assets/block2-1/title_bg_7.svg" alt="" />
+      <img class="g-tile" src="/landing/assets/block2-1/title_bg_8.svg" alt="" />
+
+      <svg class="g-mascot" viewBox="0 0 5802 2858" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="3804.9" y="1230.9" width="395.995" height="395.995" rx="197.997" stroke="#222224" stroke-width="29.8061"/>
+        <g data-mascot-eyes>
+          <path d="M3906 1511.44L3906 1408" stroke="#222224" stroke-width="29.806"/>
+          <path d="M3990.44 1511.44L3990.44 1408" stroke="#222224" stroke-width="29.806"/>
+        </g>
+      </svg>
+
+      <div class="g-ico" style="--cx:57.856%;--cy:27.264%"><img src="/landing/assets/block2-1/icon_note.svg" alt="" /></div>
+      <div class="g-ico" style="--cx:68.990%;--cy:27.264%"><img src="/landing/assets/block2-1/icon_calendar.svg" alt="" /></div>
+      <div class="g-ico" style="--cx:80.124%;--cy:27.264%"><img src="/landing/assets/block2-1/icon_camera.svg" alt="" /></div>
+      <div class="g-ico" style="--cx:80.124%;--cy:50.007%"><img src="/landing/assets/block2-1/icon_threads.svg" alt="" /></div>
+      <div class="g-ico" style="--cx:80.124%;--cy:72.750%"><img src="/landing/assets/block2-1/icon_calendar.svg" alt="" /></div>
+      <div class="g-ico" style="--cx:68.990%;--cy:72.750%"><img src="/landing/assets/block2-1/icon_clock.svg" alt="" /></div>
+      <div class="g-ico" style="--cx:57.856%;--cy:72.750%"><img src="/landing/assets/block2-1/icon_threads.svg" alt="" /></div>
+      <div class="g-ico" style="--cx:57.856%;--cy:50.007%"><img src="/landing/assets/block2-1/icon_settings.svg" alt="" /></div>
+
+      <!-- маркеры центров плиток — цели полёта заметок -->
+      <i class="g-mark" data-mark="1" style="--cx:57.856%;--cy:27.264%"></i>
+      <i class="g-mark" data-mark="2" style="--cx:68.990%;--cy:27.264%"></i>
+      <i class="g-mark" data-mark="3" style="--cx:80.124%;--cy:27.264%"></i>
+      <i class="g-mark" data-mark="4" style="--cx:80.124%;--cy:50.007%"></i>
+      <i class="g-mark" data-mark="5" style="--cx:80.124%;--cy:72.750%"></i>
+      <i class="g-mark" data-mark="6" style="--cx:68.990%;--cy:72.750%"></i>
+      <i class="g-mark" data-mark="7" style="--cx:57.856%;--cy:72.750%"></i>
+      <i class="g-mark" data-mark="8" style="--cx:57.856%;--cy:50.007%"></i>
     </div>
 
-    <!-- 6. Плашка Todoist — справа сверху чуть ниже, наезжает на ChatGPT -->
-    <div class="chaos-el" data-delay="140" style="top:22%;right:8%;transform:rotate(12deg);--dx:-6px;--dy:4px;--dr:3deg;--dur:6.7s">
-      <div class="cel-badge">
-        <span class="cel-badge-name">Todoist</span>
-        <span class="cel-badge-sub">83 задачи</span>
-      </div>
+    <!-- block2-2: финал раскадровки — плитки превращаются в день -->
+    <div class="scene2" data-scene2 aria-hidden="true">
+      <!-- память: полноразмерный холст, позиция плашки запечена -->
+      <img class="s2-memory" src="/landing/assets/block2-2/memory.svg" alt="" />
+      <!-- календарная сетка под событиями -->
+      <img class="s2-timeline" src="/landing/assets/block2-2/timeline.svg" alt="" />
+      <!-- события: летят из своих плиток (data-from = mark) в стопку -->
+      <img class="s2-event" data-from="4" src="/landing/assets/block2-2/event1.svg" style="--ex:55.5%; --ey:41.0%;" alt="" />
+      <img class="s2-event" data-from="3" src="/landing/assets/block2-2/event2.svg" style="--ex:55.5%; --ey:53.7%;" alt="" />
+      <img class="s2-event" data-from="5" src="/landing/assets/block2-2/event3.svg" style="--ex:55.5%; --ey:66.4%;" alt="" />
     </div>
 
-    <!-- 7. "идея для питча" — левый бок, середина -->
-    <div class="chaos-el" data-delay="170" style="top:38%;left:1%;transform:rotate(-4deg);--dx:5px;--dy:3px;--dr:-1.5deg;--dur:7.5s">
-      <div class="cel-note">
-        <div>идея для питча</div>
-        <div class="cel-note-line"></div>
-        <div class="cel-note-dim">не забыть про…</div>
-      </div>
+    </div><!-- /.stage -->
+
+    <!-- Заметки: дом = разброс hero, летят в маркер data-to -->
+    <div class="act-notes" data-notes>
+      <span class="note g-note" data-to="4" style="--x:12%; --y:19%;"><img class="note-inner" src="/landing/assets/hero/note_task.svg"     alt="" /></span>
+      <span class="note g-note" data-to="2" style="--x:44%; --y:19%;"><img class="note-inner" src="/landing/assets/hero/note_event.svg"    alt="" /></span>
+      <span class="note g-note" data-to="6" style="--x:76%; --y:24%;"><img class="note-inner" src="/landing/assets/hero/note_deadline.svg" alt="" /></span>
+      <span class="note g-note" data-to="8" style="--x:22%; --y:44%;"><img class="note-inner" src="/landing/assets/hero/note_reminder.svg" alt="" /></span>
+      <span class="note g-note" data-to="3" style="--x:67%; --y:52%;"><img class="note-inner" src="/landing/assets/hero/note_webinar.svg"  alt="" /></span>
+      <span class="note g-note" data-to="1" style="--x:81%; --y:68%;"><img class="note-inner" src="/landing/assets/hero/note_note.svg"     alt="" /></span>
+      <span class="note g-note" data-to="5" style="--x:12%; --y:69%;"><img class="note-inner" src="/landing/assets/hero/note_meeting.svg"  alt="" /></span>
+      <span class="note g-note" data-to="7" style="--x:47%; --y:72%;"><img class="note-inner" src="/landing/assets/hero/note_thought.svg"  alt="" /></span>
     </div>
-
-    <!-- 8. "контекст потерян" — правый бок середина, сильный наклон -->
-    <div class="chaos-el" data-delay="200" style="top:42%;right:2%;transform:rotate(-8deg);--dx:-4px;--dy:-3px;--dr:-2deg;--dur:5.6s">
-      <div class="cel-note">
-        <div>контекст потерян</div>
-        <div class="cel-note-line cel-note-dash"></div>
-        <div class="cel-note-dim">где был тот файл…</div>
-        <div class="cel-note-dim" style="opacity:0.5">кто должен был…</div>
-      </div>
-    </div>
-
-    <!-- 9. Восклицание — правый верх угол внутри -->
-    <div class="chaos-el" data-delay="50" style="top:2%;right:28%;transform:rotate(-15deg);--dx:3px;--dy:-4px;--dr:-4deg;--dur:8.0s">
-      <span class="cel-glyph" style="font-size:32px;opacity:0.12">!</span>
-    </div>
-
-    <!-- 10. "DEADLINE" — левый низ, крупно наклонено -->
-    <div class="chaos-el" data-delay="230" style="bottom:18%;left:3%;transform:rotate(8deg);--dx:4px;--dy:5px;--dr:3deg;--dur:6.2s">
-      <span class="cel-label-big">DEADLINE</span>
-    </div>
-
-    <!-- 11. "???" — нижний левый угол -->
-    <div class="chaos-el" data-delay="260" style="bottom:4%;left:6%;transform:rotate(-13deg);--dx:3px;--dy:-4px;--dr:-2.5deg;--dur:5.5s">
-      <span class="cel-shout" style="opacity:0.2;font-size:22px">???</span>
-    </div>
-
-    <!-- 12. Плашка Telegram — нижний правый, сильный наклон -->
-    <div class="chaos-el" data-delay="280" style="bottom:8%;right:5%;transform:rotate(-10deg);--dx:-5px;--dy:4px;--dr:-3deg;--dur:7.3s">
-      <div class="cel-badge">
-        <span class="cel-badge-name">Telegram</span>
-        <span class="cel-badge-sub">99+ непрочитанных</span>
-      </div>
-    </div>
-
-    <!-- 13. "09:00 → 18:00 → ..." — нижний центр-лево -->
-    <div class="chaos-el" data-delay="310" style="bottom:5%;left:28%;transform:rotate(3deg);--dx:-3px;--dy:4px;--dr:1deg;--dur:6.8s">
-      <span class="cel-label-mono">09:00 → 14:00 → 18:00 → ...</span>
-    </div>
-
-    <!-- 14. "куда это всё?" — верхний центр-право -->
-    <div class="chaos-el" data-delay="80" style="top:6%;left:55%;transform:rotate(5deg);--dx:-4px;--dy:-5px;--dr:2deg;--dur:5.1s">
-      <span class="cel-label-mono" style="opacity:0.2">куда это всё?</span>
-    </div>
-
-    <!-- 15. Три точки-недосказанность — нижний правый угол -->
-    <div class="chaos-el" data-delay="340" style="bottom:3%;right:12%;transform:rotate(-5deg);--dx:-3px;--dy:3px;--dr:-2deg;--dur:4.6s">
-      <span class="cel-dots">• • •</span>
-    </div>
-
-    <!-- 16. Стрелка хаоса — верх посередине -->
-    <div class="chaos-el" data-delay="120" style="top:3%;left:38%;transform:rotate(-3deg);--dx:4px;--dy:-3px;--dr:1deg;--dur:7.8s">
-      <span class="cel-arrow">↗ ↙ ↗</span>
-    </div>
-
-  </div>
-
-  <!-- Центральный текст -->
-  <div class="chaos-text">
-    <h2 class="chaos-title chaos-g" data-delay="320">Планирование превращается&nbsp;в хаос</h2>
-    <p class="chaos-sub chaos-g" data-delay="400">Инструменты множатся, контекст рассыпается по вкладкам,<br>а ценные мысли исчезают быстрее, чем ты успеваешь их записать.</p>
-    <p class="chaos-hint chaos-g" data-delay="460">Кажется, пора что-то менять…</p>
   </div>
 </section>
 
-<!-- ═════ Solution ═════ -->
-<section class="solution-section">
-  <div class="solution-inner">
+<!-- ═════ БЛОК 3 — Горизонтальная лента «Делегируй» (scroll-jack) ═════ -->
+<section class="rail" id="solutions" data-rail>
+  <div class="rail-sticky">
+    <div class="wrap rail-head">
+      <h2 class="rail-title"><span class="rail-word" data-rail-word>Делегируй</span> <span class="rail-word-dim">через мысль</span></h2>
+      <div class="rail-nav">
+        <button class="rail-arrow" data-rail-prev aria-label="Назад">‹</button>
+        <button class="rail-arrow" data-rail-next aria-label="Вперёд">›</button>
+      </div>
+    </div>
 
-    <div class="solution-phone-col">
-      <div class="solution-phone-wrap">
-        <div class="solution-phone">
-          <div class="solution-phone-inner">
-            <img src="/landing/screenshots/start-screen.png" class="solution-screen-img" alt="стартовый экран"
-              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
-            <div class="solution-screen-stub">стартовый экран</div>
+    <div class="rail-viewport">
+      <div class="rail-track" data-rail-track>
+        <article class="rail-card" data-word="Делегируй" data-squircle data-sq-radius="34">
+          <div class="rc-mock" data-squircle data-sq-radius="26">
+            <img class="rc-scene" src="/landing/assets/block3/scene1.svg" alt="" />
           </div>
-        </div>
-      </div>
-    </div>
+          <h3 class="rc-title">Агентный календарь</h3>
+          <p class="rc-desc">ИИ ставит задачи и управляет событиями, планируя твой день
+            на основе истории чата. Не нужно держать в уме проекты, дедлайны и встречи —
+            Мысль напомнит</p>
+        </article>
 
-    <div class="solution-text-col">
-      <div class="solution-label">решение</div>
-      <h2 class="solution-title">Агент, который управляет<br>задачами, строит планы<br>и надёжно хранит заметки</h2>
-      <p class="solution-desc">Просто общайся — как с другом.<br>Мысль запомнит, расставит по местам<br>и ничего не потеряет.</p>
-    </div>
-
-  </div>
-</section>
-
-<!-- ═════ Features ═════ -->
-<section class="feat-section" id="features">
-  <div class="feat-inner">
-
-    <!-- Левая колонка -->
-    <div class="feat-left">
-      <h2 class="feat-title">Всё что нужно —<br/>в одном месте</h2>
-
-      <div class="feat-list" id="featList">
-
-        <div class="feat-item active" data-feat="1">
-          <img src="/landing/screenshots/screen1.png" class="feat-item-img" alt="Делегируй"/>
-          <div class="feat-tag">ДЕЛЕГИРУЙ</div>
-          <div class="feat-name">Агент-планировщик</div>
-          <div class="feat-desc"><div class="feat-desc-inner">Агент управляет планировщиком через чат:
-ставит задачи, видит связи и знает контекст,
-делая планирование проще с каждым днём</div></div>
-        </div>
-
-        <div class="feat-item" data-feat="2">
-          <img src="/landing/screenshots/screen2.png" class="feat-item-img" alt="Диктуй"/>
-          <div class="feat-tag">ДИКТУЙ</div>
-          <div class="feat-name">Голосовой ввод и тг бот</div>
-          <div class="feat-desc"><div class="feat-desc-inner">Если неудобно печатать — скажи голосом,
-и Мысль услышит тебя. Неудобно заходить
-в приложение? У нас есть тг коннектор</div></div>
-        </div>
-
-        <div class="feat-item" data-feat="3">
-          <img src="/landing/screenshots/screen3.png" class="feat-item-img" alt="Добавляй"/>
-          <div class="feat-tag">ДОБАВЛЯЙ</div>
-          <div class="feat-name">Динамическое хранилище заметок</div>
-          <div class="feat-desc"><div class="feat-desc-inner">Каждый чат, задача и заметка — часть
-общей картины. Мысль использует твои заметки
-как контекст для будущих бесед, создаёт саммари
-каждого чата и сохраняет в памяти</div></div>
-        </div>
-
-        <div class="feat-item" data-feat="4">
-          <img src="/landing/screenshots/screen4.png" class="feat-item-img" alt="Доставай"/>
-          <div class="feat-tag">ДОСТАВАЙ</div>
-          <div class="feat-name">Ассистент по заметкам</div>
-          <div class="feat-desc"><div class="feat-desc-inner">Твои записи перестают быть мёртвым грузом —
-Мысль ищет по смыслу, а не ключевым словам.
-Достаточно дать направление, и вся информация
-будет у тебя в руках через мгновения</div></div>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- Правая колонка — телефон sticky -->
-    <div class="feat-right">
-      <div class="feat-phone-wrap">
-        <div class="feat-phone">
-          <div class="feat-phone-inner">
-            <div class="feat-screen active" data-feat="1">
-              <img src="/landing/screenshots/screen1.png" class="feat-screen-img" alt="Делегируй" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
-              <div class="feat-screen-stub">Делегируй</div>
-            </div>
-            <div class="feat-screen" data-feat="2">
-              <img src="/landing/screenshots/screen2.png" class="feat-screen-img" alt="Диктуй" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
-              <div class="feat-screen-stub">Диктуй</div>
-            </div>
-            <div class="feat-screen" data-feat="3">
-              <img src="/landing/screenshots/screen3.png" class="feat-screen-img" alt="Добавляй" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
-              <div class="feat-screen-stub">Добавляй</div>
-            </div>
-            <div class="feat-screen" data-feat="4">
-              <img src="/landing/screenshots/screen4.png" class="feat-screen-img" alt="Доставай" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
-              <div class="feat-screen-stub">Доставай</div>
-            </div>
+        <article class="rail-card" data-word="Ускоряйся" data-squircle data-sq-radius="34">
+          <div class="rc-mock" data-squircle data-sq-radius="26">
+            <img class="rc-scene" src="/landing/assets/block3/scene2.svg" alt="" />
           </div>
-        </div>
+          <h3 class="rc-title">Тг бот и управление голосом</h3>
+          <p class="rc-desc">Наговори все задачи в голосовом в тг — Мысль сама расставит их
+            в календаре, выберёт категории и встроит в общий план дня, опираясь на твой
+            контекст</p>
+        </article>
+
+        <article class="rail-card" data-word="Запоминай" data-squircle data-sq-radius="34">
+          <div class="rc-mock" data-squircle data-sq-radius="26">
+            <img class="rc-scene" src="/landing/assets/block3/scene3.svg" alt="" />
+          </div>
+          <h3 class="rc-title">Личная база знаний</h3>
+          <p class="rc-desc">Записывай свои мысли и то, что нужно сохранить, и возвращайся
+            в любой момент, спросив в чате. А вообще, зачастую ассистент пишет себе
+            заметки сам</p>
+        </article>
+
+        <article class="rail-card" data-word="Находи" data-squircle data-sq-radius="34">
+          <div class="rc-mock rc-chat" data-squircle data-sq-radius="26">
+            <div class="rc-msg rc-msg-out">Где мы сможем презентовать стартап в ближайшее время?</div>
+            <div class="rc-msg rc-msg-in">Нашёл питч-сессию в Сколково 28 июня — добавить в календарь?</div>
+          </div>
+          <span class="rc-soon-tag">скоро</span>
+          <h3 class="rc-title">Поиск в интернете</h3>
+          <p class="rc-desc">Мысль ищет в интернете и сама встраивает результаты в твой день,
+            будь то события, дедлайны, новости или заметки</p>
+        </article>
+
+        <article class="rail-card" data-word="<s>Работай</s> автоматизируй" data-squircle data-sq-radius="34">
+          <div class="rc-mock rc-tasks" data-squircle data-sq-radius="26">
+            <div class="rc-task is-done"><span class="rc-check"></span><span class="rc-task-t">Записаться к стоматологу</span></div>
+            <div class="rc-task is-done"><span class="rc-check"></span><span class="rc-task-t">Оплатить подписку</span></div>
+            <div class="rc-task is-active"><span class="rc-check"></span><span class="rc-task-t">Бронирую столик на пятницу…</span></div>
+            <div class="rc-agent"><span class="rc-agent-dot"></span>Мысль выполняет задачи сама</div>
+          </div>
+          <span class="rc-soon-tag">скоро</span>
+          <h3 class="rc-title">Автономные задачи</h3>
+          <p class="rc-desc">Просто планирования мало, это скучно. Мы разрабатываем модуль,
+            который позволит автоматизировать задачи от а до я</p>
+        </article>
       </div>
     </div>
-
   </div>
 </section>
 
-<!-- ═════ Onboarding ═════ -->
-<section class="ob-section">
+<!-- ═════ БЛОК 4 — Ассистент думает вместе с тобой ═════ -->
+<section class="think" id="tech">
+  <div class="wrap think-inner">
+    <div class="think-grid">
+      <!-- Левая часть — мокап телефона -->
+      <div class="think-phone">
+        <div class="phone-frame">
+          <img class="phone-screen" src="/landing/assets/block4/screen1.svg" alt="Экран приложения Мысль" />
+          <img class="phone-shell" src="/landing/assets/mockups/phone_mockup.png" alt="" aria-hidden="true" />
+        </div>
+      </div>
+
+      <!-- Правая часть — заголовок + текст -->
+      <div class="think-body">
+        <h2 class="think-title">Ассистент думает вместе с тобой</h2>
+        <p class="think-text">У мысли есть память, и этим всё сказано. Чем больше ты общаешься
+          с ассистентом, планируешь дела или рефлексируешь – тем лучше будет каждый последующий
+          ответ. Со временем агент может планировать дела сам, помогая выбрать лучшее время</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════ Запуск — ноутбук + три шага ═════ -->
+<section class="setup" id="start">
   <div class="wrap">
+    <h2 class="setup-title"><span class="setup-dim">Это всё</span> быстро,<br class="m-br"> просто и бесплатно</h2>
 
-    <h2 class="ob-heading">Минута до первого замысла</h2>
+    <div class="setup-grid">
+      <div class="setup-mock">
+        <img src="/landing/assets/block5/screen2.png" alt="Мысль на десктопе" />
+      </div>
 
-    <div class="ob-steps">
-      <div class="ob-step">
-        <span class="ob-num">01</span>
-        <svg class="ob-icon" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5">
-          <circle cx="18" cy="10" r="7"/>
-          <path d="M6 30c0-6.627 5.373-12 12-12s12 5.373 12 12"/>
-          <line x1="18" y1="3" x2="18" y2="1"/>
-          <line x1="25" y1="5" x2="27" y2="3"/>
-        </svg>
-        <div class="ob-step-title">Зарегистрируйся</div>
-        <div class="ob-step-desc">Через гугл или по почте и паролю —<br>быстро и безопасно</div>
-      </div>
-      <div class="ob-step">
-        <span class="ob-num">02</span>
-        <svg class="ob-icon" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M6 8h24a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H10l-6 4V10a2 2 0 0 1 2-2z"/>
-          <line x1="12" y1="16" x2="24" y2="16"/>
-          <line x1="12" y1="21" x2="19" y2="21"/>
-        </svg>
-        <div class="ob-step-title">Начни первую мысль</div>
-        <div class="ob-step-desc">Расскажи ассистенту о себе<br>и запланируй первую задачу</div>
-      </div>
-      <div class="ob-step">
-        <span class="ob-num">03</span>
-        <svg class="ob-icon" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="5" y="5" width="26" height="26" rx="3"/>
-          <line x1="11" y1="13" x2="25" y2="13"/>
-          <line x1="11" y1="18" x2="25" y2="18"/>
-          <line x1="11" y1="23" x2="19" y2="23"/>
-          <polyline points="21 20 24 23 29 17" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <div class="ob-step-title">Мысль разберётся</div>
-        <div class="ob-step-desc">Расставит задачи в календаре<br>и сформулирует планы сама</div>
-      </div>
+      <ol class="setup-steps" data-reveal>
+        <li class="setup-step" data-reveal-item>
+          <span class="setup-num">01</span>
+          <div class="setup-step-body">
+            <h3 class="setup-step-title">Зарегистрируйся</h3>
+            <p class="setup-step-desc">Прямо здесь, на сайте можно создать аккаунт по почте или через яндекс айди</p>
+          </div>
+        </li>
+        <li class="setup-step" data-reveal-item>
+          <span class="setup-num">02</span>
+          <div class="setup-step-body">
+            <h3 class="setup-step-title">Подключи telegram</h3>
+            <p class="setup-step-desc">Так удобнее и быстрее: ассистент всегда под рукой</p>
+          </div>
+        </li>
+        <li class="setup-step" data-reveal-item>
+          <span class="setup-num">03</span>
+          <div class="setup-step-body">
+            <h3 class="setup-step-title">Мысль разберётся</h3>
+            <p class="setup-step-desc">Ну, тут и так всё рассказали. Агент ведёт расписание, ставит задачи и хранит заметки</p>
+          </div>
+        </li>
+      </ol>
     </div>
-
-    <h2 class="ob-platforms-title">Везде, где ты работаешь</h2>
-
-    <div class="ob-platforms">
-      <div class="ob-platform">
-        <svg class="ob-platform-icon" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="3" y="6" width="30" height="24" rx="3"/>
-          <line x1="3" y1="12" x2="33" y2="12"/>
-          <circle cx="7.5" cy="9" r="1" fill="currentColor" stroke="none"/>
-          <circle cx="11.5" cy="9" r="1" fill="currentColor" stroke="none"/>
-          <circle cx="15.5" cy="9" r="1" fill="currentColor" stroke="none"/>
-        </svg>
-        <div class="ob-platform-name">Веб-приложение</div>
-        <div class="ob-platform-desc">Полный интерфейс в браузере — работает на любом устройстве без установки</div>
-        <span class="ob-platform-tag">уже доступно</span>
-      </div>
-      <div class="ob-platform">
-        <svg class="ob-platform-icon" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="10" y="3" width="16" height="30" rx="3"/>
-          <line x1="15" y1="28" x2="21" y2="28"/>
-        </svg>
-        <div class="ob-platform-name">Мобильное приложение</div>
-        <div class="ob-platform-desc">iOS и Android — голосовой ввод, уведомления, доступ к архиву</div>
-        <span class="ob-platform-tag">скоро</span>
-      </div>
-      <div class="ob-platform">
-        <svg class="ob-platform-icon" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5">
-          <circle cx="18" cy="18" r="15"/>
-          <path d="M8 18 L28 10 L22 28 L16 22 L8 18Z"/>
-          <line x1="16" y1="22" x2="28" y2="10"/>
-        </svg>
-        <div class="ob-platform-name">Telegram-бот</div>
-        <div class="ob-platform-desc">Быстрый доступ без открытия приложения — скинул мысль, Мысль поняла</div>
-        <span class="ob-platform-tag">уже доступно</span>
-      </div>
-    </div>
-
   </div>
 </section>
 
-<!-- ═════ Final CTA ═════ -->
+<!-- ═════ Финальный CTA ═════ -->
 <section class="final" id="join">
-  <div class="wrap reveal">
-    <h2 class="final-title">есть мысли?</h2>
-    <div class="final-cta-wrap">
-      <a class="btn btn-solid btn-lg" href="/app#/signup">узнать сейчас</a>
+  <div class="wrap final-inner">
+    <div class="cta-mascot" data-cta-mascot aria-hidden="true">
+      <svg viewBox="0 0 70 70" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="35" cy="35" r="32.55" stroke="#222224" stroke-width="4.9" />
+        <rect class="cta-eye" data-eye-l fill="#222224" width="4.9" x="26.55" y="40" height="0" />
+        <rect class="cta-eye" data-eye-r fill="#222224" width="4.9" x="38.55" y="40" height="0" />
+      </svg>
     </div>
+    <h2 class="final-title">ну что, есть мысли?</h2>
+    <a class="btn-dark btn-lg" href="/app#/signup">узнать сейчас</a>
   </div>
 </section>
 
 <!-- ═════ Footer ═════ -->
-<footer>
-  <div class="wrap">
-    <div class="footer-grid">
-      <a class="logo" href="#top" aria-label="мысль">
-        <img src="/landing/assets/logo-full.svg" class="logo-full" alt="Мысль" height="28"/>
-      </a>
-      <div class="footer-tag">Разгружает дела, не нагружая новыми</div>
-      <div class="footer-social">
-        <a href="https://t.me/mysle_app" target="_blank" rel="noopener" aria-label="Telegram">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M21 4L3 11l6 2 2 6 4-4 4 3 2-14z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-    </div>
-    <div class="footer-bottom">
-      <span>сделано в России · 2026</span>
-      <span>© мысль</span>
-    </div>
+<footer class="foot">
+  <div class="wrap foot-inner">
+    <a class="nav-logo" href="#top"><img src="/landing/assets/logos/landing_logo.svg" alt="Мысль" class="logo-img" /></a>
+    <a class="foot-tg" href="https://t.me/mysle_app" target="_blank" rel="noopener">Telegram</a>
   </div>
 </footer>
 
-<script>
-/* Sticky header */
-const header = document.getElementById('header');
-const onScroll = () => header.classList.toggle('scrolled', window.scrollY > 24);
-window.addEventListener('scroll', onScroll, { passive: true });
-onScroll();
-
-/* Reveal on scroll */
-const io = new IntersectionObserver((entries) => {
-  for (const e of entries) {
-    if (e.isIntersecting) {
-      e.target.classList.add('in');
-      io.unobserve(e.target);
-    }
-  }
-}, { threshold: 0.12 });
-document.querySelectorAll('.reveal').forEach(el => io.observe(el));
-
-/* Features — click only, sequential crossfade */
-(function () {
-  const featItems = document.querySelectorAll('.feat-item');
-  const featScreens = document.querySelectorAll('.feat-screen');
-  if (!featItems.length) return;
-
-  let currentFeat = 1;
-  let fadeTimer = null;
-
-  function setFeat(n) {
-    if (n === currentFeat) return;
-
-    /* Items — instant class swap, CSS handles transition */
-    featItems.forEach(el => el.classList.toggle('active', +el.dataset.feat === n));
-
-    /* Screens — sequential: fade out current, then fade in next */
-    const outEl = document.querySelector(`.feat-screen[data-feat="${currentFeat}"]`);
-    const inEl  = document.querySelector(`.feat-screen[data-feat="${n}"]`);
-
-    if (fadeTimer) clearTimeout(fadeTimer);
-
-    if (outEl) {
-      outEl.classList.remove('fade-in');
-      outEl.classList.add('fade-out');
-      outEl.classList.remove('active');
-    }
-
-    fadeTimer = setTimeout(() => {
-      if (outEl) outEl.classList.remove('fade-out');
-      if (inEl) {
-        inEl.classList.add('active');
-        inEl.classList.add('fade-in');
-        setTimeout(() => inEl.classList.remove('fade-in'), 300);
-      }
-    }, 150);
-
-    currentFeat = n;
-  }
-
-  featItems.forEach(el => {
-    el.addEventListener('click', () => setFeat(+el.dataset.feat));
-  });
-})();
-
-/* Chaos field elements (new HTML-based) */
-(function () {
-  const chaosSection = document.querySelector('.chaos-section');
-  if (!chaosSection) return;
-  const els = chaosSection.querySelectorAll('.chaos-el');
-  const io = new IntersectionObserver((entries) => {
-    if (!entries[0].isIntersecting) return;
-    els.forEach(el => {
-      const d = parseInt(el.dataset.delay || '0', 10);
-      el.style.setProperty('--delay', String(d));
-      setTimeout(() => el.classList.add('visible'), d);
-    });
-    io.disconnect();
-  }, { threshold: 0.1 });
-  io.observe(chaosSection);
-})();
-
-/* Solution section reveal */
-(function () {
-  const phoneCol = document.querySelector('.solution-phone-col');
-  const textCol  = document.querySelector('.solution-text-col');
-  if (!phoneCol || !textCol) return;
-  const io = new IntersectionObserver((entries) => {
-    entries.forEach(e => {
-      if (e.isIntersecting) {
-        e.target.classList.add('in');
-        io.unobserve(e.target);
-      }
-    });
-  }, { threshold: 0.15 });
-  io.observe(phoneCol);
-  io.observe(textCol);
-})();
-
-/* Chaos section stagger */
-const chaosSection = document.querySelector('.chaos-section');
-if (chaosSection) {
-  const chaosItems = chaosSection.querySelectorAll('.chaos-g');
-  const chaosIo = new IntersectionObserver((entries) => {
-    if (entries[0].isIntersecting) {
-      chaosItems.forEach(el => {
-        const d = parseInt(el.dataset.delay || '0', 10);
-        el.style.setProperty('--delay', String(d));
-        setTimeout(() => el.classList.add('visible'), d);
-        /* also handle .chaos-el */
-      });
-      chaosIo.disconnect();
-    }
-  }, { threshold: 0.15 });
-  chaosIo.observe(chaosSection);
-}
-
-/* Onboarding reveal */
-const obIo = new IntersectionObserver((entries) => {
-  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); obIo.unobserve(e.target); } });
-}, { threshold: 0.15 });
-document.querySelectorAll('.ob-step, .ob-platform').forEach(el => obIo.observe(el));
-</script>
-
+<script src="/landing/v2.js" defer></script>
 </body>
 </html>

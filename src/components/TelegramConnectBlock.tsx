@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../lib/auth';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
-const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || 'mysle_tgbot';
+const BOT_USERNAME = import.meta.env?.VITE_TELEGRAM_BOT_USERNAME || 'mysle_tgbot';
 
 export default function TelegramConnectBlock() {
   const [code, setCode] = useState<string | null>(null);

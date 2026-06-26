@@ -1,0 +1,574 @@
+/* ════════════════════════════════════════════════════════════════
+   Мысль — лендинг v2. Палитра и композиция со скринов:
+   нейтральный серый фон + пастельные стикеры, шрифт Muller.
+   ════════════════════════════════════════════════════════════════ */
+
+@font-face {
+  font-family: 'Muller';
+  src: url('/landing/assets/fonts/MullerRegular.ttf') format('truetype');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Muller';
+  src: url('/landing/assets/fonts/MullerMedium.ttf') format('truetype');
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+:root {
+  --bg: #f0f0f0;
+  --surface: #ffffff;
+  --ink: #1c1c1e;
+  --ink-soft: #6f6f74;
+  --ink-faint: #a8a8ad;
+  --sub: rgba(34, 34, 36, .6);   /* подзаголовки: #222224 @ 60% */
+  --line: rgba(0, 0, 0, .08);
+
+  --green: #cdeccf;
+  --green-deep: #4f7d57;
+  --blue: #d7e2f5;
+  --blue-deep: #4f6694;
+  --peach: #fbe6c9;
+  --peach-deep: #9a7a45;
+  --pink: #f6d9dd;
+  --pink-deep: #9c5560;
+
+  --radius-s: 10px;
+  --radius-m: 16px;
+  --radius-l: 22px;
+  --shadow: 0 10px 30px -12px rgba(0, 0, 0, .18);
+  --shadow-soft: 0 6px 20px -10px rgba(0, 0, 0, .14);
+
+  --wrap: 1160px;
+  --ease: cubic-bezier(.4, 0, .2, 1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+
+body {
+  font-family: 'Muller', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+.geo-h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+.wrap { width: 100%; max-width: var(--wrap); margin: 0 auto; padding: 0 32px; }
+
+/* ─── Navigation ─────────────────────────────────────────────── */
+#nav {
+  position: fixed; inset: 0 0 auto 0; z-index: 100;
+  backdrop-filter: blur(12px);
+  background: rgba(240, 240, 240,.72);
+  border-bottom: 1px solid transparent;
+  transition: border-color .3s var(--ease), background .3s var(--ease);
+}
+#nav.scrolled { border-color: var(--line); background: rgba(240, 240, 240,.9); }
+.nav-inner {
+  max-width: var(--wrap); margin: 0 auto; padding: 16px 32px;
+  display: flex; align-items: center; justify-content: space-between; gap: 24px;
+}
+.nav-logo {
+  display: inline-flex; align-items: center; gap: 9px;
+  font-weight: 500; font-size: 18px; color: var(--ink); text-decoration: none;
+}
+.logo-img { height: 26px; width: auto; display: block; }
+.nav-links { display: flex; gap: 30px; }
+.nav-link { font-size: 15px; font-weight: 500; color: var(--ink-soft); text-decoration: none; transition: color .2s; }
+.nav-link:hover { color: var(--ink); }
+.nav-cta { display: flex; align-items: center; gap: 18px; }
+.nav-login { font-size: 15px; font-weight: 500; color: var(--ink); text-decoration: none; }
+
+/* Мобильные элементы — скрыты на ПК, включаются в @media ниже */
+.logo-mark, .nav-burger, .mobile-menu,
+.m-collage, .m-mascot, .m-memory { display: none; }
+.m-br { display: none; }
+
+.btn-dark {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--ink); color: #fff; text-decoration: none;
+  font-weight: 500; font-size: 15px;
+  padding: 11px 22px; border-radius: 999px;
+  transition: transform .2s var(--ease), opacity .2s;
+}
+.btn-dark:hover { transform: translateY(-1px); opacity: .92; }
+.btn-lg { padding: 15px 32px; font-size: 16px; }
+.m-hero-cta { display: none; }   /* кнопка в hero — только мобайл (см. @media) */
+
+/* ─── Общие заголовки ────────────────────────────────────────── */
+.hero-title {
+  font-size: clamp(34px, 5vw, 60px); font-weight: 500; line-height: 1.08;
+  letter-spacing: -.02em; color: var(--ink);
+}
+.hero-sub {
+  margin-top: 22px; font-size: clamp(15px, 1.6vw, 19px); font-weight: 400;
+  color: var(--sub); line-height: 1.5;
+}
+.section-title {
+  font-size: clamp(28px, 3.4vw, 44px); font-weight: 500; line-height: 1.12;
+  letter-spacing: -.02em; color: var(--ink);
+}
+.section-sub {
+  margin-top: 18px; font-size: 19px; font-weight: 400; color: var(--sub);
+  line-height: 1.5; text-align: justify; hyphens: auto;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-12px); }
+}
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.05); }
+}
+@keyframes mNoteFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-7px); }
+}
+
+/* ─── АКТ 1: Hero → сцена (заметки → плитки) ──────────────────── */
+.act { position: relative; height: 480vh; }   /* запас прокрутки: part1 (заметки) + part2 (день) */
+.act-sticky { position: sticky; top: 0; height: 100vh; overflow: hidden; }
+
+/* Текст hero — по центру */
+.act-hero {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  z-index: 6; text-align: center; width: 100%; padding: 0 24px;
+}
+/* Текст решений — слева, поверх пустой части холста */
+.act-sol {
+  position: absolute; left: max(32px, calc((100% - var(--wrap)) / 2 + 32px));
+  top: 50%; transform: translateY(-50%); z-index: 5; max-width: min(440px, 42vw); opacity: 0;
+}
+
+/* Камера: общий холст block2-1 + block2-2 (5802×2858). Наезд — из JS. */
+.stage {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(100%, 1320px); aspect-ratio: 5802 / 2858; z-index: 3;
+  transform-origin: center; will-change: transform;
+}
+
+/* Сетка = холст block2-1, позиции плиток запечены */
+.grid { position: absolute; inset: 0; }
+.grid > * { position: absolute; }
+.g-tile, .g-mascot { inset: 0; width: 100%; height: 100%; }
+.g-tile { opacity: 0; will-change: transform, opacity; }
+.g-mascot { opacity: 0; transform-origin: 68.99% 50%; animation: breathe 3s var(--ease) infinite; }
+
+.g-ico {
+  left: var(--cx); top: var(--cy); width: 2.1%;
+  transform: translate(-50%, -50%); opacity: 0;
+}
+.g-ico img { width: 100%; height: auto; display: block; }
+
+/* маркеры целей — невидимы, нужны только для замера координат */
+.g-mark { left: var(--cx); top: var(--cy); width: 1px; height: 1px; }
+
+/* block2-2: память / события / таймлайн — поверх гаснущих плиток.
+   Масштаб 1.29 вокруг центра кластера → день занимает тот же квадрат,
+   что и сетка плиток block2-1 (одинаковый размер сцены). */
+.scene2 { position: absolute; inset: 0; z-index: 2; transform: scale(1.29); transform-origin: 69% 50%; }
+.scene2 > * { position: absolute; opacity: 0; }
+.s2-memory { inset: 0; width: 100%; }              /* полный холст, позиция запечена */
+.s2-timeline { left: 53.7%; top: 38%; width: 30.7%; height: auto; will-change: transform, opacity; }
+.s2-event {
+  left: var(--ex); top: var(--ey); width: 28.3%; height: auto;
+  transform-origin: center; will-change: transform, opacity;
+}
+
+/* заметки: дом = разброс hero (--x/--y), летят в маркеры (transform из JS) */
+.act-notes { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.note {
+  position: absolute; left: var(--x); top: var(--y);
+  width: clamp(96px, 8vw, 132px); height: auto; display: block;
+  transform-origin: center;
+  will-change: transform, opacity, filter;
+}
+/* картинка внутри: лёгкое «живое» покачивание (не влияет на замер обёртки) */
+.note-inner { display: block; width: 100%; height: auto; will-change: transform; animation: noteFloat 7s ease-in-out infinite; }
+@keyframes noteFloat {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50%      { transform: translate(var(--fx, 4px), var(--fy, -7px)) rotate(var(--fr, 1.2deg)); }
+}
+/* разнобой: своя амплитуда, длительность и фаза у каждой заметки */
+.note:nth-child(1) .note-inner { --fx: 5px;  --fy: -8px; --fr: 1.4deg;  animation-duration: 6.5s; animation-delay: -0.4s; }
+.note:nth-child(2) .note-inner { --fx: -4px; --fy: -6px; --fr: -1.2deg; animation-duration: 7.8s; animation-delay: -2.1s; }
+.note:nth-child(3) .note-inner { --fx: 6px;  --fy: -5px; --fr: 1.8deg;  animation-duration: 7.1s; animation-delay: -1.3s; }
+.note:nth-child(4) .note-inner { --fx: -5px; --fy: -9px; --fr: -1.6deg; animation-duration: 8.4s; animation-delay: -3.0s; }
+.note:nth-child(5) .note-inner { --fx: 4px;  --fy: -7px; --fr: 1.1deg;  animation-duration: 6.9s; animation-delay: -0.9s; }
+.note:nth-child(6) .note-inner { --fx: -6px; --fy: -5px; --fr: -1.9deg; animation-duration: 7.6s; animation-delay: -2.7s; }
+.note:nth-child(7) .note-inner { --fx: 5px;  --fy: -8px; --fr: 1.5deg;  animation-duration: 8.0s; animation-delay: -1.7s; }
+.note:nth-child(8) .note-inner { --fx: -4px; --fy: -6px; --fr: -1.3deg; animation-duration: 7.3s; animation-delay: -3.4s; }
+
+/* hero-визуал (статичный кадр «день») — только на мобиле; десктоп играет сцену */
+.hero-scene { display: none; }
+.scene-day {
+  position: relative; background: var(--surface); border-radius: var(--radius-l);
+  padding: 18px; box-shadow: var(--shadow-soft);
+}
+.sd-grid { width: 100%; display: block; }
+.sd-ev { position: absolute; left: 14%; width: 82%; }
+.sd-ev:nth-of-type(2) { top: 18%; }
+.sd-ev:nth-of-type(3) { top: 40%; }
+.sd-ev:nth-of-type(4) { top: 62%; }
+
+/* ─── БЛОК 3: горизонтальная лента (scroll-jack) ─────────────── */
+.rail { position: relative; }                       /* высота задаётся из JS */
+.rail-sticky { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+.rail-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 30px; }
+.rail-title { font-size: clamp(26px, 3.2vw, 40px); font-weight: 500; letter-spacing: -.02em; }
+.rail-word { display: inline-block; transition: opacity .3s var(--ease), transform .3s var(--ease); }
+.rail-word s { color: var(--ink-faint); font-weight: 500; text-decoration-thickness: .08em; margin-right: .12em; }
+.rail-word-dim { color: var(--ink-faint); font-weight: 500; }
+.rail-nav { display: flex; gap: 10px; }
+.rail-arrow {
+  width: 42px; height: 42px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); font-size: 20px; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: transform .2s var(--ease), background .2s;
+}
+.rail-arrow:hover { transform: translateY(-1px); background: #fff; }
+
+/* клипуем только по бокам (прячем горизонтальный вынос ленты),
+   сверху/снизу — запас, чтобы hover-подъём и тень карточек не срезались */
+.rail-viewport { width: 100%; clip-path: inset(-90px 0); }
+/* старт ленты выровнен по левому краю контента (как заголовок), а не по краю экрана */
+.rail-track {
+  display: flex; gap: 24px; will-change: transform;
+  padding-left: max(32px, calc((100% - var(--wrap)) / 2 + 32px));
+  padding-right: 32px;
+}
+.rail-card {
+  position: relative;
+  flex: 0 0 clamp(300px, 30vw, 420px);
+  background: var(--surface); border-radius: var(--radius-l); padding: 22px;
+  display: flex; flex-direction: column;
+  filter: drop-shadow(0 12px 34px rgba(0, 0, 0, .045));
+  transition: transform .3s var(--ease), filter .3s var(--ease);
+}
+/* hover: карточка плавно приподнимается, тень глубже */
+.rail-card:hover {
+  transform: translateY(-6px);
+  filter: drop-shadow(0 22px 46px rgba(0, 0, 0, .09));
+}
+/* squircle-форма карточек и моков считается в JS (figma-squircle), clip-path */
+[data-squircle] { border-radius: var(--radius-l); }   /* фолбэк без JS */
+.rc-title { font-size: 20px; font-weight: 500; margin: 20px 0 10px; }
+.rc-desc { font-size: 14px; color: var(--ink-soft); line-height: 1.55; }
+
+/* серый мок-превью + SVG-иллюстрация (одна форма/размер на все карточки) */
+.rc-mock {
+  background: var(--bg); border-radius: var(--radius-m); height: 290px;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.rc-scene { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+
+/* card 4 — чат (дизайн scene2): синий градиентный пузырь + белый ответ */
+.rc-chat { flex-direction: column; align-items: stretch; justify-content: center; gap: 14px; }
+.rc-msg { max-width: 88%; padding: 12px 15px; border-radius: 18px; font-size: 13px; font-weight: 500; line-height: 1.33; }
+.rc-msg-out { align-self: flex-end; background: linear-gradient(96deg, #4398d9, #388bd9); color: #fffbff; border-bottom-right-radius: 6px; }
+.rc-msg-in { align-self: flex-start; background: var(--surface); color: var(--ink); box-shadow: var(--shadow-soft); border-bottom-left-radius: 6px; }
+
+/* card 5 — автономные задачи: чекбоксы агентного цикла (дизайн строк scene1) */
+.rc-tasks { flex-direction: column; align-items: stretch; justify-content: center; gap: 9px; }
+.rc-task { display: flex; align-items: center; gap: 11px; background: var(--surface); border-radius: 14px; padding: 10px 13px; box-shadow: var(--shadow-soft); font-size: 12.5px; font-weight: 500; color: var(--ink); }
+.rc-check { flex: 0 0 18px; width: 18px; height: 18px; border-radius: 6px; border: 1.6px solid var(--line); position: relative; }
+.rc-task.is-done .rc-check { background: var(--green-deep); border-color: transparent; }
+.rc-task.is-done .rc-check::after { content: ''; position: absolute; left: 6px; top: 2.5px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.rc-task.is-done .rc-task-t { color: var(--ink-soft); text-decoration: line-through; text-decoration-color: var(--ink-faint); }
+.rc-task.is-active { opacity: .75; }
+.rc-task.is-active .rc-check { border-style: dashed; border-color: #4398d9; }
+.rc-agent { display: flex; align-items: center; gap: 8px; margin-top: 2px; font-size: 11px; color: var(--ink-faint); }
+.rc-agent-dot { flex: 0 0 14px; width: 14px; height: 14px; border-radius: 50%; background: linear-gradient(135deg, #4398d9, #388bd9); }
+
+/* бейдж «скоро» — в потоке между моком и заголовком (не режется squircle) */
+.rc-soon-tag {
+  align-self: flex-start; margin-top: 16px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--ink-faint); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px;
+}
+.rc-soon-tag + .rc-title { margin-top: 10px; }
+
+/* ─── БЛОК 4: Ассистент думает вместе с тобой ─────────────────── */
+.think { padding: 120px 0; }
+.think-title { font-size: clamp(28px, 2.6vw, 40px); font-weight: 500; line-height: 1.12; letter-spacing: -.02em; color: var(--ink); }
+.think-grid { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 72px; align-items: center; }
+
+/* Мокап телефона: скрин внутри, рамка сверху */
+.think-phone { display: flex; justify-content: center; }
+.phone-frame { position: relative; width: 100%; max-width: 320px; aspect-ratio: 974 / 2034; }
+.phone-screen {
+  position: absolute; top: 2.6%; left: 4.4%; width: 91.2%; height: 94.8%;
+  object-fit: cover; object-position: top; border-radius: 13% / 6.2%;
+}
+.phone-shell { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+/* Правая часть — заголовок + текст прямо на фоне (без карточки) */
+.think-body { display: flex; flex-direction: column; justify-content: center; }
+.think-text {
+  margin-top: 22px; max-width: 52ch; font-weight: 400;
+  font-size: clamp(16px, 1.3vw, 19px); line-height: 1.6; color: var(--sub);
+}
+
+/* Цепочка скрыта на ПК (дизайн без неё); остаётся на мобайле */
+@media (min-width: 861px) { .chain { display: none; } }
+
+/* Цепочка из 4 шагов */
+.chain { margin-top: 28px; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.chain-step {
+  flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  text-align: center;
+  opacity: 0; transform: translateY(10px); transition: opacity .5s var(--ease), transform .5s var(--ease);
+}
+.chain-ico {
+  width: 48px; height: 48px; display: grid; place-items: center;
+  border-radius: var(--radius-m); background: var(--surface); color: var(--ink);
+  box-shadow: var(--shadow-soft);
+}
+.chain-ico svg { width: 24px; height: 24px; }
+.chain-label { font-size: 13px; line-height: 1.3; color: var(--ink-soft); font-weight: 500; }
+.chain-arrow {
+  flex: 0 0 auto; width: 22px; height: 22px; margin-top: 13px; color: var(--blue-deep);
+  opacity: 0; transition: opacity .5s var(--ease);
+}
+.chain.is-in .chain-step,
+.chain.is-in .chain-arrow { opacity: 1; transform: none; }
+.chain.is-in .chain-step:nth-child(1) { transition-delay: 0ms; }
+.chain.is-in .chain-arrow:nth-child(2) { transition-delay: 110ms; }
+.chain.is-in .chain-step:nth-child(3) { transition-delay: 150ms; }
+.chain.is-in .chain-arrow:nth-child(4) { transition-delay: 260ms; }
+.chain.is-in .chain-step:nth-child(5) { transition-delay: 300ms; }
+.chain.is-in .chain-arrow:nth-child(6) { transition-delay: 410ms; }
+.chain.is-in .chain-step:nth-child(7) { transition-delay: 450ms; }
+
+/* ─── Reveal при скролле (stagger) ───────────────────────────── */
+[data-reveal-item] {
+  opacity: 0; transform: translateY(16px);
+  transition: opacity .55s var(--ease), transform .55s var(--ease);
+}
+[data-reveal].is-in [data-reveal-item] { opacity: 1; transform: none; }
+[data-reveal].is-in [data-reveal-item]:nth-child(1) { transition-delay: 0ms; }
+[data-reveal].is-in [data-reveal-item]:nth-child(2) { transition-delay: 110ms; }
+[data-reveal].is-in [data-reveal-item]:nth-child(3) { transition-delay: 220ms; }
+
+/* ─── Запуск: ноутбук + три шага ──────────────────────────────── */
+.setup { padding: 100px 0; }
+.setup-title { text-align: center; font-size: clamp(28px, 3vw, 40px); font-weight: 500; line-height: 1.12; letter-spacing: -.02em; color: var(--ink); }
+.setup-dim { color: var(--ink-faint); }
+.setup-grid {
+  margin-top: 56px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 360px);
+  gap: 64px; align-items: center;
+}
+.setup-mock img { width: 100%; height: auto; display: block; }
+
+.setup-steps { list-style: none; display: flex; flex-direction: column; gap: 36px; }
+.setup-step { display: grid; grid-template-columns: auto 1fr; column-gap: 16px; align-items: start; }
+.setup-num {
+  font-size: 15px; font-weight: 500; letter-spacing: .06em; color: var(--ink-faint);
+  padding-top: 4px;
+}
+.setup-step-title { font-size: 21px; font-weight: 500; letter-spacing: -.01em; color: var(--ink); }
+.setup-step-desc { margin-top: 8px; font-size: 15px; line-height: 1.55; color: var(--ink-soft); }
+
+/* ─── Финальный CTA ──────────────────────────────────────────── */
+.final { padding: 60px 0 120px; }
+.final-inner { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 28px; }
+.cta-mascot { width: clamp(76px, 8vw, 104px); margin-bottom: 4px; }
+.cta-mascot svg { width: 100%; height: auto; display: block; }
+.final-title { font-size: clamp(34px, 5vw, 60px); font-weight: 500; line-height: 1.08; letter-spacing: -.02em; color: var(--ink); }
+
+/* ─── Footer ─────────────────────────────────────────────────── */
+.foot { border-top: 1px solid var(--line); margin-top: 80px; }
+.foot-inner { display: flex; align-items: center; justify-content: space-between; padding-top: 26px; padding-bottom: 26px; gap: 16px; flex-wrap: wrap; }
+.foot-copy { font-size: 13px; color: var(--ink-faint); }
+.foot-tg { font-size: 14px; font-weight: 500; color: var(--ink); text-decoration: none; }
+
+/* ════════════════════════════════════════════════════════════════
+   MOBILE (<=860px) — мобильный лендинг переработан целиком.
+   Принцип: ничего не вылезает за экран, тач-цели ≥44px, safe-area,
+   десктопная раскадровка hero отключена в пользу чистого текста.
+   ════════════════════════════════════════════════════════════════ */
+@media (max-width: 860px) {
+  /* — Глобально — */
+  .wrap { padding: 0 20px; }
+  .m-br { display: inline; }
+
+  /* — Навигация: знак слева + бургер справа — */
+  #nav { background: rgba(240, 240, 240,.86); }
+  .nav-inner {
+    padding: 12px max(20px, env(safe-area-inset-right, 0px)) 12px max(20px, env(safe-area-inset-left, 0px));
+    gap: 12px;
+  }
+  .nav-links { display: none; }
+  .nav-cta { display: none; }                  /* CTA уходит в бургер-меню */
+  .logo-full { display: none; }                /* надпись «Мысль» убрана для баланса */
+  .logo-mark { display: block; width: 34px; height: 34px; }
+
+  /* Burger icon */
+  .nav-burger {
+    display: flex !important; flex-direction: column; justify-content: center; align-items: center; gap: 7px;
+    width: 44px; height: 44px;
+    background: none; border: 0; cursor: pointer; padding: 0;
+  }
+  .burger-bar {
+    display: block; width: 22px; height: 2.6px; border-radius: 2px; background: var(--ink);
+    transition: transform .32s var(--ease), opacity .2s var(--ease);
+  }
+  .nav-burger.is-open .burger-bar:nth-child(1) { transform: translateY(4.8px) rotate(45deg); }
+  .nav-burger.is-open .burger-bar:nth-child(2) { transform: translateY(-4.8px) rotate(-45deg); }
+
+  /* Меню выезжает сверху вниз: пункты по центру, кнопки прижаты к низу */
+  .mobile-menu {
+    display: flex; flex-direction: column; align-items: stretch;
+    position: fixed; inset: 0; z-index: 90;
+    padding: calc(80px + env(safe-area-inset-top, 0px)) 28px calc(36px + env(safe-area-inset-bottom, 0px));
+    background: var(--bg);
+    transform: translateY(-100%);
+    transition: transform .42s var(--ease);
+    visibility: hidden;
+  }
+  .mobile-menu.is-open { transform: translateY(0); visibility: visible; }
+  .mm-links {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+    margin: auto 0;                        /* центрирует пункты по вертикали */
+  }
+  .mm-link {
+    font-size: 34px; font-weight: 500; letter-spacing: -.02em; color: var(--ink);
+    text-decoration: none; padding: 8px 0; text-align: left;
+    opacity: 0; transform: translateY(-14px);
+    transition: opacity .4s var(--ease), transform .4s var(--ease);
+  }
+  .mobile-menu.is-open .mm-link { opacity: 1; transform: none; }
+  .mobile-menu.is-open .mm-link:nth-child(1) { transition-delay: .12s; }
+  .mobile-menu.is-open .mm-link:nth-child(2) { transition-delay: .18s; }
+  .mobile-menu.is-open .mm-link:nth-child(3) { transition-delay: .24s; }
+  .mm-cta {
+    display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%;
+    opacity: 0; transform: translateY(-14px);
+    transition: opacity .4s var(--ease) .30s, transform .4s var(--ease) .30s;
+  }
+  .mobile-menu.is-open .mm-cta { opacity: 1; transform: none; }
+  .mm-cta .btn-dark { width: 100%; max-width: 320px; }
+  .mm-login { font-size: 15px; font-weight: 500; color: var(--ink-soft); text-decoration: none; }
+  body.menu-open { overflow: hidden; }
+
+  /* — Hero: занимает экран целиком; заметки парят сверху, текст прижат к низу — */
+  .act { height: auto; }
+  .act-sticky { position: static; height: auto; overflow: visible; }
+  .stage, .act-notes, .hero-scene { display: none; }
+
+  .m-hero-screen {
+    position: relative;
+    display: flex; flex-direction: column; align-items: stretch;
+    width: 100%; overflow: hidden;
+    min-height: 100vh; min-height: 100svh;
+    padding: calc(56px + env(safe-area-inset-top, 0px)) 0 calc(26px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Коллаж занимает всё свободное место над текстом */
+  .m-collage { display: block; position: relative; flex: 1 1 auto; width: 100%; min-height: 340px; }
+  .m-note { position: absolute; display: block; width: 37%; }
+  .m-note img { width: 100%; height: auto; display: block;
+    filter: drop-shadow(0 14px 30px rgba(0,0,0,.10));
+    animation: mNoteFloat 6s ease-in-out infinite; }
+  .m-note--deadline img { animation-duration: 6.8s; animation-delay: -1.2s; }
+  .m-note--note img     { animation-duration: 6.4s; animation-delay: -.3s; }
+  .m-note--webinar img  { animation-duration: 7.2s; animation-delay: -2.0s; }
+  .m-note--event img    { animation-duration: 7.6s; animation-delay: -3.0s; }
+  .m-note--thought img  { animation-duration: 6.9s; animation-delay: -.8s; }
+  .m-note--deadline { left: 7%;  top: 6%;  transform: rotate(-7deg); z-index: 3; }
+  .m-note--note     { left: 5%;  top: 36%; transform: rotate(5deg);  z-index: 2; }
+  .m-note--webinar  { right: 5%; top: 30%; transform: rotate(6deg);  z-index: 2; }
+  .m-note--event    { left: 9%;  top: 64%; transform: rotate(-4deg); z-index: 4; }
+  .m-note--thought  { right: 6%; top: 58%; transform: rotate(7deg);  z-index: 4; }
+
+  /* Маскот «Прайм» — круг с глазами, смотрит вниз на заметки */
+  .m-mascot { display: block; position: absolute; top: calc(66px + env(safe-area-inset-top, 0px)); right: 20px; z-index: 6; width: 64px; height: 64px; }
+  .m-mascot svg { width: 100%; height: auto; display: block; animation: breathe 3.6s var(--ease) infinite; }
+
+  .act-hero {
+    position: relative; inset: auto; transform: none; text-align: left;
+    width: 100%; padding: 18px 20px 0; z-index: 5;
+  }
+  .hero-title { font-size: clamp(30px, 8.6vw, 42px); line-height: 1.1; }
+  .hero-sub { margin-top: 12px; }
+  .m-hero-cta {
+    display: inline-flex; margin-top: 20px;
+    width: auto; padding: 13px 30px; font-size: 15px;
+  }
+
+  /* — Блок «память обновлена» — готовый ассет, без подложки — */
+  .m-memory { display: block; padding: 56px 20px 0; }
+  .mm-img { width: 100%; height: auto; display: block; }
+
+  .act-sol {
+    position: relative; inset: auto; transform: none; opacity: 1 !important;
+    max-width: none; padding: 48px 20px 0;
+  }
+  .section-title { font-size: clamp(26px, 7.4vw, 36px); }
+  .section-sub { text-align: left; hyphens: none; margin-top: 14px; font-size: 16px; }
+
+  /* — Блок 3: лента — нативный горизонтальный скролл со снапом — */
+  .rail { height: auto !important; }
+  .rail-sticky { position: static; height: auto; padding: 88px 0 28px; overflow: visible; }
+  .rail-head { padding: 0 20px; margin-bottom: 22px; }
+  .rail-title { font-size: clamp(24px, 6.6vw, 34px); }
+  .rail-nav { display: none; }
+  .rail-viewport {
+    clip-path: none; overflow-x: auto; scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .rail-viewport::-webkit-scrollbar { display: none; }
+  .rail-track { transform: none !important; padding: 4px 20px 16px; gap: 16px; }
+  .rail-card { scroll-snap-align: center; flex-basis: 84vw; padding: 18px; }
+  .rc-mock { height: 240px; }
+  .rc-title { font-size: 18px; }
+
+  /* — Блок 4: «Ассистент думает» — заголовок по центру, телефон, текст — */
+  .think { padding: 36px 0 8px; }
+  .think-title { padding: 0 12px; text-align: center; font-size: clamp(28px, 8vw, 38px); }
+  .think-grid { grid-template-columns: 1fr; gap: 32px; margin-top: 36px; }
+  .think-phone { order: 1; }
+  .phone-frame { max-width: 250px; }
+  .think-body { order: 2; }
+  .think-text { font-size: 16px; line-height: 1.6; max-width: none; margin-top: 0; }
+  .chain { display: none; }                     /* цепочка скрыта — по макету её нет */
+
+  /* — Запуск: ноутбук сверху, шаги списком снизу — */
+  .setup { padding: 56px 0; }
+  .setup-title { padding: 0 4px; }
+  .setup-grid { grid-template-columns: 1fr; gap: 32px; margin-top: 32px; }
+  .setup-steps { gap: 0; }
+  .setup-step { padding: 20px 0; border-bottom: 1px solid var(--line); }
+  .setup-step:last-child { border-bottom: 0; }
+  .setup-step-title { font-size: 18px; }
+  .setup-step-desc { font-size: 14px; }
+
+  /* — Финальный CTA: кнопка во всю ширину (крупная тач-цель) — */
+  .final { padding: 36px 0 64px; }
+  .final-inner { gap: 24px; padding: 0 20px; }
+  .final .btn-dark { width: 100%; max-width: 340px; padding: 17px; font-size: 16px; }
+
+  /* — Footer: в столбик, по центру, с нижним safe-area — */
+  .foot { margin-top: 52px; }
+  .foot-inner {
+    flex-direction: column; align-items: center; text-align: center; gap: 10px;
+    padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* — Совсем узкие экраны — */
+@media (max-width: 380px) {
+  .hero-title { font-size: 30px; }
+  .rail-card { flex-basis: 86vw; }
+  .think-text { padding: 20px 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .note, .note-inner { animation: none; }
+  html { scroll-behavior: auto; }
+}

@@ -64,10 +64,46 @@
       "Bash(curl -s http://localhost:3000/api/health)",
       "Bash(git revert *)",
       "Bash(cd \"D:\\\\Mindex-1\" && cp \"D:\\\\logo.png\" \"public/icons/icon-512.png\")",
-      "Bash(git merge *)"
+      "Bash(git merge *)",
+      "Bash(export NODE_ENV=test)",
+      "Bash(node --import tsx --test tests/integration/server.test.ts)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(echo \"TSC=$?\")",
+      "WebFetch(domain:pixso.net)",
+      "Bash(curl -s -m 5 -o /dev/null -w \"%{http_code}\" http://127.0.0.1:3667/mcp)",
+      "Bash(curl -s -m 5 -X POST http://127.0.0.1:3667/mcp -H \"Content-Type: application/json\" -H \"Accept: application/json, text/event-stream\" -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1.0\"}}}')",
+      "mcp__pixso__get_all_components",
+      "mcp__pixso__get_screenshot",
+      "mcp__pixso__design_to_code",
+      "mcp__pixso__get_local_styles",
+      "mcp__pixso__get_variable_sets",
+      "Bash(python -c ' *)",
+      "Bash(cat > *)",
+      "Bash(python /tmp/serve_landing.py)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{content_type}\\\\n\" http://127.0.0.1:8901/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{size_download}b\\\\n\" http://127.0.0.1:8901/landing/v2.css)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{size_download}b\\\\n\" http://127.0.0.1:8901/landing/v2.js)",
+      "Bash(curl -s http://127.0.0.1:8901/)",
+      "Bash(sed -i \"s#os.chdir\\('/d/Mindex-1'\\)#os.chdir\\(r'd:\\\\\\\\\\\\\\\\Mindex-1'\\)#\" /tmp/serve_landing.py)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://127.0.0.1:8901/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{size_download}b\\\\n\" http://127.0.0.1:8902/landing/v2.css)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{size_download}b\\\\n\" http://127.0.0.1:8902/landing/v2.js)",
+      "Bash('/c/Program Files/Google/Chrome/Application/chrome.exe' --headless --disable-gpu --hide-scrollbars --window-size=1440,2400 --screenshot=/tmp/land_desktop.png http://127.0.0.1:8902/)",
+      "Bash('/c/Program Files/Google/Chrome/Application/chrome.exe' --headless --disable-gpu --hide-scrollbars --window-size=390,2600 --screenshot=/tmp/land_mobile.png http://127.0.0.1:8902/)",
+      "Bash('/c/Program Files/Google/Chrome/Application/chrome.exe' --headless=new --disable-gpu --hide-scrollbars --window-size=1440,1000 --screenshot=/tmp/full.png http://127.0.0.1:8902/)",
+      "Bash(python -c \"from PIL import Image; im=Image.open\\('/tmp/full.png'\\); print\\(im.size\\)\")",
+      "Bash(awk '{print $5, $9}')",
+      "Bash(python -)",
+      "Bash('/c/Program Files/Google/Chrome/Application/chrome.exe' --headless --disable-gpu --hide-scrollbars --window-size=1440,7200 --screenshot=/tmp/qa.png http://127.0.0.1:8902/.tmp_qa.html)",
+      "Bash(awk '{print $5}')",
+      "Bash('/c/Program Files/Google/Chrome/Application/chrome.exe' --headless --disable-gpu --hide-scrollbars --window-size=390,8000 --screenshot=/tmp/qam.png http://127.0.0.1:8902/.tmp_qa.html)",
+      "Bash(rm -f .tmp_qa.html .tmp_qa_full.png .tmp_qa_mobile.png .tmp_full.png .tmp_land_desktop.png .tmp_land_mobile.png .tmp_sec_*.png)",
+      "Bash(taskkill //IM python.exe //F)",
+      "PowerShell(npx tsc --noEmit -p tsconfig.json 2>&1)"
     ],
     "additionalDirectories": [
-      "D:\\"
+      "D:\\",
+      "\\tmp"
     ]
   }
 }
