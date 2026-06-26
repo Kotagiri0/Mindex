@@ -463,7 +463,7 @@ const formatAuthUser = (user: any) => ({
   username: String(user.username),
   displayName: String(user.display_name ?? user.displayName ?? ''),
   createdAt: new Date(user.created_at ?? user.createdAt ?? Date.now()).getTime(),
-  provider: user.provider === 'google' ? 'google' : user.provider === 'email' ? 'email' : 'local',
+  provider: user.provider === 'google' ? 'google' : user.provider === 'yandex' ? 'yandex' : user.provider === 'email' ? 'email' : 'local',
   email: user.email ? String(user.email) : undefined,
   avatarUrl: user.avatar_url ? String(user.avatar_url) : undefined,
 });
@@ -1263,6 +1263,12 @@ app.post('/api/auth/yandex', async (req, res) => {
     return res.status(500).json({ error: 'Яндекс OAuth не настроен на сервере.' });
   }
 
+  // Антифлуд: эндпоинт без авторизации, каждый запрос дёргает Яндекс (исходящие)
+  // + пишет в БД. 20 попыток на IP за 15 мин — с запасом для реального входа.
+  if (!checkCustomRateLimit(`yandex-auth:${req.ip || 'unknown'}`, 20, 15 * 60 * 1000)) {
+    return res.status(429).json({ error: 'Слишком много попыток входа. Попробуй позже.' });
+  }
+
   const code = String(req.body?.code || '').trim();
   if (!code) {
     return res.status(400).json({ error: 'Яндекс authorization code обязателен.' });
@@ -1354,8 +1360,9 @@ app.post('/api/auth/yandex', async (req, res) => {
     const tokenNew = await createSession(userId);
     return res.status(201).json({ user: formatAuthUser(result.rows[0]), token: tokenNew });
   } catch (error: any) {
+    // Детали — только в лог; наружу обобщённо, чтобы не светить внутренности.
     console.error('[AUTH][YANDEX]', error?.message || error);
-    return res.status(401).json({ error: error?.message || 'Не удалось выполнить вход через Яндекс.' });
+    return res.status(401).json({ error: 'Не удалось выполнить вход через Яндекс.' });
   }
 });
 

@@ -93,7 +93,7 @@ export interface LocalUser {
   username: string;
   displayName: string;
   createdAt: number;
-  provider?: 'local' | 'google' | 'email';
+  provider?: 'local' | 'google' | 'email' | 'yandex';
   email?: string;
   avatarUrl?: string;
 }

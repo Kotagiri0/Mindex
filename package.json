@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test": "npm run test:unit && npm run test:integration",
     "test:unit": "NODE_ENV=test node --import tsx --test --experimental-test-coverage tests/unit/**/*.test.ts",
-    "test:integration": "NODE_ENV=test node --import tsx --test tests/integration/server.test.ts"
+    "test:integration": "NODE_ENV=test node --import tsx --test --test-force-exit tests/integration/*.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.1",

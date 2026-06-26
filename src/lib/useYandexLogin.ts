@@ -6,10 +6,13 @@ import { LocalUser } from '../types';
  * Вход через Яндекс (OAuth code-flow).
  *
  * Открываем попап на oauth.yandex.ru/authorize?response_type=code, маленькая страница
- * /auth/yandex/callback.html ловит code и шлёт его обратно через postMessage.
+ * /auth/yandex/callback.html ловит code+state и шлёт их обратно через postMessage.
  * Код уходит на бэкенд (/api/auth/yandex), где меняется на токен (client_secret на сервере).
  *
- * Аналог useGoogleLogin — единый колбэк на успех, тот же интерфейс.
+ * Безопасность:
+ *  - `state` (nonce) против login-CSRF / подмены кода: генерим перед стартом, проверяем при ответе;
+ *  - слушаем postMessage только со своего origin;
+ *  - фолбэк через localStorage, если попап заблокирован (полный редирект).
  */
 
 interface UseYandexLoginResult {
@@ -20,6 +23,15 @@ interface UseYandexLoginResult {
 }
 
 const REDIRECT_PATH = '/auth/yandex/callback.html';
+const STATE_KEY = 'yandex_oauth_state';
+const RESULT_KEY = 'yandex_auth_result';
+
+function newState(): string {
+  try {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  } catch { /* ignore */ }
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
 
 export function useYandexLogin(onSuccess: (user: LocalUser) => void): UseYandexLoginResult {
   const [clientId, setClientId] = useState<string>(import.meta.env?.VITE_YANDEX_CLIENT_ID || '');
@@ -36,43 +48,64 @@ export function useYandexLogin(onSuccess: (user: LocalUser) => void): UseYandexL
     }).catch(() => {});
   }, [clientId]);
 
-  const exchange = useCallback(async (code: string, redirectUri: string) => {
-    try {
-      const user = await loginYandexUser(code, redirectUri);
-      onSuccessRef.current(user);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось войти через Яндекс.');
-    } finally {
+  const redirectUri = window.location.origin + REDIRECT_PATH;
+
+  // Проверяем state и обмениваем код на сессию
+  const handleResult = useCallback((data: any) => {
+    if (!data || data.source !== 'yandex-auth') return;
+    const expected = (() => { try { return localStorage.getItem(STATE_KEY); } catch { return null; } })();
+    try { localStorage.removeItem(STATE_KEY); } catch { /* ignore */ }
+
+    if (data.error) { setError(String(data.error)); setLoading(false); return; }
+    // CSRF-защита: state из ответа должен совпасть с тем, что мы сохранили перед стартом
+    if (!expected || data.state !== expected) {
+      setError('Сессия входа не совпала. Попробуй ещё раз.');
       setLoading(false);
+      return;
     }
-  }, []);
+    if (!data.code) { setError('Яндекс не вернул код авторизации.'); setLoading(false); return; }
+
+    setLoading(true);
+    loginYandexUser(String(data.code), redirectUri)
+      .then((user) => onSuccessRef.current(user))
+      .catch((e) => setError(e instanceof Error ? e.message : 'Не удалось войти через Яндекс.'))
+      .finally(() => setLoading(false));
+  }, [redirectUri]);
 
   // Сообщение от callback-попапа
   useEffect(() => {
-    const redirectUri = window.location.origin + REDIRECT_PATH;
     const onMessage = (ev: MessageEvent) => {
-      if (ev.origin !== window.location.origin) return;
-      const d = ev.data;
-      if (!d || d.source !== 'yandex-auth') return;
+      if (ev.origin !== window.location.origin) return; // только свой origin
+      if (!ev.data || ev.data.source !== 'yandex-auth') return;
       try { popupRef.current?.close(); } catch { /* ignore */ }
-      if (d.error) { setError(String(d.error)); setLoading(false); return; }
-      if (d.code) exchange(String(d.code), redirectUri);
-      else { setError('Яндекс не вернул код авторизации.'); setLoading(false); }
+      handleResult(ev.data);
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [exchange]);
+  }, [handleResult]);
+
+  // Фолбэк: попап был заблокирован → callback положил результат в localStorage и редиректнул сюда
+  useEffect(() => {
+    let raw: string | null = null;
+    try { raw = localStorage.getItem(RESULT_KEY); } catch { /* ignore */ }
+    if (!raw) return;
+    try { localStorage.removeItem(RESULT_KEY); } catch { /* ignore */ }
+    try { handleResult(JSON.parse(raw)); } catch { /* ignore */ }
+  }, [handleResult]);
 
   const startLogin = useCallback(() => {
     if (!clientId) { setError('Вход через Яндекс не настроен.'); return; }
     setError('');
     setLoading(true);
 
-    const redirectUri = window.location.origin + REDIRECT_PATH;
+    const state = newState();
+    try { localStorage.setItem(STATE_KEY, state); } catch { /* ignore */ }
+
     const url = 'https://oauth.yandex.ru/authorize'
       + '?response_type=code'
       + '&client_id=' + encodeURIComponent(clientId)
       + '&redirect_uri=' + encodeURIComponent(redirectUri)
+      + '&state=' + encodeURIComponent(state)
       + '&force_confirm=yes';
 
     const w = 520, h = 600;
@@ -84,7 +117,7 @@ export function useYandexLogin(onSuccess: (user: LocalUser) => void): UseYandexL
       // Попап заблокирован — уходим редиректом в том же окне (callback вернёт через localStorage)
       window.location.href = url;
     }
-  }, [clientId]);
+  }, [clientId, redirectUri]);
 
   return { startLogin, loading, error, ready: Boolean(clientId) };
 }
