@@ -29,8 +29,6 @@ export {
 } from './activation.ts';
 export { stemRu, extractKeywords } from './morphology.ts';
 export { getProfileSummaries, retrieveArchive } from './retrieve.ts';
-export { createPolisadApi } from './api.ts';
-export type { PolisadApiDeps } from './api.ts';
 export {
   summarizeThreadCore,
   sweepColdThreads,
