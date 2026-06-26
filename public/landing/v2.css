@@ -386,6 +386,10 @@ body {
 .foot-inner { display: flex; align-items: center; justify-content: space-between; padding-top: 26px; padding-bottom: 26px; gap: 16px; flex-wrap: wrap; }
 .foot-copy { font-size: 13px; color: var(--ink-faint); }
 .foot-tg { font-size: 14px; font-weight: 500; color: var(--ink); text-decoration: none; }
+.foot-links { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+.foot-link { font-size: 14px; color: var(--ink-faint); text-decoration: none; transition: color 0.15s ease; }
+.foot-link:hover { color: var(--ink); }
+.foot-legal { font-size: 12px; color: var(--ink-faint); padding-bottom: 26px; margin-top: -8px; }
 
 /* ════════════════════════════════════════════════════════════════
    MOBILE (<=860px) — мобильный лендинг переработан целиком.
@@ -556,8 +560,13 @@ body {
   /* — Footer: в столбик, по центру, с нижним safe-area — */
   .foot { margin-top: 52px; }
   .foot-inner {
-    flex-direction: column; align-items: center; text-align: center; gap: 10px;
-    padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+    flex-direction: column; align-items: center; text-align: center; gap: 14px;
+    padding: 24px 20px 16px;
+  }
+  .foot-links { flex-direction: column; gap: 12px; }
+  .foot-legal {
+    text-align: center; margin-top: 0;
+    padding: 0 20px calc(24px + env(safe-area-inset-bottom, 0px));
   }
 }
 

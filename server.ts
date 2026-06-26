@@ -498,6 +498,9 @@ const ensureAuthSchema = async () => {
   await db.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS yandex_id TEXT;`);
   await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS auth_users_yandex_id_key ON auth_users (yandex_id) WHERE yandex_id IS NOT NULL;`);
   await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS auth_users_email_key ON auth_users (email) WHERE email IS NOT NULL;`);
+  // Фиксация факта согласия с условиями (152-ФЗ): когда и под какой редакцией пользователь согласился.
+  await db.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS consent_at TIMESTAMPTZ;`);
+  await db.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS consent_version TEXT;`);
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS user_profiles (
@@ -761,12 +764,24 @@ function hashOtp(otp: string): string {
   return crypto.createHash('sha256').update(otp).digest('hex');
 }
 
+// Редакция юр-документов, под которой пользователь даёт согласие. Меняем при правке доков.
+const CONSENT_VERSION = '2026-06-26';
+
 app.post("/api/auth/send-otp", async (req, res) => {
   if (!db) return res.status(500).json({ error: "БД не настроена." });
 
   const email = String(req.body?.email || '').trim().toLowerCase();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return res.status(400).json({ error: "Некорректный email." });
+  }
+
+  // Режим: 'login' не создаёт аккаунт. Если экран входа, а аккаунта нет — отправляем на регистрацию.
+  const mode = req.body?.mode === 'login' ? 'login' : 'signup';
+  if (mode === 'login') {
+    const { rows } = await db.query(`SELECT 1 FROM auth_users WHERE email = $1 LIMIT 1`, [email]);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Аккаунта с таким email нет. Сначала зарегистрируйся." });
+    }
   }
 
   // Защита от перебора: 10 запросов с одного IP в час (отсекает массовый enumeration)
@@ -920,20 +935,39 @@ app.post("/api/auth/verify-otp", async (req, res) => {
     [email]
   );
 
+  const mode = req.body?.mode === 'login' ? 'login' : 'signup';
+  const consent = req.body?.consent === true;
+
   let user;
   if (existingUsers.length > 0) {
-    // Пользователь существует — просто входим
+    // Пользователь существует — просто входим. Бэкфилл согласия для старых аккаунтов.
     user = existingUsers[0];
+    if (consent) {
+      await db.query(
+        `UPDATE auth_users
+         SET consent_at = COALESCE(consent_at, NOW()),
+             consent_version = COALESCE(consent_version, $2)
+         WHERE id = $1`,
+        [user.id, CONSENT_VERSION]
+      );
+    }
   } else {
-    // Новый пользователь — создаём
+    // Аккаунта нет. На экране входа не создаём — отправляем регистрироваться.
+    if (mode === 'login') {
+      return res.status(404).json({ error: "Аккаунта с таким email нет. Сначала зарегистрируйся." });
+    }
+    // Регистрация требует согласия с условиями.
+    if (!consent) {
+      return res.status(400).json({ error: "Чтобы зарегистрироваться, нужно согласие с условиями." });
+    }
     const userId = crypto.randomUUID();
     const username = email.split('@')[0].replace(/[^a-z0-9_]/gi, '').slice(0, 30) + '_' + userId.slice(0, 6);
     const displayName = email.split('@')[0];
     const { rows: newUser } = await db.query(
-      `INSERT INTO auth_users (id, username, display_name, password_hash, provider, email)
-       VALUES ($1, $2, $3, '', 'email', $4)
+      `INSERT INTO auth_users (id, username, display_name, password_hash, provider, email, consent_at, consent_version)
+       VALUES ($1, $2, $3, '', 'email', $4, NOW(), $5)
        RETURNING id, username, display_name, provider, email, avatar_url, created_at`,
-      [userId, username, displayName, email]
+      [userId, username, displayName, email, CONSENT_VERSION]
     );
     user = newUser[0];
     createSelfKnowledgeSkill(userId);
@@ -1276,6 +1310,7 @@ app.post('/api/auth/yandex', async (req, res) => {
   // redirect_uri должен совпадать в authorize и token; берём тот, что использовал фронт
   // (Яндекс всё равно валидирует его по списку зарегистрированных Callback URI).
   const redirectUri = String(req.body?.redirectUri || '').trim() || YANDEX_REDIRECT_URI;
+  const consent = req.body?.consent === true;
 
   try {
     const yUser = await verifyYandexCode(code, YANDEX_CLIENT_ID, YANDEX_CLIENT_SECRET, redirectUri);
@@ -1326,10 +1361,12 @@ app.post('/api/auth/yandex', async (req, res) => {
               yandex_id = COALESCE(yandex_id, $1),
               email = COALESCE(email, $2),
               avatar_url = COALESCE($3, avatar_url),
-              display_name = COALESCE(NULLIF(display_name, ''), $4)
+              display_name = COALESCE(NULLIF(display_name, ''), $4),
+              consent_at = CASE WHEN $6 THEN COALESCE(consent_at, NOW()) ELSE consent_at END,
+              consent_version = CASE WHEN $6 THEN COALESCE(consent_version, $7) ELSE consent_version END
           WHERE id = $5
         `,
-        [yUser.id, email || null, yUser.avatarUrl || null, displayName, row.id]
+        [yUser.id, email || null, yUser.avatarUrl || null, displayName, row.id, consent, CONSENT_VERSION]
       );
 
       const tokenExisting = await createSession(row.id);
@@ -1348,12 +1385,14 @@ app.post('/api/auth/yandex', async (req, res) => {
     const result = await db.query(
       `
         INSERT INTO auth_users (
-          id, username, display_name, password_hash, provider, yandex_id, email, avatar_url
+          id, username, display_name, password_hash, provider, yandex_id, email, avatar_url, consent_at, consent_version
         )
-        VALUES ($1, $2, $3, '', 'yandex', $4, $5, $6)
+        VALUES ($1, $2, $3, '', 'yandex', $4, $5, $6,
+                CASE WHEN $7 THEN NOW() ELSE NULL END,
+                CASE WHEN $7 THEN $8 ELSE NULL END)
         RETURNING id, username, display_name, provider, email, avatar_url, created_at
       `,
-      [userId, username, displayName, yUser.id, email || null, yUser.avatarUrl || null]
+      [userId, username, displayName, yUser.id, email || null, yUser.avatarUrl || null, consent, CONSENT_VERSION]
     );
 
     createSelfKnowledgeSkill(userId);
@@ -1822,6 +1861,52 @@ app.patch("/api/data/thread/:id/archive", requireAuth, async (req, res) => {
   }
 });
 
+// ─── Очистка памяти ассистента ──────────────────────────────────────────────
+// Удаляет переписки и производную память ПОЛИСАД. Задачи и аккаунт остаются.
+app.post("/api/account/clear-memory", requireAuth, async (req, res) => {
+  if (!db) return res.status(500).json({ error: "База данных не настроена." });
+  const userId = String((req as any).userId);
+  try {
+    await db.query(`DELETE FROM user_threads WHERE user_id = $1`, [userId]);
+    await db.query(`DELETE FROM polisad_access_log WHERE user_id = $1`, [userId]).catch(() => {});
+    await db.query(`DELETE FROM polisad_retrieval_log WHERE user_id = $1`, [userId]).catch(() => {});
+    await db.query(`DELETE FROM polisad_memory_edges WHERE user_id = $1`, [userId]).catch(() => {});
+    return res.status(200).json({ success: true });
+  } catch (err: any) {
+    console.error('[account/clear-memory]', err?.message);
+    return res.status(500).json({ error: "Не удалось очистить память." });
+  }
+});
+
+// ─── Полное удаление аккаунта и всех данных (необратимо, без остаточных копий) ─
+app.post("/api/account/delete", requireAuth, async (req, res) => {
+  if (!db) return res.status(500).json({ error: "База данных не настроена." });
+  const userId = String((req as any).userId);
+  try {
+    // email нужен, чтобы вычистить одноразовые коды, привязанные к адресу
+    const u = await db.query(`SELECT email FROM auth_users WHERE id = $1`, [userId]);
+    const email = u.rows[0]?.email || null;
+
+    await db.query(`DELETE FROM user_threads WHERE user_id = $1`, [userId]);
+    await db.query(`DELETE FROM user_tasks WHERE user_id = $1`, [userId]);
+    await db.query(`DELETE FROM user_profiles WHERE user_id = $1`, [userId]);
+    await db.query(`DELETE FROM user_sessions WHERE user_id = $1`, [userId]);
+    await db.query(`DELETE FROM telegram_link_codes WHERE user_id = $1`, [userId]).catch(() => {});
+    await db.query(`DELETE FROM shared_event_adds WHERE user_id = $1`, [userId]).catch(() => {});
+    await db.query(`DELETE FROM polisad_access_log WHERE user_id = $1`, [userId]).catch(() => {});
+    await db.query(`DELETE FROM polisad_retrieval_log WHERE user_id = $1`, [userId]).catch(() => {});
+    await db.query(`DELETE FROM polisad_memory_edges WHERE user_id = $1`, [userId]).catch(() => {});
+    if (email) await db.query(`DELETE FROM email_otp_codes WHERE email = $1`, [email]).catch(() => {});
+    // аккаунт удаляем последним
+    await db.query(`DELETE FROM auth_users WHERE id = $1`, [userId]);
+
+    return res.status(200).json({ success: true });
+  } catch (err: any) {
+    console.error('[account/delete]', err?.message);
+    return res.status(500).json({ error: "Не удалось удалить аккаунт." });
+  }
+});
+
 app.get("/api/chat", (req, res) => {
   res.json({ status: "ok", message: "Local Chat API is running" });
 });
@@ -2118,7 +2203,7 @@ app.post("/api/voice/transcribe", requireAuth, aiRateLimit, upload.single('audio
     const aiData = await aiRes.json() as any;
     const text = (aiData.text ?? '').trim();
 
-    console.log('[VOICE] Transcription success:', text.slice(0, 100));
+    console.log('[VOICE] Transcription success, length:', text.length);
     return res.status(200).json({ text });
 
   } catch (error: any) {

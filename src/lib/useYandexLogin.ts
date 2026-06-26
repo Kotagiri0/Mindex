@@ -16,7 +16,7 @@ import { LocalUser } from '../types';
  */
 
 interface UseYandexLoginResult {
-  startLogin: () => void;
+  startLogin: (consent?: boolean) => void;
   loading: boolean;
   error: string;
   ready: boolean;
@@ -40,6 +40,7 @@ export function useYandexLogin(onSuccess: (user: LocalUser) => void): UseYandexL
   const onSuccessRef = useRef(onSuccess);
   onSuccessRef.current = onSuccess;
   const popupRef = useRef<Window | null>(null);
+  const consentRef = useRef(false);
 
   useEffect(() => {
     if (clientId) return;
@@ -66,7 +67,7 @@ export function useYandexLogin(onSuccess: (user: LocalUser) => void): UseYandexL
     if (!data.code) { setError('Яндекс не вернул код авторизации.'); setLoading(false); return; }
 
     setLoading(true);
-    loginYandexUser(String(data.code), redirectUri)
+    loginYandexUser(String(data.code), redirectUri, consentRef.current)
       .then((user) => onSuccessRef.current(user))
       .catch((e) => setError(e instanceof Error ? e.message : 'Не удалось войти через Яндекс.'))
       .finally(() => setLoading(false));
@@ -93,8 +94,9 @@ export function useYandexLogin(onSuccess: (user: LocalUser) => void): UseYandexL
     try { handleResult(JSON.parse(raw)); } catch { /* ignore */ }
   }, [handleResult]);
 
-  const startLogin = useCallback(() => {
+  const startLogin = useCallback((consent?: boolean) => {
     if (!clientId) { setError('Вход через Яндекс не настроен.'); return; }
+    consentRef.current = consent === true;
     setError('');
     setLoading(true);
 

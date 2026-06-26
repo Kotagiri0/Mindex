@@ -396,6 +396,8 @@ function AccountRow({ label, action, onAction, danger }: { label: string; action
 
 export default function SettingsScreen({ settings, setSettings, onBack, onLogout, isDesktop = false }: SettingsProps) {
   const [confirmClear, setConfirmClear] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState(false);
   const currentUser = getCurrentUser();
 
   const displayName = settings.name || currentUser?.displayName || 'Пользователь';
@@ -409,10 +411,30 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
     if (next !== null) setSettings({ ...settings, name: next });
   };
 
-  const clearMemory = () => {
+  const clearMemory = async () => {
+    setBusy(true);
+    try {
+      // Сначала чистим серверную память (переписки + ПОЛИСАД), затем локальный кэш
+      await apiFetch('/api/account/clear-memory', { method: 'POST' });
+    } catch {
+      /* даже если сервер недоступен — локальный кэш всё равно чистим */
+    }
     const user = getCurrentUser();
     if (user) storage.clearUserData(user.id);
     window.location.reload();
+  };
+
+  const deleteAccount = async () => {
+    setBusy(true);
+    try {
+      await apiFetch('/api/account/delete', { method: 'POST' });
+    } catch {
+      /* игнорируем — ниже всё равно выходим из аккаунта */
+    }
+    const user = getCurrentUser();
+    if (user) storage.clearUserData(user.id);
+    setConfirmDelete(false);
+    onLogout();
   };
 
   if (isDesktop) {
@@ -456,6 +478,12 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
               label="Память модели"
               action="Очистить"
               onAction={() => setConfirmClear(true)}
+              danger
+            />
+            <AccountRow
+              label="Удалить аккаунт"
+              action="Удалить"
+              onAction={() => setConfirmDelete(true)}
               danger
             />
           </div>
@@ -613,6 +641,12 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
             onAction={() => setConfirmClear(true)}
             danger
           />
+          <AccountRow
+            label="Удалить аккаунт"
+            action="Удалить"
+            onAction={() => setConfirmDelete(true)}
+            danger
+          />
         </div>
       </div>
 
@@ -638,21 +672,69 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
               Очистить память?
             </div>
             <div style={{ fontFamily: M, fontSize: 14, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.6 }}>
-              Это удалит все локальные задачи, переписки и настройки без возможности восстановления.
+              Мысль забудет все переписки и накопленный контекст. Задачи и аккаунт останутся. Восстановить нельзя.
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <button
                 onClick={clearMemory}
+                disabled={busy}
                 style={{
                   height: 44, borderRadius: 40, background: '#c0392b',
-                  border: 'none', color: '#fff', cursor: 'pointer',
-                  fontFamily: M, fontSize: 14, fontWeight: 500,
+                  border: 'none', color: '#fff', cursor: busy ? 'default' : 'pointer',
+                  fontFamily: M, fontSize: 14, fontWeight: 500, opacity: busy ? 0.6 : 1,
                 }}
               >
-                Удалить всё
+                {busy ? 'Очищаю…' : 'Очистить память'}
               </button>
               <button
                 onClick={() => setConfirmClear(false)}
+                disabled={busy}
+                style={{
+                  height: 44, borderRadius: 40, background: 'transparent',
+                  border: '1px solid var(--border-input)', color: 'var(--text-primary)',
+                  cursor: 'pointer', fontFamily: M, fontSize: 14,
+                }}
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm delete account modal */}
+      {confirmDelete && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 100, padding: 24,
+        }}>
+          <div style={{
+            background: 'var(--surface)', borderRadius: 20, padding: 32,
+            maxWidth: 340, width: '100%', display: 'flex', flexDirection: 'column',
+            gap: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+          }}>
+            <div style={{ fontFamily: M, fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', textAlign: 'center' }}>
+              Удалить аккаунт?
+            </div>
+            <div style={{ fontFamily: M, fontSize: 14, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.6 }}>
+              Будут безвозвратно удалены аккаунт, все задачи, переписки и память — без остаточных копий на сервере. Это действие нельзя отменить.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button
+                onClick={deleteAccount}
+                disabled={busy}
+                style={{
+                  height: 44, borderRadius: 40, background: '#c0392b',
+                  border: 'none', color: '#fff', cursor: busy ? 'default' : 'pointer',
+                  fontFamily: M, fontSize: 14, fontWeight: 500, opacity: busy ? 0.6 : 1,
+                }}
+              >
+                {busy ? 'Удаляю…' : 'Удалить аккаунт навсегда'}
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                disabled={busy}
                 style={{
                   height: 44, borderRadius: 40, background: 'transparent',
                   border: '1px solid var(--border-input)', color: 'var(--text-primary)',

@@ -27,21 +27,42 @@ const M = "'Muller', sans-serif";
 const BG = '#f0f0f0';
 const FG = '#222224';
 
-async function sendOtp(email: string): Promise<void> {
+// Обязательное согласие на обработку ПДн (152-ФЗ). Без отметки вход недоступен.
+function ConsentCheck({ agreed, setAgreed }: { agreed: boolean; setAgreed: (v: boolean) => void }) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '0 6px', cursor: 'pointer', maxWidth: 400 }}>
+      <input
+        type="checkbox"
+        checked={agreed}
+        onChange={e => setAgreed(e.target.checked)}
+        style={{ width: 16, height: 16, marginTop: 2, accentColor: FG, flexShrink: 0, cursor: 'pointer' }}
+      />
+      <span style={{ fontFamily: M, fontSize: 12, lineHeight: 1.45, color: 'rgba(11,13,16,0.5)' }}>
+        Я согласен с{' '}
+        <a href="/legal/terms.html" target="_blank" rel="noopener" style={{ color: 'rgba(11,13,16,0.7)', textDecoration: 'underline' }}>Соглашением</a>,{' '}
+        <a href="/legal/privacy.html" target="_blank" rel="noopener" style={{ color: 'rgba(11,13,16,0.7)', textDecoration: 'underline' }}>Политикой</a>{' '}
+        и даю{' '}
+        <a href="/legal/consent.html" target="_blank" rel="noopener" style={{ color: 'rgba(11,13,16,0.7)', textDecoration: 'underline' }}>согласие на обработку данных</a>
+      </span>
+    </label>
+  );
+}
+
+async function sendOtp(email: string, mode: AuthMode): Promise<void> {
   const res = await fetch('/api/auth/send-otp', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, mode }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Не удалось отправить код');
 }
 
-async function verifyOtp(email: string, otp: string): Promise<LocalUser> {
+async function verifyOtp(email: string, otp: string, mode: AuthMode, consent: boolean): Promise<LocalUser> {
   const res = await fetch('/api/auth/verify-otp', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, otp }),
+    body: JSON.stringify({ email, otp, mode, consent }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Неверный код');
@@ -72,6 +93,9 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
   }, []);
 
   const [step, setStep] = useState<Step>('choice');
+  const [agreed, setAgreed] = useState(false);
+  // Согласие обязательно только при регистрации. На входе аккаунт уже существует и согласие дано ранее.
+  const blockAuth = mode === 'signup' && !agreed;
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [legacyUsername, setLegacyUsername] = useState('');
@@ -100,8 +124,9 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
   }, [yandex.error]);
 
   const handleYandexClick = () => {
+    if (blockAuth) { setError('Поставь галочку согласия, чтобы продолжить'); return; }
     setError('');
-    yandex.startLogin();
+    yandex.startLogin(agreed);
   };
 
   // Автофокус на полях
@@ -128,7 +153,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
     setError('');
     setLoading(true);
     try {
-      await sendOtp(trimmed);
+      await sendOtp(trimmed, mode);
       setStep('code');
       setResendCooldown(60);
     } catch (e) {
@@ -145,7 +170,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
     setError('');
     setLoading(true);
     try {
-      const user = await verifyOtp(email.trim().toLowerCase(), trimmedOtp);
+      const user = await verifyOtp(email.trim().toLowerCase(), trimmedOtp, mode, agreed);
       onAuthenticated(user);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Неверный код');
@@ -160,7 +185,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
     setError('');
     setLoading(true);
     try {
-      await sendOtp(email.trim().toLowerCase());
+      await sendOtp(email.trim().toLowerCase(), mode);
       setResendCooldown(60);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ошибка');
@@ -344,7 +369,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                       <motion.button
                         type="button"
                         onClick={handleYandexClick}
-                        disabled={yandex.loading || !yandex.ready}
+                        disabled={yandex.loading || !yandex.ready || blockAuth}
                         whileHover={!yandex.loading ? { scale: 1.01, boxShadow: '0 4px 14px rgba(0,0,0,0.15)' } : undefined}
                         whileTap={!yandex.loading ? { scale: 0.97 } : undefined}
                         transition={{ type: 'spring', stiffness: 400, damping: 25 }}
@@ -363,16 +388,19 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
 
                       <motion.button
                         type="button"
+                        disabled={blockAuth}
                         onClick={() => { setStep('email'); setError(''); }}
-                        whileHover={{ scale: 1.01, boxShadow: '0 4px 14px rgba(0,0,0,0.08)' }}
-                        whileTap={{ scale: 0.97 }}
+                        whileHover={!blockAuth ? { scale: 1.01, boxShadow: '0 4px 14px rgba(0,0,0,0.08)' } : undefined}
+                        whileTap={!blockAuth ? { scale: 0.97 } : undefined}
                         transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                        className="w-full h-[52px] rounded-full flex items-center justify-center"
-                        style={{ background: '#ffffff', fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: FG, border: '1px solid rgba(0,0,0,0.1)', cursor: 'pointer' }}
+                        className="w-full h-[52px] rounded-full flex items-center justify-center disabled:opacity-60"
+                        style={{ background: '#ffffff', fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: FG, border: '1px solid rgba(0,0,0,0.1)', cursor: !blockAuth ? 'pointer' : 'default' }}
                       >
                         {isLogin ? 'Получить письмо с кодом' : 'По электронной почте'}
                       </motion.button>
                     </div>
+
+                    {mode === 'signup' && <ConsentCheck agreed={agreed} setAgreed={setAgreed} />}
 
                     <AnimatePresence>
                       {error && (
@@ -399,7 +427,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                     {isLogin && (
                       <motion.button
                         type="button"
-                        onClick={() => { setStep('legacy'); setError(''); }}
+                        onClick={() => { if (blockAuth) { setError('Поставь галочку согласия, чтобы продолжить'); return; } setStep('legacy'); setError(''); }}
                         whileHover={{ color: FG }}
                         whileTap={{ scale: 0.95 }}
                         transition={{ duration: 0.15 }}
@@ -695,7 +723,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                   <motion.button
                     type="button"
                     onClick={handleYandexClick}
-                    disabled={yandex.loading || !yandex.ready}
+                    disabled={yandex.loading || !yandex.ready || blockAuth}
                     whileTap={!yandex.loading ? { scale: 0.97 } : undefined}
                     transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                     className="w-full h-[52px] rounded-full flex items-center justify-center disabled:opacity-60"
@@ -710,15 +738,17 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                   </motion.button>
                   <motion.button
                     type="button"
+                    disabled={blockAuth}
                     onClick={() => { setStep('email'); setError(''); }}
-                    whileTap={{ scale: 0.97 }}
+                    whileTap={!blockAuth ? { scale: 0.97 } : undefined}
                     transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                    className="w-full h-[52px] rounded-full flex items-center justify-center"
-                    style={{ background: '#ffffff', fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: FG, border: '1px solid rgba(0,0,0,0.1)', cursor: 'pointer' }}
+                    className="w-full h-[52px] rounded-full flex items-center justify-center disabled:opacity-60"
+                    style={{ background: '#ffffff', fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: FG, border: '1px solid rgba(0,0,0,0.1)', cursor: !blockAuth ? 'pointer' : 'default' }}
                   >
                     {isLogin ? 'Получить письмо с кодом' : 'По электронной почте'}
                   </motion.button>
                 </div>
+                {mode === 'signup' && <ConsentCheck agreed={agreed} setAgreed={setAgreed} />}
                 <AnimatePresence>
                   {error && (
                     <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
@@ -733,7 +763,7 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                   {crossLinkText}
                 </motion.button>
                 {isLogin && (
-                  <motion.button type="button" onClick={() => { setStep('legacy'); setError(''); }} whileTap={{ scale: 0.95 }} transition={{ duration: 0.15 }}
+                  <motion.button type="button" onClick={() => { if (blockAuth) { setError('Поставь галочку согласия, чтобы продолжить'); return; } setStep('legacy'); setError(''); }} whileTap={{ scale: 0.95 }} transition={{ duration: 0.15 }}
                     style={{ fontFamily: M, fontSize: 12, color: 'rgba(11,13,16,0.3)', background: 'none', border: 'none', cursor: 'pointer', marginTop: -4 }}>
                     Аккаунт до обновления?
                   </motion.button>

@@ -1506,7 +1506,7 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
       if (!whisperRes.ok) throw new Error(`VseGPT error: ${whisperRes.status}`);
       const whisperData: any = await whisperRes.json();
       userText = whisperData.text?.trim() || '';
-      console.log(`[Bot] Транскрипция: "${userText}"`);
+      console.log(`[Bot] Транскрипция получена, длина: ${userText.length}`);
     } catch (e: any) {
       console.error('[Bot] Ошибка транскрипции:', e?.message);
       await tgApi(token, 'sendMessage', { chat_id: chatId, text: 'Не смог распознать голосовое, попробуй ещё раз' });
@@ -1534,7 +1534,7 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
   const thread = await loadBotThread(db, webUserId, userTz, apiKey);
   const existingMessages = thread.messages;
 
-  console.log(`[Bot] вызываю AI для ${webUserId}, сообщение: "${userText.slice(0, 80)}"${thread.isNew ? ' [новый тред]' : ''}`);
+  console.log(`[Bot] вызываю AI для ${webUserId}, длина сообщения: ${userText.length}${thread.isNew ? ' [новый тред]' : ''}`);
 
   // Стрим-сток: плейсхолдер + «печатает…». Если создать не удалось (сеть),
   // работаем по-старому — одной отправкой в конце. Двойной отправки нет ни в одной ветке:

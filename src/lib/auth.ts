@@ -100,13 +100,13 @@ export const loginGoogleUser = async (credential: string) => {
   return user;
 };
 
-export const loginYandexUser = async (code: string, redirectUri?: string) => {
+export const loginYandexUser = async (code: string, redirectUri?: string, consent?: boolean) => {
   const response = await fetch(`${window.location.origin}/api/auth/yandex`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ code, redirectUri }),
+    body: JSON.stringify({ code, redirectUri, consent: consent === true }),
   });
 
   const data = await response.json().catch(() => ({ error: 'Некорректный ответ сервера.' }));
