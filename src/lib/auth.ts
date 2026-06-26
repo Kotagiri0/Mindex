@@ -100,6 +100,27 @@ export const loginGoogleUser = async (credential: string) => {
   return user;
 };
 
+export const loginYandexUser = async (code: string, redirectUri?: string) => {
+  const response = await fetch(`${window.location.origin}/api/auth/yandex`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ code, redirectUri }),
+  });
+
+  const data = await response.json().catch(() => ({ error: 'Некорректный ответ сервера.' }));
+  if (!response.ok) {
+    throw new Error(data.error || 'Ошибка авторизации через Яндекс.');
+  }
+
+  const user = mapApiUser(data.user);
+  storage.setSessionUserId(user.id);
+  storage.setCurrentUser(user);
+  if (data.token) storage.setSessionToken(data.token);
+  return user;
+};
+
 export const logoutLocalUser = () => {
   storage.clearSessionUserId();
   storage.clearCurrentUser();

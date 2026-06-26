@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Вход через Яндекс…</title>
+<style>
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+         background:#f0f0f0; color:#1c1c1e; display:grid; place-items:center; height:100vh; }
+  .box { text-align:center; opacity:.7; font-size:15px; }
+</style>
+</head>
+<body>
+  <div class="box">Завершаем вход…<br>Можно закрыть это окно.</div>
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var code = params.get('code');
+      var error = params.get('error_description') || params.get('error');
+      var state = params.get('state');
+      var msg = { source: 'yandex-auth', code: code, error: error, state: state };
+      try {
+        if (window.opener) {
+          window.opener.postMessage(msg, window.location.origin);
+          window.close();
+          return;
+        }
+      } catch (e) {}
+      // Фолбэк, если попап заблокирован и страница открыта в том же окне:
+      // прокинем через localStorage и вернёмся на /app.
+      try { localStorage.setItem('yandex_auth_result', JSON.stringify(msg)); } catch (e) {}
+      window.location.replace('/app');
+    })();
+  </script>
+</body>
+</html>

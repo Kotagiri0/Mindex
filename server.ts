@@ -17,6 +17,7 @@ import {
   collectDefaultMetrics,
 } from "prom-client";
 import { verifyGoogleIdToken } from './src/lib/google-auth.ts';
+import { verifyYandexCode } from './src/lib/yandex-auth.ts';
 import * as polisad from './src/polisad/index.ts';
 import { Resend } from 'resend';
 
@@ -284,6 +285,11 @@ app.use("/api/*", (req, res, next) => {
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
 
+// Яндекс OAuth (вход). client_secret — только на сервере.
+const YANDEX_CLIENT_ID = process.env.YANDEX_CLIENT_ID || process.env.VITE_YANDEX_CLIENT_ID;
+const YANDEX_CLIENT_SECRET = process.env.YANDEX_CLIENT_SECRET;
+const YANDEX_REDIRECT_URI = process.env.YANDEX_REDIRECT_URI; // опц., если задан при регистрации приложения
+
 // Multer configuration for voice uploads
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -318,6 +324,7 @@ app.get('/api/config', (_req, res) => {
 
   return res.status(200).json({
     googleClientId: GOOGLE_CLIENT_ID,
+    yandexClientId: YANDEX_CLIENT_ID,
   });
 });
 
@@ -488,6 +495,8 @@ const ensureAuthSchema = async () => {
   await db.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS email TEXT;`);
   await db.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS avatar_url TEXT;`);
   await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS auth_users_google_sub_key ON auth_users (google_sub) WHERE google_sub IS NOT NULL;`);
+  await db.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS yandex_id TEXT;`);
+  await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS auth_users_yandex_id_key ON auth_users (yandex_id) WHERE yandex_id IS NOT NULL;`);
   await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS auth_users_email_key ON auth_users (email) WHERE email IS NOT NULL;`);
 
   await db.query(`
@@ -1243,6 +1252,110 @@ app.post('/api/auth/google', async (req, res) => {
   } catch (error: any) {
     console.error('[AUTH][GOOGLE]', error?.message || error);
     return res.status(401).json({ error: error?.message || 'Не удалось выполнить вход через Google.' });
+  }
+});
+
+app.post('/api/auth/yandex', async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ error: 'База данных не настроена (DATABASE_URL).' });
+  }
+  if (!YANDEX_CLIENT_ID || !YANDEX_CLIENT_SECRET) {
+    return res.status(500).json({ error: 'Яндекс OAuth не настроен на сервере.' });
+  }
+
+  const code = String(req.body?.code || '').trim();
+  if (!code) {
+    return res.status(400).json({ error: 'Яндекс authorization code обязателен.' });
+  }
+  // redirect_uri должен совпадать в authorize и token; берём тот, что использовал фронт
+  // (Яндекс всё равно валидирует его по списку зарегистрированных Callback URI).
+  const redirectUri = String(req.body?.redirectUri || '').trim() || YANDEX_REDIRECT_URI;
+
+  try {
+    const yUser = await verifyYandexCode(code, YANDEX_CLIENT_ID, YANDEX_CLIENT_SECRET, redirectUri);
+    const email = yUser.email || '';
+    const displayName = yUser.displayName || (email ? email.split('@')[0] : '') || 'Яндекс';
+    let username = email || `yandex-${yUser.id.slice(0, 12)}`;
+
+    if (email) {
+      const usernameExists = await db.query(
+        `SELECT id FROM auth_users WHERE username = $1 LIMIT 1`,
+        [username]
+      );
+      if (usernameExists.rows.length > 0) {
+        username = `yandex-${yUser.id.slice(0, 12)}`;
+      }
+    }
+
+    // Ищем по yandex_id (надёжный ключ). По email привязываем ТОЛЬКО если у строки
+    // нет ЧУЖОГО yandex_id — так старый Google-аккаунт с тем же email подхватится,
+    // и пользователь не потеряет задачи (линковка по подтверждённому провайдером email).
+    let existingRow = null;
+    const byId = await db.query(
+      `SELECT id, username, display_name, provider, email, avatar_url, created_at, yandex_id
+       FROM auth_users WHERE yandex_id = $1 LIMIT 1`,
+      [yUser.id]
+    );
+    if (byId.rows.length > 0) {
+      existingRow = byId.rows[0];
+    } else if (email && yUser.emailVerified) {
+      const byEmail = await db.query(
+        `SELECT id, username, display_name, provider, email, avatar_url, created_at, yandex_id
+         FROM auth_users WHERE email = $1 LIMIT 1`,
+        [email]
+      );
+      if (byEmail.rows.length > 0 && !byEmail.rows[0].yandex_id) {
+        existingRow = byEmail.rows[0];
+      } else if (byEmail.rows.length > 0 && byEmail.rows[0].yandex_id !== yUser.id) {
+        return res.status(409).json({ error: 'Этот email уже привязан к другому Яндекс-аккаунту.' });
+      }
+    }
+
+    if (existingRow) {
+      const row = existingRow;
+      await db.query(
+        `
+          UPDATE auth_users
+          SET provider = 'yandex',
+              yandex_id = COALESCE(yandex_id, $1),
+              email = COALESCE(email, $2),
+              avatar_url = COALESCE($3, avatar_url),
+              display_name = COALESCE(NULLIF(display_name, ''), $4)
+          WHERE id = $5
+        `,
+        [yUser.id, email || null, yUser.avatarUrl || null, displayName, row.id]
+      );
+
+      const tokenExisting = await createSession(row.id);
+      return res.status(200).json({
+        user: formatAuthUser({
+          ...row,
+          provider: 'yandex',
+          email: row.email || email || null,
+          avatar_url: row.avatar_url || yUser.avatarUrl || null,
+        }),
+        token: tokenExisting,
+      });
+    }
+
+    const userId = crypto.randomUUID();
+    const result = await db.query(
+      `
+        INSERT INTO auth_users (
+          id, username, display_name, password_hash, provider, yandex_id, email, avatar_url
+        )
+        VALUES ($1, $2, $3, '', 'yandex', $4, $5, $6)
+        RETURNING id, username, display_name, provider, email, avatar_url, created_at
+      `,
+      [userId, username, displayName, yUser.id, email || null, yUser.avatarUrl || null]
+    );
+
+    createSelfKnowledgeSkill(userId);
+    const tokenNew = await createSession(userId);
+    return res.status(201).json({ user: formatAuthUser(result.rows[0]), token: tokenNew });
+  } catch (error: any) {
+    console.error('[AUTH][YANDEX]', error?.message || error);
+    return res.status(401).json({ error: error?.message || 'Не удалось выполнить вход через Яндекс.' });
   }
 });
 

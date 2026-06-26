@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { Loader2, Calendar, MapPin, Check, ArrowRight } from 'lucide-react';
 import { SharedEvent, LocalUser } from '../types';
 import { getSessionToken, apiFetch } from '../lib/auth';
-import { useGoogleLogin } from '../lib/useGoogleLogin';
+import { useYandexLogin } from '../lib/useYandexLogin';
 
 // Дизайн-токены публичной страницы — те же, что у экрана входа (off-white, тёмный акцент).
 const F = "'Random Grotesque', sans-serif";
@@ -79,7 +79,7 @@ export default function SharedEventPage({ eventId, onOpenApp }: Props) {
     void addToCalendar();
   }, [addToCalendar]);
 
-  const google = useGoogleLogin(handleLoginSuccess);
+  const yandex = useYandexLogin(handleLoginSuccess);
 
   // Загрузка события (публичный запрос, без токена).
   useEffect(() => {
@@ -112,7 +112,7 @@ export default function SharedEventPage({ eventId, onOpenApp }: Props) {
     } else {
       // Холодный гейт: запомним событие, чтобы не потерять его после логина.
       localStorage.setItem(PENDING_KEY, eventId);
-      void google.startLogin();
+      yandex.startLogin();
     }
   };
 
@@ -121,12 +121,6 @@ export default function SharedEventPage({ eventId, onOpenApp }: Props) {
       className="min-h-screen flex flex-col items-center px-6 py-10"
       style={{ backgroundColor: BG, justifyContent: 'center' }}
     >
-      {/* Скрытый контейнер для Google-iframe — вне display:none блоков */}
-      <div
-        ref={google.buttonRef}
-        style={{ position: 'fixed', opacity: 0, pointerEvents: 'none', width: 0, height: 0, overflow: 'hidden', top: 0, left: 0 }}
-      />
-
       {status.kind === 'loading' && (
         <Loader2 size={28} className="animate-spin" style={{ color: FG }} />
       )}
@@ -229,12 +223,12 @@ export default function SharedEventPage({ eventId, onOpenApp }: Props) {
                 </div>
                 <PrimaryButton
                   onClick={handleAddClick}
-                  loading={google.loading || addState === 'adding'}
-                  label="Войти через Google"
-                  icon={<GoogleIcon />}
-                  disabled={!google.ready}
+                  loading={yandex.loading || addState === 'adding'}
+                  label="Войти через Яндекс"
+                  icon={<YandexIcon />}
+                  disabled={!yandex.ready}
                 />
-                {(google.error || addState === 'error') && <ErrorNote text={google.error || addError} />}
+                {(yandex.error || addState === 'error') && <ErrorNote text={yandex.error || addError} />}
               </div>
             )}
           </div>
@@ -308,13 +302,11 @@ function ErrorNote({ text }: { text: string }) {
   );
 }
 
-function GoogleIcon() {
+function YandexIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 72 73" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <path d="M71.2941 37.1865C71.2941 34.1958 71.0515 32.0133 70.5262 29.75H36.3745V43.2489H56.4208C56.0168 46.6035 53.8343 51.6556 48.9843 55.0503L48.9163 55.5023L59.7144 63.8675L60.4626 63.9421C67.3332 57.5967 71.2941 48.2605 71.2941 37.1865Z" fill="#ffffff"/>
-      <path d="M36.3746 72.7508C46.1956 72.7508 54.4405 69.5174 60.4627 63.9401L48.9844 55.0483C45.9128 57.1904 41.7903 58.6858 36.3746 58.6858C26.7556 58.6858 18.5916 52.3406 15.6814 43.5703L15.2548 43.6065L4.02672 52.296L3.87988 52.7042C9.86143 64.5865 22.148 72.7508 36.3746 72.7508Z" fill="#ffffff"/>
-      <path d="M15.6813 43.5666C14.9135 41.3033 14.469 38.8781 14.469 36.3724C14.469 33.8665 14.9135 31.4416 15.6409 29.1783L15.6206 28.6963L4.25183 19.8672L3.87987 20.0441C1.41458 24.975 0 30.5121 0 36.3724C0 42.2328 1.41458 47.7696 3.87987 52.7005L15.6813 43.5666Z" fill="#ffffff"/>
-      <path d="M36.3746 14.0648C43.2049 14.0648 47.8122 17.0151 50.4394 19.4807L60.7051 9.4574C54.4003 3.59706 46.1956 0 36.3746 0C22.148 0 9.86142 8.16402 3.87988 20.0463L15.641 29.1805C18.5916 20.4102 26.7556 14.0648 36.3746 14.0648Z" fill="#ffffff"/>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="12" cy="12" r="12" fill="#FC3F1D"/>
+      <path d="M13.2 6.6h-1.06c-1.94 0-2.96 1-2.96 2.48 0 1.66.72 2.44 2.18 3.43l1.2.82-3.46 5.17H6.6l3.1-4.62c-1.78-1.28-2.78-2.52-2.78-4.62 0-2.64 1.84-4.44 5.32-4.44h2.62V18.5H13.2V6.6Z" fill="#fff"/>
     </svg>
   );
 }

@@ -3,56 +3,24 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2 } from 'lucide-react';
 import { LocalUser } from '../types';
-import { loginGoogleUser, loginLocalUser } from '../lib/auth';
+import { loginLocalUser } from '../lib/auth';
 import { storage } from '../lib/storage';
 import { useHashRoute } from '../lib/useHashRoute';
+import { useYandexLogin } from '../lib/useYandexLogin';
 import PrimeMascot, { PrimeEyes, PrimeDecor } from './PrimeMascot';
 
 interface LocalAuthProps {
   onAuthenticated: (user: LocalUser) => void;
 }
 
-declare global {
-  interface Window {
-    google?: {
-      accounts?: {
-        id?: {
-          initialize: (config: { client_id: string; callback: (response: { credential?: string }) => void }) => void;
-          renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
-        };
-      };
-    };
-  }
+function YandexMark() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="12" cy="12" r="12" fill="#FC3F1D" />
+      <path d="M13.2 6.6h-1.06c-1.94 0-2.96 1-2.96 2.48 0 1.66.72 2.44 2.18 3.43l1.2.82-3.46 5.17H6.6l3.1-4.62c-1.78-1.28-2.78-2.52-2.78-4.62 0-2.64 1.84-4.44 5.32-4.44h2.62V18.5H13.2V6.6Z" fill="#fff" />
+    </svg>
+  );
 }
-
-let googleScriptPromise: Promise<void> | null = null;
-
-const loadGoogleIdentityScript = () => {
-  if (window.google?.accounts?.id) return Promise.resolve();
-  if (googleScriptPromise) return googleScriptPromise;
-
-  googleScriptPromise = new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('Google Sign-In недоступен. Попробуй войти через email.')), 5000);
-
-    const existingScript = document.querySelector<HTMLScriptElement>('script[data-google-gsi="true"]');
-    if (existingScript) {
-      if (window.google?.accounts?.id) { clearTimeout(timeout); resolve(); return; }
-      existingScript.addEventListener('load', () => { clearTimeout(timeout); resolve(); }, { once: true });
-      existingScript.addEventListener('error', () => { clearTimeout(timeout); reject(new Error('Не удалось загрузить Google Sign-In.')); }, { once: true });
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.dataset.googleGsi = 'true';
-    script.onload = () => { clearTimeout(timeout); resolve(); };
-    script.onerror = () => { clearTimeout(timeout); reject(new Error('Не удалось загрузить Google Sign-In.')); };
-    document.head.appendChild(script);
-  }).catch((error) => { googleScriptPromise = null; throw error; });
-
-  return googleScriptPromise;
-};
 
 const F = "'Random Grotesque', sans-serif";
 const M = "'Muller', sans-serif";
@@ -110,10 +78,8 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
   const [legacyPassword, setLegacyPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
-  const [googleClientId, setGoogleClientId] = useState<string>(import.meta.env.VITE_GOOGLE_CLIENT_ID || '');
+  const yandex = useYandexLogin(onAuthenticated);
   const [resendCooldown, setResendCooldown] = useState(0);
-  const googleButtonRef = useRef<HTMLDivElement | null>(null);
   const otpRef = useRef<HTMLInputElement | null>(null);
   const emailRef = useRef<HTMLInputElement | null>(null);
   const submittingRef = useRef(false);
@@ -128,54 +94,14 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
     setLegacyPassword('');
   }, [mode]);
 
+  // Ошибки Яндекс-входа показываем в общем поле ошибок
   useEffect(() => {
-    if (googleClientId) return;
-    fetch('/api/config').then(r => r.json()).then(d => {
-      if (d?.googleClientId) setGoogleClientId(d.googleClientId);
-    }).catch(() => {});
-  }, [googleClientId]);
+    if (yandex.error) setError(yandex.error);
+  }, [yandex.error]);
 
-  // Google Identity инициализируется лениво — только по клику на кнопку.
-  // Это предотвращает зависание страницы в странах с ограниченным доступом к Google.
-
-  const handleGoogleClick = async () => {
-    if (!googleClientId) { setError('Google вход не настроен.'); return; }
+  const handleYandexClick = () => {
     setError('');
-    setGoogleLoading(true);
-    try {
-      await loadGoogleIdentityScript();
-      if (!window.google?.accounts?.id) throw new Error('Google Sign-In недоступен.');
-      window.google.accounts.id.initialize({
-        client_id: googleClientId,
-        callback: async ({ credential }) => {
-          if (!credential) { setError('Google не вернул токен авторизации.'); setGoogleLoading(false); return; }
-          try {
-            const user = await loginGoogleUser(credential);
-            onAuthenticated(user);
-          } catch (e) {
-            setError(e instanceof Error ? e.message : 'Не удалось войти через Google.');
-            setGoogleLoading(false);
-          }
-        },
-      });
-      // Скрытый button-рендер — единственный способ запустить OAuth без FedCM-предупреждений
-      if (googleButtonRef.current) {
-        googleButtonRef.current.innerHTML = '';
-        window.google.accounts.id.renderButton(googleButtonRef.current, {
-          theme: 'filled_black', size: 'large', shape: 'pill', width: 320,
-        });
-        setTimeout(() => {
-          const btn = googleButtonRef.current?.querySelector('div[role="button"]') as HTMLElement | null;
-          btn?.click();
-          setGoogleLoading(false);
-        }, 50);
-      } else {
-        setGoogleLoading(false);
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Google Sign-In недоступен. Используй вход через email.');
-      setGoogleLoading(false);
-    }
+    yandex.startLogin();
   };
 
   // Автофокус на полях
@@ -301,11 +227,6 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
           background-color: #ffffff;
         }
       `}</style>
-      {/* Скрытый контейнер для Google iframe — должен быть вне display:none блоков */}
-      <div
-        ref={googleButtonRef}
-        style={{ position: 'fixed', opacity: 0, pointerEvents: 'none', width: 0, height: 0, overflow: 'hidden', top: 0, left: 0 }}
-      />
 
       <motion.div
         initial={{ opacity: 0, y: 16 }}
@@ -422,25 +343,20 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                     >
                       <motion.button
                         type="button"
-                        onClick={handleGoogleClick}
-                        disabled={googleLoading || !googleClientId}
-                        whileHover={!googleLoading ? { scale: 1.01, boxShadow: '0 4px 14px rgba(0,0,0,0.15)' } : undefined}
-                        whileTap={!googleLoading ? { scale: 0.97 } : undefined}
+                        onClick={handleYandexClick}
+                        disabled={yandex.loading || !yandex.ready}
+                        whileHover={!yandex.loading ? { scale: 1.01, boxShadow: '0 4px 14px rgba(0,0,0,0.15)' } : undefined}
+                        whileTap={!yandex.loading ? { scale: 0.97 } : undefined}
                         transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                         className="w-full h-[52px] rounded-full flex items-center justify-center disabled:opacity-60"
-                        style={{ background: FG, fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: '#f8f8f8', border: 'none', cursor: googleLoading ? 'default' : 'pointer', position: 'relative' }}
+                        style={{ background: FG, fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: '#f8f8f8', border: 'none', cursor: yandex.loading ? 'default' : 'pointer', position: 'relative' }}
                       >
-                        {googleLoading ? (
+                        {yandex.loading ? (
                           <Loader2 size={18} className="animate-spin" />
                         ) : (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                            <svg width="18" height="18" viewBox="0 0 72 73" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                              <path d="M71.2941 37.1865C71.2941 34.1958 71.0515 32.0133 70.5262 29.75H36.3745V43.2489H56.4208C56.0168 46.6035 53.8343 51.6556 48.9843 55.0503L48.9163 55.5023L59.7144 63.8675L60.4626 63.9421C67.3332 57.5967 71.2941 48.2605 71.2941 37.1865Z" fill="#ffffff"/>
-                              <path d="M36.3746 72.7508C46.1956 72.7508 54.4405 69.5174 60.4627 63.9401L48.9844 55.0483C45.9128 57.1904 41.7903 58.6858 36.3746 58.6858C26.7556 58.6858 18.5916 52.3406 15.6814 43.5703L15.2548 43.6065L4.02672 52.296L3.87988 52.7042C9.86143 64.5865 22.148 72.7508 36.3746 72.7508Z" fill="#ffffff"/>
-                              <path d="M15.6813 43.5666C14.9135 41.3033 14.469 38.8781 14.469 36.3724C14.469 33.8665 14.9135 31.4416 15.6409 29.1783L15.6206 28.6963L4.25183 19.8672L3.87987 20.0441C1.41458 24.975 0 30.5121 0 36.3724C0 42.2328 1.41458 47.7696 3.87987 52.7005L15.6813 43.5666Z" fill="#ffffff"/>
-                              <path d="M36.3746 14.0648C43.2049 14.0648 47.8122 17.0151 50.4394 19.4807L60.7051 9.4574C54.4003 3.59706 46.1956 0 36.3746 0C22.148 0 9.86142 8.16402 3.87988 20.0463L15.641 29.1805C18.5916 20.4102 26.7556 14.0648 36.3746 14.0648Z" fill="#ffffff"/>
-                            </svg>
-                            {isLogin ? 'Войти через Google' : 'С помощью Google'}
+                            <YandexMark />
+                            {isLogin ? 'Войти через Яндекс' : 'С помощью Яндекс'}
                           </span>
                         )}
                       </motion.button>
@@ -778,22 +694,17 @@ export default function LocalAuth({ onAuthenticated }: LocalAuthProps) {
                 >
                   <motion.button
                     type="button"
-                    onClick={handleGoogleClick}
-                    disabled={googleLoading || !googleClientId}
-                    whileTap={!googleLoading ? { scale: 0.97 } : undefined}
+                    onClick={handleYandexClick}
+                    disabled={yandex.loading || !yandex.ready}
+                    whileTap={!yandex.loading ? { scale: 0.97 } : undefined}
                     transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                     className="w-full h-[52px] rounded-full flex items-center justify-center disabled:opacity-60"
-                    style={{ background: FG, fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: '#f8f8f8', border: 'none', cursor: googleLoading ? 'default' : 'pointer', position: 'relative' }}
+                    style={{ background: FG, fontFamily: M, fontSize: '0.95rem', fontWeight: 500, color: '#f8f8f8', border: 'none', cursor: yandex.loading ? 'default' : 'pointer', position: 'relative' }}
                   >
-                    {googleLoading ? <Loader2 size={18} className="animate-spin" /> : (
+                    {yandex.loading ? <Loader2 size={18} className="animate-spin" /> : (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                        <svg width="18" height="18" viewBox="0 0 72 73" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                          <path d="M71.2941 37.1865C71.2941 34.1958 71.0515 32.0133 70.5262 29.75H36.3745V43.2489H56.4208C56.0168 46.6035 53.8343 51.6556 48.9843 55.0503L48.9163 55.5023L59.7144 63.8675L60.4626 63.9421C67.3332 57.5967 71.2941 48.2605 71.2941 37.1865Z" fill="#ffffff"/>
-                          <path d="M36.3746 72.7508C46.1956 72.7508 54.4405 69.5174 60.4627 63.9401L48.9844 55.0483C45.9128 57.1904 41.7903 58.6858 36.3746 58.6858C26.7556 58.6858 18.5916 52.3406 15.6814 43.5703L15.2548 43.6065L4.02672 52.296L3.87988 52.7042C9.86143 64.5865 22.148 72.7508 36.3746 72.7508Z" fill="#ffffff"/>
-                          <path d="M15.6813 43.5666C14.9135 41.3033 14.469 38.8781 14.469 36.3724C14.469 33.8665 14.9135 31.4416 15.6409 29.1783L15.6206 28.6963L4.25183 19.8672L3.87987 20.0441C1.41458 24.975 0 30.5121 0 36.3724C0 42.2328 1.41458 47.7696 3.87987 52.7005L15.6813 43.5666Z" fill="#ffffff"/>
-                          <path d="M36.3746 14.0648C43.2049 14.0648 47.8122 17.0151 50.4394 19.4807L60.7051 9.4574C54.4003 3.59706 46.1956 0 36.3746 0C22.148 0 9.86142 8.16402 3.87988 20.0463L15.641 29.1805C18.5916 20.4102 26.7556 14.0648 36.3746 14.0648Z" fill="#ffffff"/>
-                        </svg>
-                        {isLogin ? 'Войти через Google' : 'С помощью Google'}
+                        <YandexMark />
+                        {isLogin ? 'Войти через Яндекс' : 'С помощью Яндекс'}
                       </span>
                     )}
                   </motion.button>
