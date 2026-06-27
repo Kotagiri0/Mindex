@@ -1,0 +1,79 @@
+/* ════════════════════════════════════════════════════════════════
+   Мысль — дизайн-токены (единый источник правды).
+
+   Сведено из лендинга (public/landing/v2.css) и приложения
+   (src/index.css). Где значения расходились — выбран канонический
+   вариант, расхождение помечено в комментарии. Этот файл — эталон
+   для дизайн-системы и для /design-sync; он НЕ подключён в рантайм,
+   менять прод-стили он не может.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ─── Шрифты ─────────────────────────────────────────────────────
+   Muller — основной UI/текст (400/500/700).
+   Random Grotesque — дисплейный, для строчных заголовков ("настройки").
+   Russisch Sans — акцидентный (600), используется точечно. */
+@font-face { font-family:'Muller'; src:url('/landing/assets/fonts/MullerRegular.ttf') format('truetype'); font-weight:400; font-display:swap; }
+@font-face { font-family:'Muller'; src:url('/landing/assets/fonts/MullerMedium.ttf')  format('truetype'); font-weight:500; font-display:swap; }
+@font-face { font-family:'Muller'; src:url('/landing/assets/fonts/MullerBold.ttf')    format('truetype'); font-weight:700; font-display:swap; }
+@font-face { font-family:'Random Grotesque'; src:url('/landing/assets/fonts/RG-SpaciousBook.ttf') format('truetype'); font-weight:400; font-display:swap; }
+
+:root {
+  /* ─── Типографика ───────────────────────────────────────────── */
+  --font-ui:       'Muller', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display:  'Random Grotesque', 'Muller', sans-serif;
+
+  --weight-regular: 400;
+  --weight-medium:  500;   /* заголовки документов/UI */
+  --weight-bold:    700;
+
+  --text-xs:   12px;
+  --text-sm:   14px;
+  --text-base: 15.5px;
+  --text-md:   16px;
+  --text-lg:   20px;
+  --text-xl:   28px;
+  --text-2xl:  30px;
+  --leading-tight: 1.2;
+  --leading-body:  1.6;
+
+  /* ─── Цвет: поверхности и текст ─────────────────────────────── */
+  /* Канон — со стороны лендинга (он отражает актуальное направление бренда). */
+  --bg:        #f0f0f0;   /* приложение сейчас #f9f9f9 — свести к #f0f0f0 */
+  --surface:   #ffffff;
+  --surface-2: #f2f2f2;
+
+  --ink:       #1c1c1e;   /* приложение сейчас #222224 — свести к #1c1c1e */
+  --ink-soft:  #6f6f74;
+  --ink-faint: #a8a8ad;
+  --ink-sub:   rgba(34, 34, 36, .6);
+
+  --line:        rgba(0, 0, 0, .08);
+  --line-strong: rgba(0, 0, 0, .12);
+  --border-input: rgba(0, 0, 0, .10);
+
+  /* ─── Акцент действия (тёмная кнопка) ───────────────────────── */
+  --accent:      #1c1c1e;
+  --accent-text: #f0f0f0;
+
+  /* ─── Палитра-стикеры (пастель для карточек/категорий) ──────── */
+  --green:      #cdeccf;  --green-deep: #4f7d57;
+  --blue:       #d7e2f5;  --blue-deep:  #4f6694;
+  --peach:      #fbe6c9;  --peach-deep: #9a7a45;
+  --pink:       #f6d9dd;  --pink-deep:  #9c5560;
+
+  /* ─── Радиусы ───────────────────────────────────────────────── */
+  --radius-s:   10px;
+  --radius-m:   16px;
+  --radius-l:   22px;
+  --radius-pill: 40px;
+
+  /* ─── Тени ──────────────────────────────────────────────────── */
+  --shadow:       0 10px 30px -12px rgba(0, 0, 0, .18);
+  --shadow-soft:  0 6px 20px -10px rgba(0, 0, 0, .14);
+  --shadow-card:  0 0 50px rgba(0, 0, 0, .02);
+  --shadow-input: 0 0 44px rgba(0, 0, 0, .02);
+
+  /* ─── Раскладка ─────────────────────────────────────────────── */
+  --wrap: 1160px;
+  --ease: cubic-bezier(.4, 0, .2, 1);
+}

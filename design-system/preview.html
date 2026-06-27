@@ -1,0 +1,119 @@
+<!-- @dsCard group="Foundations" -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Мысль — дизайн-система</title>
+<link rel="stylesheet" href="./tokens.css" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); line-height: var(--leading-body); padding: 56px 32px 96px; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+  .display { font-family: var(--font-display); font-size: 40px; color: var(--ink); }
+  h2 { font-weight: var(--weight-medium); font-size: var(--text-lg); margin-bottom: 18px; }
+  .muted { color: var(--ink-soft); font-size: var(--text-sm); }
+  .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+  /* swatches */
+  .sw { display: flex; flex-direction: column; gap: 8px; }
+  .chip { width: 96px; height: 64px; border-radius: var(--radius-m); border: 1px solid var(--line); }
+  .sw span { font-size: var(--text-xs); color: var(--ink-soft); }
+  /* type scale */
+  .t-display { font-family: var(--font-display); font-size: var(--text-2xl); }
+  .t-h1 { font-weight: var(--weight-medium); font-size: var(--text-2xl); }
+  .t-h2 { font-weight: var(--weight-medium); font-size: var(--text-lg); }
+  .t-body { font-size: var(--text-base); }
+  .t-cap { font-size: var(--text-sm); color: var(--ink-soft); }
+  /* buttons */
+  .btn { height: 52px; padding: 0 28px; border-radius: var(--radius-pill); font-family: var(--font-ui); font-size: 15px; font-weight: var(--weight-medium); border: none; cursor: pointer; display: inline-flex; align-items: center; }
+  .btn-primary { background: var(--accent); color: var(--accent-text); }
+  .btn-secondary { background: var(--surface); color: var(--ink); border: 1px solid var(--border-input); }
+  /* input pill */
+  .input { height: 52px; width: 320px; border-radius: var(--radius-pill); background: #f5f5f5; border: 1px solid var(--line); display: flex; align-items: center; padding: 0 24px; color: var(--ink-soft); font-size: 15px; }
+  /* card / task item */
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-l); box-shadow: var(--shadow-card); padding: 18px 20px; max-width: 420px; }
+  .task { display: flex; align-items: center; gap: 14px; }
+  .check { width: 24px; height: 24px; border-radius: 8px; border: 1.5px solid var(--border-input); flex-shrink: 0; }
+  .task .title { font-size: 15px; }
+  .task .time { margin-left: auto; font-size: 13px; color: var(--ink-soft); }
+  /* chat bubble */
+  .bubble { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-l); padding: 14px 18px; max-width: 460px; font-size: 15px; }
+  /* category chips */
+  .cat { padding: 6px 14px; border-radius: var(--radius-pill); font-size: 13px; font-weight: var(--weight-medium); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="display">мысль</div>
+    <p class="muted">Дизайн-система · шрифт Muller + Random Grotesque · палитра off-white</p>
+  </header>
+
+  <!-- Цвет -->
+  <section>
+    <h2>Цвет</h2>
+    <div class="row">
+      <div class="sw"><div class="chip" style="background:var(--bg)"></div><span>bg #f0f0f0</span></div>
+      <div class="sw"><div class="chip" style="background:var(--surface)"></div><span>surface #fff</span></div>
+      <div class="sw"><div class="chip" style="background:var(--ink)"></div><span>ink #1c1c1e</span></div>
+      <div class="sw"><div class="chip" style="background:var(--ink-soft)"></div><span>ink-soft</span></div>
+      <div class="sw"><div class="chip" style="background:var(--ink-faint)"></div><span>ink-faint</span></div>
+    </div>
+    <div class="row" style="margin-top:16px">
+      <div class="sw"><div class="chip" style="background:var(--green)"></div><span>green</span></div>
+      <div class="sw"><div class="chip" style="background:var(--blue)"></div><span>blue</span></div>
+      <div class="sw"><div class="chip" style="background:var(--peach)"></div><span>peach</span></div>
+      <div class="sw"><div class="chip" style="background:var(--pink)"></div><span>pink</span></div>
+    </div>
+  </section>
+
+  <!-- Типографика -->
+  <section>
+    <h2>Типографика</h2>
+    <div style="display:flex; flex-direction:column; gap:10px">
+      <div class="t-display">время создать аккаунт — Random Grotesque</div>
+      <div class="t-h1">Заголовок — Muller Medium 30</div>
+      <div class="t-h2">Подзаголовок — Muller Medium 20</div>
+      <div class="t-body">Основной текст — Muller Regular 15.5. Максимум пользы в минимуме слов, без воды.</div>
+      <div class="t-cap">Подпись — Muller Regular 14, ink-soft</div>
+    </div>
+  </section>
+
+  <!-- Кнопки и поля -->
+  <section>
+    <h2>Кнопки и поля</h2>
+    <div class="row">
+      <button class="btn btn-primary">Попробовать</button>
+      <button class="btn btn-secondary">По электронной почте</button>
+    </div>
+    <div class="row" style="margin-top:16px">
+      <div class="input">Твой email адрес</div>
+    </div>
+  </section>
+
+  <!-- Задача -->
+  <section>
+    <h2>Задача</h2>
+    <div class="card task">
+      <div class="check"></div>
+      <div class="title">Созвон с командой по релизу</div>
+      <div class="time">15:00</div>
+    </div>
+    <div class="row" style="margin-top:16px">
+      <span class="cat" style="background:var(--green); color:var(--green-deep)">Работа</span>
+      <span class="cat" style="background:var(--blue); color:var(--blue-deep)">Личное</span>
+      <span class="cat" style="background:var(--peach); color:var(--peach-deep)">Встречи</span>
+      <span class="cat" style="background:var(--pink); color:var(--pink-deep)">Здоровье</span>
+    </div>
+  </section>
+
+  <!-- Мысль -->
+  <section>
+    <h2>Сообщение Мысли</h2>
+    <div class="bubble">Давай разберёмся. Вижу три задачи на завтра — раскидать по времени или оставить списком?</div>
+  </section>
+
+</div>
+</body>
+</html>
