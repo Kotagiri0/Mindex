@@ -8,6 +8,7 @@ import { useEffect, useRef } from 'react';
 
 export type PrimeEyes = 'waking' | 'down' | 'away' | 'idle';
 export type PrimeDecor = 'none' | 'question' | 'dots';
+export type PrimeDrop = 'none' | 'working' | 'needs' | 'done';
 
 const FG = '#222224';
 
@@ -60,11 +61,13 @@ interface PrimeMascotProps {
    * Только при первом маунте. Повторные смены eyes анимируются обычными transition-ами.
    */
   wakeUp?: boolean;
+  /** Индикатор-«капля» в правом-верхнем углу: статус агента. */
+  drop?: PrimeDrop;
 }
 
 const M = "'Muller', sans-serif";
 
-export default function PrimeMascot({ size = 64, eyes, decor, wakeUp = false }: PrimeMascotProps) {
+export default function PrimeMascot({ size = 64, eyes, decor, wakeUp = false, drop = 'none' }: PrimeMascotProps) {
   const S = size / 70;
   const CX = CX_BASE * S;
   const CY = CY_BASE * S;
@@ -75,6 +78,14 @@ export default function PrimeMascot({ size = 64, eyes, decor, wakeUp = false }: 
   const leftCtrl = useAnimationControls();
   const rightCtrl = useAnimationControls();
   const initialized = useRef(false);
+
+  // Проверяем prefers-reduced-motion один раз при маунте
+  const reducedMotionRef = useRef(
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false
+  );
+  const reducedMotion = reducedMotionRef.current;
 
   // Анимируем глаза при каждой смене eyes
   useEffect(() => {
@@ -145,6 +156,54 @@ export default function PrimeMascot({ size = 64, eyes, decor, wakeUp = false }: 
             }}
           >
             {decor === 'question' ? '?' : '…'}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Капля-индикатор статуса агента, правый-верхний угол поверх обводки */}
+      <AnimatePresence>
+        {drop !== 'none' && (
+          <motion.div
+            key={drop}
+            initial={{ opacity: 0, scale: 0.6 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.6 }}
+            transition={{ duration: 0.2 }}
+            style={{
+              position: 'absolute',
+              top: -size * 0.06,
+              right: -size * 0.06,
+              width: size * 0.3,
+              height: size * 0.3,
+              borderRadius: '50%',
+              border: '3px solid #ECEBE8',
+              boxSizing: 'border-box',
+              overflow: 'hidden',
+              pointerEvents: 'none',
+            }}
+          >
+            {drop === 'working' && (
+              <motion.div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: '50%',
+                  background: 'conic-gradient(#9FDFAE 0 70%, transparent 70%)',
+                }}
+                animate={reducedMotion ? undefined : { rotate: 360 }}
+                transition={reducedMotion ? undefined : { duration: 1.4, ease: 'linear', repeat: Infinity }}
+              />
+            )}
+            {drop === 'needs' && (
+              <motion.div
+                style={{ width: '100%', height: '100%', borderRadius: '50%', background: '#F5D879' }}
+                animate={reducedMotion ? undefined : { scale: [1, 1.28, 1] }}
+                transition={reducedMotion ? undefined : { duration: 1.4, ease: 'easeInOut', repeat: Infinity }}
+              />
+            )}
+            {drop === 'done' && (
+              <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: '#9FDFAE' }} />
+            )}
           </motion.div>
         )}
       </AnimatePresence>

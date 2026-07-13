@@ -14,6 +14,7 @@ import { TaskEditPatch } from './EditTaskModal';
 import DayTimeline from './DayTimeline';
 import TimelineCreatePopover from './TimelineCreatePopover';
 import * as MxIcon from './icons';
+import AgentStatus from './AgentStatus';
 import SettingsScreen from './Settings';
 import NoteView from './NoteView';
 import NoteEditor from './NoteEditor';
@@ -1978,6 +1979,7 @@ function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
 
 function Sidebar({
   collapsed, onToggle, screen, setScreen, calActive, setCalActive, threads, startNewThread, newChatActive, onOpenThread, onDropText,
+  agentState, agentWorkingCount,
 }: {
   collapsed: boolean;
   onToggle: () => void;
@@ -1990,6 +1992,8 @@ function Sidebar({
   newChatActive: boolean;
   onOpenThread: (id: string) => void;
   onDropText: (text: string) => void;
+  agentState: 'ok' | 'working' | 'needs';
+  agentWorkingCount: number;
 }) {
 
   const NavBtn = ({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) => {
@@ -2043,16 +2047,11 @@ function Sidebar({
         overflow: 'hidden', flexShrink: 0, height: '100%',
       }}
     >
-      {/* Header: logo fades, toggle button always visible */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: collapsed ? '18px' : '18px 12px 18px 14px', flexShrink: 0 }}>
-        <motion.div
-          animate={{ opacity: collapsed ? 0 : 1, width: collapsed ? 0 : 28 }}
-          transition={collapsed ? { duration: 0.12 } : { duration: 0.2, delay: 0.14 }}
-          style={{ overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center' }}
-        >
-          <LogoIcon size={28} />
-        </motion.div>
-        <div style={{ flex: 1 }} />
+      {/* Header: статус агента «Мысль» вместо логотипа, кнопка сворачивания на своём месте */}
+      <div style={{ display: 'flex', alignItems: collapsed ? 'center' : 'flex-start', flexDirection: collapsed ? 'column' : 'row', padding: collapsed ? '18px 12px' : '14px 8px 14px 8px', flexShrink: 0, gap: collapsed ? 10 : 0 }}>
+        <div style={{ flex: collapsed ? 'none' : 1, minWidth: 0, paddingTop: collapsed ? 0 : 4 }}>
+          <AgentStatus state={agentState} workingCount={agentWorkingCount} collapsed={collapsed} onClick={() => console.log('AgentStatus click (TODO: открыть панель агента)')} />
+        </div>
         <button
           onClick={onToggle}
           title={collapsed ? 'Развернуть' : 'Свернуть'}
@@ -2258,6 +2257,10 @@ export default function DesktopApp({
     db.saveThread(newTh);
   };
 
+  // TODO: связать с реальным состоянием агента (пока мок для визуальной проверки)
+  const agentState: 'ok' | 'working' | 'needs' = 'ok';
+  const agentWorkingCount = 0;
+
   return (
     <div style={{ display: 'flex', height: '100dvh', overflow: 'hidden', background: 'var(--bg)' }}>
       <Sidebar
@@ -2272,6 +2275,8 @@ export default function DesktopApp({
         newChatActive={screen === 'ai' && !curTh && !noteMode}
         onOpenThread={handleOpenThread}
         onDropText={handleDropText}
+        agentState={agentState}
+        agentWorkingCount={agentWorkingCount}
       />
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minWidth: 0 }}>
