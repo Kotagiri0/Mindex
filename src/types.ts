@@ -40,6 +40,14 @@ export interface Task {
   suggestedTime?: string;
   /** Конец предложенного агентом слота ("HH:MM"). */
   suggestedEndTime?: string;
+  /**
+   * Задачу ведёт агент «Мысль». Определяет наличие «лица» на карточке и каплю-статус.
+   * 'working' — агент выполняет, 'needs' — ждёт ответа/подтверждения, 'done' — завершил.
+   * undefined — обычная пользовательская задача (лица нет).
+   */
+  agent?: 'working' | 'needs' | 'done';
+  /** Источник задачи. 'telegram' — пришла из бота (показываем метку источника). */
+  origin?: 'telegram';
 }
 
 export interface Message {

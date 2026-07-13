@@ -14,6 +14,8 @@ interface AgentStatusProps {
   workingCount?: number;
   collapsed?: boolean;
   onClick?: () => void;
+  /** Компактный режим — тонкая горизонтальная полоса для мобильного хедера */
+  compact?: boolean;
 }
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
@@ -57,9 +59,49 @@ function getContent(state: AgentState, workingCount: number) {
   }
 }
 
-export default function AgentStatus({ state, workingCount = 0, collapsed = false, onClick }: AgentStatusProps) {
+export default function AgentStatus({ state, workingCount = 0, collapsed = false, onClick, compact = false }: AgentStatusProps) {
   const [hovered, setHovered] = useState(false);
   const content = getContent(state, workingCount);
+
+  // Компактная полоса-уведомление для мобильного хедера
+  if (compact) {
+    return (
+      <button
+        onClick={onClick}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          height: 44,
+          padding: '8px 16px',
+          background: 'var(--surface)',
+          border: 'none',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <PrimeMascot size={26} eyes={content.eyes} decor={content.decor} drop={content.drop} />
+        <span
+          style={{
+            fontFamily: M,
+            fontSize: 13,
+            fontWeight: 500,
+            color: 'var(--text-primary)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          {content.title} · {content.subtitle}
+        </span>
+        <ChevronRight size={14} strokeWidth={1.75} color="var(--text-30)" style={{ flexShrink: 0 }} />
+      </button>
+    );
+  }
 
   return (
     <button

@@ -9,6 +9,8 @@ import TimelineCreatePopover from './TimelineCreatePopover';
 import { CalendarGridIcon, TodoIcon, SettingsIcon } from './icons';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
+import AgentStatus from './AgentStatus';
+import { deriveAgentStatus } from '../lib/agentStatus';
 
 // Вид панели задач: список (как было) или таймлайн (календарь дня). Запоминается навсегда.
 type DashView = 'list' | 'timeline';
@@ -163,6 +165,9 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
   // Время, по которому тапнули на таймлайне для создания задачи (null — попровер закрыт).
   const [createAt, setCreateAt] = useState<string | null>(null);
   const [today, setToday] = useState(todayStr);
+
+  // Глобальный статус агента «Мысль» — выводится из задач, показывается в компактной полосе под хедером
+  const { state: agentState, workingCount } = useMemo(() => deriveAgentStatus(tasks), [tasks]);
 
   // Обновляем "сегодня" при смене суток — без перезагрузки страницы.
   useEffect(() => {
@@ -429,6 +434,22 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
         </motion.button>
 
       </div>
+
+      {/* Полоса статуса агента «Мысль» — показывается только когда есть что сообщить (не 'ok') */}
+      <AnimatePresence initial={false}>
+        {agentState !== 'ok' && (
+          <motion.div
+            key="agent-status"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 44, opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            style={{ overflow: 'hidden' }}
+          >
+            <AgentStatus compact state={agentState} workingCount={workingCount} onClick={() => onNavigate('threads')} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Week strip — swipeable */}
       <div

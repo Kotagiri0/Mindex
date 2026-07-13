@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { MysliThinking } from './MysliThinking';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Sun, Calendar, MessageCircle, Settings as SettingsIcon,
+  Calendar, MessageCircle, Settings as SettingsIcon,
   Plus, ChevronDown, ArrowUp, Search, Check, Mic, Loader,
   PanelLeftOpen, PanelLeftClose, Pencil, Copy, MoreHorizontal, X, StickyNote, BookOpen, ChevronRight,
   LayoutList, CalendarRange,
@@ -15,6 +15,8 @@ import DayTimeline from './DayTimeline';
 import TimelineCreatePopover from './TimelineCreatePopover';
 import * as MxIcon from './icons';
 import AgentStatus from './AgentStatus';
+import AgentTaskCard from './AgentTaskCard';
+import { deriveAgentStatus } from '../lib/agentStatus';
 import SettingsScreen from './Settings';
 import NoteView from './NoteView';
 import NoteEditor from './NoteEditor';
@@ -514,8 +516,18 @@ function TodayScreen({
 
 // ─── Empty chat screen ──────────────────────────────────────────────────────────
 
+// Разделы памяти — витрина того, что «Мысль» знает про пользователя (пока без данных)
+const MEMORY_TABS = ['мои идеи', 'твой проект', 'твоя работа', 'исследования'] as const;
+const MEMORY_TAB_EMPTY_TEXT: Record<typeof MEMORY_TABS[number], string> = {
+  'мои идеи': 'Здесь будет то, что Мысль знает про твои идеи',
+  'твой проект': 'Здесь будет то, что Мысль знает про твой проект',
+  'твоя работа': 'Здесь будет то, что Мысль знает про твою работу',
+  'исследования': 'Здесь будет то, что Мысль знает из твоих исследований',
+};
+
 function EmptyChatScreen({ onSend }: { onSend: (msg: string) => void }) {
   const [input, setInput] = useState('');
+  const [memoryTab, setMemoryTab] = useState<typeof MEMORY_TABS[number]>('мои идеи');
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0' }}>
@@ -529,6 +541,47 @@ function EmptyChatScreen({ onSend }: { onSend: (msg: string) => void }) {
             onSend={() => { if (input.trim()) { onSend(input.trim()); setInput(''); } }}
             placeholder="Спрашивай о чём угодно"
           />
+
+          {/* Разделы памяти: витрина того, что Мысль знает про пользователя */}
+          <div style={{ marginTop: 24, textAlign: 'left' }}>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {MEMORY_TABS.map(tab => {
+                const active = tab === memoryTab;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setMemoryTab(tab)}
+                    style={{
+                      fontFamily: M, fontSize: 14,
+                      padding: '8px 14px',
+                      border: 'none', cursor: 'pointer',
+                      borderRadius: '12px 12px 0 0',
+                      background: active ? 'var(--surface)' : 'transparent',
+                      color: active ? 'var(--text-primary)' : 'var(--text-30)',
+                      fontWeight: active ? 500 : 400,
+                      boxShadow: active ? '0 -1px 4px rgba(0,0,0,0.04)' : 'none',
+                      borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
+                      transition: 'color 0.12s, background 0.12s',
+                    }}
+                  >
+                    {tab}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{
+              minHeight: 180,
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: '0 12px 12px 12px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 32,
+            }}>
+              <span style={{ fontFamily: M, fontSize: 13, color: 'var(--text-30)', textAlign: 'center' }}>
+                {MEMORY_TAB_EMPTY_TEXT[memoryTab]}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2029,6 +2082,41 @@ function Sidebar({
     );
   };
 
+  // Акцентная кнопка «Новая задача» — главное действие сайдбара, всегда визуально выделена
+  const AccentNavBtn = ({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) => {
+    const [hovered, setHovered] = useState(false);
+    return (
+      <button
+        onClick={onClick}
+        title={collapsed ? label : undefined}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center',
+          gap: collapsed ? 0 : 10,
+          justifyContent: collapsed ? 'center' : 'flex-start',
+          padding: collapsed ? '7px' : '7px 12px 7px 8px',
+          borderRadius: 40, border: 'none', cursor: 'pointer',
+          background: 'var(--accent)',
+          opacity: hovered ? 0.9 : 1,
+          color: 'var(--accent-text)',
+          fontWeight: 500,
+          transition: 'opacity 0.12s, gap 0.28s cubic-bezier(0.4,0,0.2,1), padding 0.28s cubic-bezier(0.4,0,0.2,1)',
+          minHeight: 36, flexShrink: 0,
+        }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{icon}</span>
+        <motion.span
+          animate={{ opacity: collapsed ? 0 : 1, maxWidth: collapsed ? 0 : 200 }}
+          transition={collapsed ? { duration: 0.1 } : { duration: 0.18, delay: 0.13 }}
+          style={{ fontFamily: M, fontSize: 15, whiteSpace: 'nowrap', fontWeight: 'inherit', color: 'inherit', overflow: 'hidden', display: 'block' }}
+        >
+          {label}
+        </motion.span>
+      </button>
+    );
+  };
+
   const [dragOver, setDragOver] = useState(false);
   const [dropHovered, setDropHovered] = useState(false);
 
@@ -2063,9 +2151,7 @@ function Sidebar({
 
       {/* Nav */}
       <nav style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
-        <NavBtn icon={<Plus size={17} strokeWidth={1.75} />} label="Новый чат" active={newChatActive} onClick={startNewThread} />
-
-        <NavBtn icon={<Sun size={17} strokeWidth={1.75} />} label="Сегодня" active={screen === 'dash' && !calActive} onClick={() => { setScreen('dash'); setCalActive(false); }} />
+        <AccentNavBtn icon={<Pencil size={17} strokeWidth={1.75} />} label="Новая задача" onClick={startNewThread} />
         <NavBtn icon={<MxIcon.CalendarIcon size={16} />} label="Календарь" active={screen === 'dash' && calActive} onClick={() => { setScreen('dash'); setCalActive(true); }} />
         <NavBtn icon={<MxIcon.ChatIcon size={16} />} label="Твои мысли" active={screen === 'threads' || (screen === 'ai' && !newChatActive)} onClick={() => setScreen('threads')} />
       </nav>
@@ -2257,9 +2343,12 @@ export default function DesktopApp({
     db.saveThread(newTh);
   };
 
-  // TODO: связать с реальным состоянием агента (пока мок для визуальной проверки)
-  const agentState: 'ok' | 'working' | 'needs' = 'ok';
-  const agentWorkingCount = 0;
+  // Глобальное состояние агента выводится из реальных задач.
+  const { state: agentState, workingCount: agentWorkingCount } = deriveAgentStatus(tasks);
+
+  // Плавающая карточка задач агента — показывается только если есть задачи, которые ведёт агент.
+  const agentTasks = tasks.filter(t => t.agent);
+  const [agentCardVisible, setAgentCardVisible] = useState(true);
 
   return (
     <div style={{ display: 'flex', height: '100dvh', overflow: 'hidden', background: 'var(--bg)' }}>
@@ -2418,6 +2507,23 @@ export default function DesktopApp({
               Обновить
             </button>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Плавающая карточка задач агента — визуальная проверка деривации из tasks. */}
+      <AnimatePresence>
+        {agentCardVisible && agentTasks.length > 0 && (
+          <div style={{ position: 'fixed', right: 24, bottom: 24, zIndex: 500 }}>
+            <AgentTaskCard
+              tasks={agentTasks.map(t => ({
+                id: t.id,
+                name: t.name,
+                time: t.time || undefined,
+                status: t.agent === 'done' ? 'done' : t.agent === 'working' ? 'working' : t.agent === 'needs' ? 'needs' : 'pending',
+              }))}
+              onClose={() => setAgentCardVisible(false)}
+            />
+          </div>
         )}
       </AnimatePresence>
     </div>

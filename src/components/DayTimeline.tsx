@@ -8,6 +8,7 @@ import {
   parseTime,
   layoutDay,
 } from '../lib/timeline';
+import PrimeMascot from './PrimeMascot';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 
@@ -270,6 +271,29 @@ export default function DayTimeline({
   );
 }
 
+/**
+ * Метка источника «пришло из Telegram» — нейтральный кружок-самолётик,
+ * показывается только когда у задачи нет agent-лица (иначе приоритет у лица).
+ */
+function TelegramMark() {
+  return (
+    <svg
+      width={18}
+      height={18}
+      viewBox="0 0 18 18"
+      fill="none"
+      style={{ flexShrink: 0, pointerEvents: 'none' }}
+      aria-hidden="true"
+    >
+      <circle cx={9} cy={9} r={8.2} stroke="rgba(34,34,36,0.35)" strokeWidth={1.4} fill="none" />
+      <path
+        d="M5 9.3l7-3.4-2.6 7.6-1.4-2.6-2.9-1.1z"
+        fill="rgba(34,34,36,0.35)"
+      />
+    </svg>
+  );
+}
+
 function TimelineBlock({
   placed,
   top,
@@ -458,24 +482,40 @@ function TimelineBlock({
             : timeLabel}
         </span>
       )}
-      <span
-        style={{
-          fontFamily: M,
-          fontSize: untimed ? 13 : 15,
-          fontWeight: untimed ? 400 : 500,
-          color: untimed ? 'rgba(34,34,36,0.7)' : colors.text,
-          lineHeight: 1.2,
-          textDecoration: task.done ? 'line-through' : 'none',
-          overflow: 'hidden',
-          whiteSpace: 'nowrap',
-          textOverflow: 'ellipsis',
-          display: untimed ? 'block' : '-webkit-box',
-          WebkitLineClamp: compact ? 1 : 2,
-          WebkitBoxOrient: 'vertical',
-        }}
-      >
-        {task.name}
-      </span>
+      {/* Слот-иконка: лицо агента (приоритет) или метка источника Telegram + название,
+          в одну горизонтальную строку — иконка не сжимается, текст обрезается ellipsis. */}
+      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 }}>
+        {task.agent && (
+          <div style={{ flexShrink: 0, pointerEvents: 'none' }}>
+            <PrimeMascot
+              size={18}
+              eyes="idle"
+              decor="none"
+              drop={task.agent}
+            />
+          </div>
+        )}
+        {!task.agent && task.origin === 'telegram' && <TelegramMark />}
+        <span
+          style={{
+            fontFamily: M,
+            fontSize: untimed ? 13 : 15,
+            fontWeight: untimed ? 400 : 500,
+            color: untimed ? 'rgba(34,34,36,0.7)' : colors.text,
+            lineHeight: 1.2,
+            textDecoration: task.done ? 'line-through' : 'none',
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            textOverflow: 'ellipsis',
+            display: untimed ? 'block' : '-webkit-box',
+            WebkitLineClamp: compact ? 1 : 2,
+            WebkitBoxOrient: 'vertical',
+            minWidth: 0,
+          }}
+        >
+          {task.name}
+        </span>
+      </div>
     </motion.div>
   );
 }
