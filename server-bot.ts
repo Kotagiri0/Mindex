@@ -142,7 +142,13 @@ function getSystemInstruction(tz = 'Europe/Moscow'): string {
   Послезавтра = ${afterISO}
 «сегодня» → date=${todayISO}; «завтра» → date=${tomorrowISO}; «послезавтра» → date=${afterISO}. Для других дней («в пятницу», «15-го») считай от сегодняшней даты выше и перепроверь день недели.
 
-Текущее время: ${timeStr} (Москва)`;
+Текущее время: ${timeStr} (Москва)
+
+АВТОМАТИЧЕСКИЕ НАПОМИНАНИЯ В ИСТОРИИ
+В истории диалога могут встречаться сообщения, начинающиеся с ⏰ или 🔔 — это твои собственные напоминания, отправленные системой напоминаний от твоего имени, а не пользователем.
+— Если пользователь отвечает на такое напоминание или ссылается на него — продолжай разговор естественно, как будто напомнила именно ты
+— Не извиняйся за эмодзи в этих сообщениях и не переспрашивай, что это такое
+— Не повторяй и не пересказывай само напоминание — сразу переходи к сути ответа`;
 }
 
 // ─── Tool definitions ─────────────────────────────────────────────────────────
@@ -1140,6 +1146,51 @@ async function saveBotThread(
   );
 }
 
+// Дописывает проактивное сообщение (напоминание, утренняя сводка) в сегодняшний
+// тред бота — чтобы модель видела его в истории диалога, когда пользователь
+// на него отвечает. Fire-and-forget: ошибки БД не должны ломать отправку в Telegram.
+async function appendProactiveToBotThread(
+  db: Pool,
+  userId: string,
+  userTz: string,
+  text: string
+): Promise<void> {
+  try {
+    const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: userTz });
+    const title = botThreadTitle(todayStr);
+    const message: StoredMessage = { role: 'assistant', content: text, time: new Date().toISOString() };
+
+    // Треда за сегодня может ещё не быть (пользователь ничего не писал) —
+    // создаём тем же атомарным паттерном, что и loadBotThread, без побочных
+    // эффектов саммаризации (для этого не нужен apiKey).
+    await db.query(
+      `INSERT INTO user_threads (id, user_id, title, preview, messages, created_at, updated_at, source)
+       SELECT $1, $2, $3, '', '[]'::jsonb, $4, NOW(), 'telegram'
+       WHERE NOT EXISTS (
+         SELECT 1 FROM user_threads WHERE user_id = $2 AND title = $3
+       )`,
+      [crypto.randomUUID(), userId, title, Date.now()]
+    );
+
+    // Атомарная jsonb-конкатенация — без read-modify-write, чтобы не потерять
+    // параллельные записи ответа пользователя. Пишем ровно в один тред (в БД
+    // встречаются дублирующие title — как в loadBotThread берём LIMIT 1),
+    // иначе сообщение задвоится по всем совпадениям.
+    await db.query(
+      `UPDATE user_threads
+       SET messages = COALESCE(messages, '[]'::jsonb) || $2::jsonb,
+           preview = $3,
+           updated_at = NOW()
+       WHERE id = (
+         SELECT id FROM user_threads WHERE user_id = $1 AND title = $4 LIMIT 1
+       )`,
+      [userId, JSON.stringify([message]), text.slice(0, 80), title]
+    );
+  } catch (e: any) {
+    console.error('[Notif] не удалось записать проактивное сообщение в тред:', e?.message);
+  }
+}
+
 // ─── Получить web userId по telegram chatId ───────────────────────────────────
 
 async function getWebUserId(db: Pool, chatId: number): Promise<string | null> {
@@ -1833,6 +1884,12 @@ ${taskLines}
           body: JSON.stringify({ chat_id: user.telegram_chat_id, text }),
         }));
 
+        // Записываем в тред — как и напоминания, эта сводка отправлена от имени
+        // Мысли и должна быть видна модели, если пользователь на неё ответит.
+        appendProactiveToBotThread(db, user.user_id, user.timezone, text).catch(e =>
+          console.error('[Proactive] append thread error:', e?.message)
+        );
+
         await db.query(
           `UPDATE user_profiles SET proactive_sent_date = $1 WHERE user_id = $2`,
           [userTodayInTz, user.user_id]
@@ -1913,7 +1970,9 @@ export async function startNotificationScheduler(token: string, db: Pool): Promi
     taskId: string,
     kind: 'time' | 'remind',
     chatId: string,
-    text: string
+    text: string,
+    userId: string,
+    userTz: string
   ) => {
     const column = kind === 'time' ? 'notified_at' : 'remind_notified_at';
     const extraCondition = kind === 'remind' ? 'AND remind_at IS NOT NULL' : '';
@@ -1935,6 +1994,11 @@ export async function startNotificationScheduler(token: string, db: Pool): Promi
           body: JSON.stringify({ chat_id: chatId, text }),
         }));
         console.log(`[Notif] отправлено (${kind}) task=${taskId}`);
+        // Записываем в тред, чтобы модель видела своё же напоминание, если
+        // пользователь на него ответит («да, иду», «перенеси на час»).
+        appendProactiveToBotThread(db, userId, userTz, text).catch(e =>
+          console.error('[Notif] append thread error:', e?.message)
+        );
       } catch (e: any) {
         await db.query(`UPDATE user_tasks SET ${column} = NULL WHERE id = $1`, [taskId]).catch(() => {});
         console.error(`[Notif] отправка не удалась (${kind}), откатили claim:`, e?.message);
@@ -1993,13 +2057,14 @@ export async function startNotificationScheduler(token: string, db: Pool): Promi
         if (fireAt > horizonMs) continue;
         schedule(`${row.id}:time`, fireAt, () =>
           claimAndFire(row.id, 'time', row.telegram_chat_id,
-            `⏰ Через 15 минут: ${row.name}`)
+            `⏰ Через 15 минут: ${row.name}`, row.user_id, tz)
         );
       }
 
       // ── 2. Плавающие напоминания через remind_at ─────────────────────────────
       const { rows: reminds } = await db.query(
-        `SELECT t.id, t.name, t.remind_at, t.user_id, p.telegram_chat_id
+        `SELECT t.id, t.name, t.remind_at, t.user_id, p.telegram_chat_id,
+                COALESCE(p.timezone, 'Europe/Moscow') AS timezone
          FROM user_tasks t
          JOIN user_profiles p ON p.user_id = t.user_id
          WHERE t.done = false
@@ -2016,7 +2081,7 @@ export async function startNotificationScheduler(token: string, db: Pool): Promi
         if (fireAt > horizonMs) continue;
         schedule(`${row.id}:remind`, fireAt, () =>
           claimAndFire(row.id, 'remind', row.telegram_chat_id,
-            `🔔 Напоминание: ${row.name}`)
+            `🔔 Напоминание: ${row.name}`, row.user_id, row.timezone || 'Europe/Moscow')
         );
       }
 
