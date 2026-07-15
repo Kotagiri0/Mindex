@@ -113,7 +113,7 @@ Mindex (Майндекс) — персональный ИИ-ассистент �
 - **Frontend**: React, TypeScript
 - **Backend**: Node.js, Vercel Serverless Functions
 - **База данных**: Supabase (PostgreSQL)
-- **AI**: Groq API, модель llama-3.3-70b-versatile
+- **AI**: RouterAI, модель `deepseek/deepseek-v4-flash` (основная). Groq (`llama-3.3-70b-versatile`) — запасной стрим-провайдер и суммаризация
 - **Платформа доставки**: Telegram Mini App + Telegram Bot
 - **Хостинг**: Vercel
 - **Репозиторий**: GitHub, ветка main
@@ -189,7 +189,7 @@ Mindex (Майндекс) — персональный ИИ-ассистент �
 ## Юнит-экономика (ориентиры)
 
 - Цена подписки: 399 ₽/мес
-- COGS на пользователя: ~16 ₽ (Groq API)
+- COGS на пользователя: ~16 ₽ (AI API)
 - Gross Margin: 96%
 - Целевой LTV: 5 477 ₽ (14.3 мес lifetime)
 - Целевой CAC: 800 ₽
@@ -243,7 +243,7 @@ Mindex (Майндекс) — персональный ИИ-ассистент �
 - **Telegram WebView строже обычного браузера**: отсутствие CORS-заголовков блокирует запросы на клиенте (не серверная ошибка). Всегда проверяй заголовки `Access-Control-Allow-Origin`.
 - **Vercel Serverless Functions**: проверяй runtime-логи при любых проблемах с API.
 - **Supabase**: используй `service: 'api'` или `service: 'auth'` при работе с логами. Более широкие запросы без фильтра по уровню ошибок дают более полезные результаты.
-- **Groq API**: модель `llama-3.3-70b-versatile`. При любых изменениях промптов для Мысли — тестируй на реальных сценариях пользователя.
+- **AI-провайдер**: основная модель `deepseek/deepseek-v4-flash` через RouterAI; Groq (`llama-3.3-70b-versatile`) — запасной стрим-провайдер (`STREAM_PROVIDER=groq`) и суммаризация. При любых изменениях промптов для Мысли — тестируй на реальных сценариях пользователя.
 
 ---
 
