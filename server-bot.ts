@@ -65,6 +65,10 @@ interface StoredMessage {
   time: string;
   tool_calls?: any[];
   tool_call_id?: string;
+  // Для проактивных напоминаний: id задачи, о которой напоминали. В UI не
+  // показывается — подмешивается в контекст модели в toGroqFormat, чтобы
+  // «перенеси» после напоминания не требовал угадывания через get_tasks.
+  task_id?: string;
 }
 
 function tgFetchOptions(extra: RequestInit = {}): RequestInit {
@@ -154,7 +158,9 @@ function getSystemInstruction(tz = 'Europe/Moscow'): string {
 АВТОМАТИЧЕСКИЕ НАПОМИНАНИЯ В ИСТОРИИ
 В истории диалога могут встречаться сообщения, начинающиеся с ⏰ или 🔔 — это твои собственные напоминания, отправленные системой напоминаний от твоего имени, а не пользователем.
 — Если пользователь отвечает на такое напоминание или ссылается на него — продолжай разговор естественно, как будто напомнила именно ты
-— КЛЮЧЕВОЕ: короткая команда сразу после напоминания («перенеси на 16», «сделал», «отмени») относится к задаче ИЗ ЭТОГО НАПОМИНАНИЯ, а не к более ранним темам разговора. Напоминание — самое свежее событие, оно перевешивает старые списки и предложения
+— КЛЮЧЕВОЕ: короткая команда сразу после напоминания («перенеси на 16», «сделал», «отмени», «завтра в это же время») относится к задаче ИЗ ЭТОГО НАПОМИНАНИЯ, а не к более ранним темам разговора. Напоминание — самое свежее событие, оно перевешивает старые списки и предложения
+— У напоминания в истории есть привязка [задача: id] — используй этот id напрямую, get_tasks не нужен. Перенос после 🔔 → set_reminder с этим task_id и новым временем. Перенос после ⏰ (задача со временем старта) → update_task этой задачи. НИКОГДА не создавай новую задачу или задачу-напоминание, когда речь о существующей
+— В ответе называй задачу по имени («Перенесла напоминание про пост на завтра, 17:20»), а не «готово» без контекста
 — Не извиняйся за эмодзи в этих сообщениях и не переспрашивай, что это такое
 — Не повторяй и не пересказывай само напоминание — сразу переходи к сути ответа`;
 }
@@ -490,6 +496,9 @@ function toGroqFormat(msgs: StoredMessage[]) {
   return msgs.map(m => {
     let content = typeof m.content === 'string' ? m.content : '';
     if (content.length > MAX_MSG_CHARS) content = content.slice(0, MAX_MSG_CHARS) + '…';
+    // Привязка напоминания к задаче: хранится отдельным полем (UI рендерит только
+    // content), а модели подмешивается в текст — id виден только ей
+    if (m.task_id) content += `\n[задача: ${m.task_id}]`;
     const msg: any = { role: m.role, content };
     if (m.tool_calls) msg.tool_calls = m.tool_calls;
     if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
@@ -1161,12 +1170,14 @@ async function appendProactiveToBotThread(
   db: Pool,
   userId: string,
   userTz: string,
-  text: string
+  text: string,
+  taskId?: string
 ): Promise<void> {
   try {
     const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: userTz });
     const title = botThreadTitle(todayStr);
     const message: StoredMessage = { role: 'assistant', content: text, time: new Date().toISOString() };
+    if (taskId) message.task_id = taskId;
 
     // Треда за сегодня может ещё не быть (пользователь ничего не писал) —
     // создаём тем же атомарным паттерном, что и loadBotThread, без побочных
@@ -2004,7 +2015,8 @@ export async function startNotificationScheduler(token: string, db: Pool): Promi
         console.log(`[Notif] отправлено (${kind}) task=${taskId}`);
         // Записываем в тред, чтобы модель видела своё же напоминание, если
         // пользователь на него ответит («да, иду», «перенеси на час»).
-        appendProactiveToBotThread(db, userId, userTz, text).catch(e =>
+        // task_id даёт модели прямую привязку к задаче — без угадывания через get_tasks.
+        appendProactiveToBotThread(db, userId, userTz, text, taskId).catch(e =>
           console.error('[Notif] append thread error:', e?.message)
         );
       } catch (e: any) {
