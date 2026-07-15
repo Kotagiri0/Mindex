@@ -1202,6 +1202,7 @@ async function sendFinalMessage(token: string, chatId: number, raw: string): Pro
       chat_id: chatId, rich_message: { markdown: trimmed },
     }).catch(() => null);
     if (res?.ok) return;
+    if (res && !res.ok) console.warn('[Bot] sendRichMessage отклонён:', res.description);
   }
   const clean = cleanBotText(trimmed).trim() || 'Готово';
   for (const part of splitForTelegram(clean)) {
@@ -1306,14 +1307,26 @@ async function createStreamSink(token: string, chatId: number): Promise<StreamSi
       await editChain.catch(() => {});
 
       const raw = (finalRaw || '').trim();
-      // Rich-коммит: превращаем плейсхолдер в структурированное сообщение (Markdown
-      // рендерит клиент). Любая неудача — старый клиент, кривой markdown, метод
-      // недоступен — тихо откатываемся на чистый текст ниже.
-      if (RICH_MESSAGES_ENABLED && messageId && raw && raw.length <= RICH_MAX_LEN) {
-        const res = await tgApi(token, 'editMessageText', {
-          chat_id: chatId, message_id: messageId, rich_message: { markdown: raw },
+      // Rich-коммит (Markdown → структура на клиенте). Плейсхолдер отправлен как
+      // обычный текст, а Telegram НЕ гарантирует конвертацию text→rich через edit,
+      // поэтому: 1) пробуем edit (без мигания); 2) если отклонён — шлём свежее
+      // rich-сообщение и удаляем плейсхолдер; 3) любой отказ логируем и падаем в текст.
+      if (RICH_MESSAGES_ENABLED && raw && raw.length <= RICH_MAX_LEN) {
+        if (messageId) {
+          const res = await tgApi(token, 'editMessageText', {
+            chat_id: chatId, message_id: messageId, rich_message: { markdown: raw },
+          }).catch(() => null);
+          if (res?.ok) { lastSent = raw; return; }
+          if (res && !res.ok) console.warn('[Bot] rich edit отклонён:', res.description);
+        }
+        const sent = await tgApi(token, 'sendRichMessage', {
+          chat_id: chatId, rich_message: { markdown: raw },
         }).catch(() => null);
-        if (res?.ok) { lastSent = raw; return; }
+        if (sent?.ok) {
+          if (messageId) tgApi(token, 'deleteMessage', { chat_id: chatId, message_id: messageId }).catch(() => {});
+          return;
+        }
+        if (sent && !sent.ok) console.warn('[Bot] sendRichMessage отклонён:', sent.description);
       }
 
       const clean = (cleanBotText(finalRaw).trim()) || 'Готово';
