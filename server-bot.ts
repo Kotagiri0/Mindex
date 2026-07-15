@@ -83,6 +83,11 @@ const MAX_TOOL_ITERATIONS = 5;
 const MAX_BUTTON_TEXT_LENGTH = 32;
 const POLLING_ERROR_RETRY_DELAY_MS = 5_000;
 
+// Rich Messages (Bot API 10.1+): бот шлёт Markdown, Telegram сам рендерит списки/
+// код/таблицы на клиенте. За флагом — при любой проблеме выключается без деплоя.
+const RICH_MESSAGES_ENABLED = process.env.RICH_MESSAGES_ENABLED !== '0';
+const RICH_MAX_LEN = 32_768;  // лимит длины rich-сообщения (против 4096 у обычного)
+
 // ─── System prompt ────────────────────────────────────────────────────────────
 
 function getSystemInstruction(tz = 'Europe/Moscow'): string {
@@ -100,7 +105,13 @@ function getSystemInstruction(tz = 'Europe/Moscow'): string {
 
   return `Ты — Мысль, личный ассистент по организации дел и мышлению.
 
-Отвечай только на русском. Никогда не используй эмодзи, звёздочки, Markdown-форматирование. Только чистый текст.
+Отвечай только на русском. Не используй эмодзи.
+
+Форматирование — экономно, по умолчанию живой чистый текст. Можно лёгкий Markdown, но по делу:
+— списком (- или 1.) — когда разбиваешь цель на шаги или перечисляешь задачи
+— код-блоком — когда просят код
+— таблицей — только если это правда самый удобный способ показать данные
+Короткий ответ, диалог, подтверждение — просто текст, без разметки. Не форматируй ради форматирования.
 
 ХАРАКТЕР
 Говори как умный человек, а не как сервис. Коротко, прямо, без воды. Человечно — но без слащавости и дежурных фраз. Если можно ответить одним словом — ответь одним словом.
@@ -1252,6 +1263,22 @@ function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// Финальная отправка ответа Мысли без стрима: пробуем rich (Markdown → структура),
+// при любой неудаче — прежнее поведение (чистый текст, побитый на куски ≤4096).
+async function sendFinalMessage(token: string, chatId: number, raw: string): Promise<void> {
+  const trimmed = (raw || '').trim();
+  if (RICH_MESSAGES_ENABLED && trimmed && trimmed.length <= RICH_MAX_LEN) {
+    const res = await tgApi(token, 'sendRichMessage', {
+      chat_id: chatId, rich_message: { markdown: trimmed },
+    }).catch(() => null);
+    if (res?.ok) return;
+  }
+  const clean = cleanBotText(trimmed).trim() || 'Готово';
+  for (const part of splitForTelegram(clean)) {
+    await tgApi(token, 'sendMessage', { chat_id: chatId, text: part }).catch(() => {});
+  }
+}
+
 // ─── Стриминг ответа в Telegram (через editMessageText) ───────────────────────
 // Telegram не умеет токеновый поток, поэтому стримим через редактирование одного
 // сообщения-плейсхолдера. Лимит правок — ~1/сек на чат, поэтому throttle.
@@ -1347,6 +1374,18 @@ async function createStreamSink(token: string, chatId: number): Promise<StreamSi
       // Дожидаемся, пока сольются все стрим-правки в полёте — финальная правка
       // должна записаться ПОСЛЕДНЕЙ, иначе устаревшая дельта перетрёт финал.
       await editChain.catch(() => {});
+
+      const raw = (finalRaw || '').trim();
+      // Rich-коммит: превращаем плейсхолдер в структурированное сообщение (Markdown
+      // рендерит клиент). Любая неудача — старый клиент, кривой markdown, метод
+      // недоступен — тихо откатываемся на чистый текст ниже.
+      if (RICH_MESSAGES_ENABLED && messageId && raw && raw.length <= RICH_MAX_LEN) {
+        const res = await tgApi(token, 'editMessageText', {
+          chat_id: chatId, message_id: messageId, rich_message: { markdown: raw },
+        }).catch(() => null);
+        if (res?.ok) { lastSent = raw; return; }
+      }
+
       const clean = (cleanBotText(finalRaw).trim()) || 'Готово';
       // Плейсхолдер не создался — единственная отправка целиком (задвоения нет).
       if (!messageId) {
@@ -1627,9 +1666,10 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
     );
     console.log(`[Bot] AI ответил: "${aiResponse?.slice(0, 80)}"`);
     await saveBotThread(db, webUserId, thread.id, [...existingMessages, ...newMessages]);
-    const cleanResponse = cleanBotText(aiResponse);
-    if (sink) await sink.finish(cleanResponse);
-    else await tgApi(token, 'sendMessage', { chat_id: chatId, text: cleanResponse });
+    // Сырой ответ (с Markdown) — rich-путь отрендерит его структурой; при откате
+    // на чистый текст разметка снимается внутри finish/sendFinalMessage.
+    if (sink) await sink.finish(aiResponse ?? '');
+    else await sendFinalMessage(token, chatId, aiResponse ?? '');
   } catch (e: any) {
     console.error(`[Bot] ошибка AI:`, e?.message || e);
     const errText = 'Не могу ответить прямо сейчас, попробуй позже.';
