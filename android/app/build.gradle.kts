@@ -19,7 +19,7 @@ android {
         // Бэкенд Mindex. По умолчанию — продакшен (Railway).
         // Для локального докера: раскомментируй mindexApiUrl в gradle.properties.
         val apiUrl = (project.findProperty("mindexApiUrl") as String?)
-            ?: "https://mindex-production.up.railway.app"
+            ?: "https://mysle.ru"
         buildConfigField("String", "API_BASE_URL", "\"$apiUrl\"")
     }
 
