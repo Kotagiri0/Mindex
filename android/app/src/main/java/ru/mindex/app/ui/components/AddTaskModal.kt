@@ -410,7 +410,7 @@ internal fun CategoryPicker(value: String, onChange: (String) -> Unit) {
                     ) { onChange(cat) },
                 contentAlignment = Alignment.Center,
             ) {
-                AnimatedVisibility(
+                androidx.compose.animation.AnimatedVisibility(
                     visible = active,
                     enter = fadeIn(),
                     exit = fadeOut(),

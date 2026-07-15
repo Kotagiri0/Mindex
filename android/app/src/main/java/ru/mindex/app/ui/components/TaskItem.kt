@@ -264,8 +264,8 @@ private fun TaskCheckbox(
                     .size(size * 0.45f)
                     .graphicsLayer { scaleX = checkScale; scaleY = checkScale },
             ) {
-                val w = size.width
-                val h = size.height
+                val w = this.size.width
+                val h = this.size.height
                 val path = Path().apply {
                     moveTo(w * 0.05f, h * 0.55f)
                     lineTo(w * 0.38f, h * 0.88f)
