@@ -26,7 +26,7 @@ import ru.mindex.app.data.model.UserResponse
 import ru.mindex.app.data.model.YandexAuthRequest
 
 /**
- * HTTP-контракт с бэкендом Mindex — те же /api/*-маршруты,
+ * HTTP-контракт с бэкендом Mindex — те же маршруты /api/...,
  * которые использует веб-клиент. Авторизация — Bearer-токен
  * (подставляется AuthInterceptor).
  */
