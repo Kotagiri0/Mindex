@@ -16,8 +16,11 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        // Продакшен-бэкенд Mindex (Railway). Меняется одной строкой.
-        buildConfigField("String", "API_BASE_URL", "\"https://mindex-production.up.railway.app\"")
+        // Бэкенд Mindex. По умолчанию — продакшен (Railway).
+        // Для локального докера: раскомментируй mindexApiUrl в gradle.properties.
+        val apiUrl = (project.findProperty("mindexApiUrl") as String?)
+            ?: "https://mindex-production.up.railway.app"
+        buildConfigField("String", "API_BASE_URL", "\"$apiUrl\"")
     }
 
     buildTypes {
