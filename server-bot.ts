@@ -1615,28 +1615,21 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
       await execFileAsync('ffmpeg', ['-y', '-i', tmpIn, '-vn', '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le', '-f', 'wav', tmpOut]);
       const wavBuffer = fs.readFileSync(tmpOut);
 
-      // Транскрибируем через RouterAI: у них нет отдельного /audio/transcriptions
-      // (это не OpenAI) — аудио идёт через /chat/completions с content-блоком
-      // input_audio, base64. Подтверждено по докам routerai.ru/docs. Название модели
-      // 'openai/whisper-large-v3-turbo' и формат ответа (choices[0].message.content)
-      // — по аналогии с обычным chat/completions, отдельно этой моделью не проверялось.
+      // Транскрибируем через RouterAI: JSON-эндпоинт /audio/transcriptions,
+      // аудио base64 в поле input_audio.data (спецификация с routerai.ru/docs).
       const base64Audio = wavBuffer.toString('base64');
-      const whisperRes = await fetch('https://routerai.ru/api/v1/chat/completions', {
+      const whisperRes = await fetch('https://routerai.ru/api/v1/audio/transcriptions', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${routeraiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'openai/whisper-large-v3-turbo',
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'input_audio', input_audio: { data: base64Audio, format: 'wav' } },
-            ],
-          }],
+          input_audio: { data: base64Audio, format: 'wav' },
+          language: 'ru',
         }),
       });
       if (!whisperRes.ok) throw new Error(`RouterAI error: ${whisperRes.status} ${await whisperRes.text().catch(() => '')}`);
       const whisperData: any = await whisperRes.json();
-      userText = (whisperData?.choices?.[0]?.message?.content || '').trim();
+      userText = (whisperData?.text || '').trim();
       console.log(`[Bot] Транскрипция получена, длина: ${userText.length}`);
     } catch (e: any) {
       console.error('[Bot] Ошибка транскрипции:', e?.message);

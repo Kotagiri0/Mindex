@@ -2183,20 +2183,16 @@ app.post("/api/voice/transcribe", requireAuth, aiRateLimit, upload.single('audio
     const wavBuffer = fs.readFileSync(tmpOut);
     console.log('[VOICE] Converted to wav:', wavBuffer.length, 'bytes');
 
-    // RouterAI без отдельного /audio/transcriptions — аудио через /chat/completions
-    // с content-блоком input_audio, base64 (подтверждено по routerai.ru/docs).
+    // RouterAI: JSON-эндпоинт /audio/transcriptions, аудио base64 в input_audio.data
+    // (спецификация с routerai.ru/docs).
     const base64Audio = wavBuffer.toString('base64');
-    const aiRes = await fetch('https://routerai.ru/api/v1/chat/completions', {
+    const aiRes = await fetch('https://routerai.ru/api/v1/audio/transcriptions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'openai/whisper-large-v3-turbo',
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'input_audio', input_audio: { data: base64Audio, format: 'wav' } },
-          ],
-        }],
+        input_audio: { data: base64Audio, format: 'wav' },
+        language: 'ru',
       }),
     });
 
@@ -2207,7 +2203,7 @@ app.post("/api/voice/transcribe", requireAuth, aiRateLimit, upload.single('audio
     }
 
     const aiData = await aiRes.json() as any;
-    const text = (aiData?.choices?.[0]?.message?.content ?? '').trim();
+    const text = (aiData?.text ?? '').trim();
 
     console.log('[VOICE] Transcription success, length:', text.length);
     return res.status(200).json({ text });
