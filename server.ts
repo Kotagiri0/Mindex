@@ -2156,9 +2156,9 @@ app.post("/api/voice/transcribe", requireAuth, aiRateLimit, upload.single('audio
       return res.status(400).json({ error: "Аудиофайл пуст (0 байт)." });
     }
 
-    const apiKey = process.env.VSEGPT_API_KEY;
+    const apiKey = process.env.ROUTERAI_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: "VSEGPT_API_KEY не найден." });
+      return res.status(500).json({ error: "ROUTERAI_API_KEY не найден." });
     }
 
     const inputExtension = resolveAudioExtension(req.file.mimetype, req.file.originalname);
@@ -2185,10 +2185,10 @@ app.post("/api/voice/transcribe", requireAuth, aiRateLimit, upload.single('audio
 
     const formData = new FormData();
     formData.append('file', new Blob([wavBuffer], { type: 'audio/wav' }), 'audio.wav');
-    formData.append('model', 'stt-openai/whisper-v3-turbo');
+    formData.append('model', 'openai/whisper-large-v3-turbo');
     formData.append('language', 'ru');
 
-    const aiRes = await fetch('https://api.vsegpt.ru/v1/audio/transcriptions', {
+    const aiRes = await fetch('https://routerai.ru/api/v1/audio/transcriptions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}` },
       body: formData,
@@ -2196,7 +2196,7 @@ app.post("/api/voice/transcribe", requireAuth, aiRateLimit, upload.single('audio
 
     if (!aiRes.ok) {
       const err = await aiRes.text();
-      console.error('[VOICE] VseGPT error:', err);
+      console.error('[VOICE] RouterAI error:', err);
       return res.status(500).json({ error: 'Ошибка транскрибации.' });
     }
 

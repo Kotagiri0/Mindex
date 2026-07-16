@@ -1522,8 +1522,8 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
     let tmpIn = '';
     let tmpOut = '';
     try {
-      const vsegptKey = process.env.VSEGPT_API_KEY;
-      if (!vsegptKey) throw new Error('VSEGPT_API_KEY не задан');
+      const routeraiKey = process.env.ROUTERAI_API_KEY;
+      if (!routeraiKey) throw new Error('ROUTERAI_API_KEY не задан');
 
       // Скачиваем ogg от Telegram
       const fileRes = await tgApi(token, 'getFile', { file_id: message.voice.file_id });
@@ -1544,18 +1544,18 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
       await execFileAsync('ffmpeg', ['-y', '-i', tmpIn, '-vn', '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le', '-f', 'wav', tmpOut]);
       const wavBuffer = fs.readFileSync(tmpOut);
 
-      // Транскрибируем через VseGPT (тот же эндпоинт что и в вебе)
+      // Транскрибируем через RouterAI (тот же эндпоинт что и в вебе)
       const formData = new FormData();
       formData.append('file', new Blob([wavBuffer], { type: 'audio/wav' }), 'audio.wav');
-      formData.append('model', 'stt-openai/whisper-v3-turbo');
+      formData.append('model', 'openai/whisper-large-v3-turbo');
       formData.append('language', 'ru');
 
-      const whisperRes = await fetch('https://api.vsegpt.ru/v1/audio/transcriptions', {
+      const whisperRes = await fetch('https://routerai.ru/api/v1/audio/transcriptions', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${vsegptKey}` },
+        headers: { 'Authorization': `Bearer ${routeraiKey}` },
         body: formData,
       });
-      if (!whisperRes.ok) throw new Error(`VseGPT error: ${whisperRes.status}`);
+      if (!whisperRes.ok) throw new Error(`RouterAI error: ${whisperRes.status}`);
       const whisperData: any = await whisperRes.json();
       userText = whisperData.text?.trim() || '';
       console.log(`[Bot] Транскрипция получена, длина: ${userText.length}`);
