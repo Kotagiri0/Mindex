@@ -819,7 +819,7 @@ async function buildBotSystemPrompt(userText: string, userId: string, userTz: st
         [userId, todayStr, currentTimeStr, windowEndStr]
       );
       if (upcoming.length > 0) {
-        const lines = upcoming.map((t: any) => `— ${t.name} в ${t.time}`).join('\n');
+        const lines = upcoming.map((t: any) => `- ${t.name} в ${t.time}`).join('\n');
         return `\n\n## Ближайшие задачи (следующие 30 минут)\n${lines}\n\nЕсли уместно — упомяни одну из них к месту. Один раз, без навязчивости.`;
       }
     } catch (e: any) {
@@ -846,7 +846,7 @@ async function buildBotSystemPrompt(userText: string, userId: string, userTz: st
         const lines = rows.map((t: any) => {
           const when = t.time && t.time !== '' ? `${t.time} ` : 'без времени — ';
           const status = t.done ? '[выполнено] ' : '';
-          return `— ${when}${status}${t.name}`;
+          return `- ${when}${status}${t.name}`;
         }).join('\n');
         return `\n\n## Задачи на сегодня (${todayStr})\nЭто полный и точный список задач на сегодня из календаря. На вопрос «что у меня сегодня» отвечай строго по нему. НЕ добавляй сюда задачи других дней и НЕ выдумывай. Невыполненные задачи прошлых дней в «сегодня» НЕ входят — не приписывай их сегодняшнему дню.\n${lines}`;
       }
