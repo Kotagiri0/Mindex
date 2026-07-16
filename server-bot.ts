@@ -783,7 +783,7 @@ async function buildBotSystemPrompt(userText: string, userId: string, userTz: st
     try {
       const profileSummaries = await polisad.getProfileSummaries(db, userId);
       if (profileSummaries.length > 0) {
-        return `\n\n## Что пользователь рассказал о себе\n${profileSummaries.join('\n\n')}`;
+        return `\n\nЧТО ПОЛЬЗОВАТЕЛЬ РАССКАЗАЛ О СЕБЕ\n${profileSummaries.join('\n\n')}`;
       }
     } catch (e: any) {
       console.warn('[Bot RAG] profile inject failed:', e?.message);
@@ -795,7 +795,7 @@ async function buildBotSystemPrompt(userText: string, userId: string, userTz: st
   const yesterdayBlock = (async () => {
     try {
       const ySummary = await polisad.getYesterdaySummary(db, userId, userTz);
-      if (ySummary) return `\n\n## Вчера в боте\n${ySummary}`;
+      if (ySummary) return `\n\nВЧЕРА В БОТЕ\n${ySummary}`;
     } catch (e: any) {
       console.warn('[Bot RAG] yesterday summary failed:', e?.message);
     }
@@ -820,7 +820,7 @@ async function buildBotSystemPrompt(userText: string, userId: string, userTz: st
       );
       if (upcoming.length > 0) {
         const lines = upcoming.map((t: any) => `- ${t.name} в ${t.time}`).join('\n');
-        return `\n\n## Ближайшие задачи (следующие 30 минут)\n${lines}\n\nЕсли уместно — упомяни одну из них к месту. Один раз, без навязчивости.`;
+        return `\n\nБЛИЖАЙШИЕ ЗАДАЧИ (следующие 30 минут)\n${lines}\n\nЕсли уместно — упомяни одну из них к месту. Один раз, без навязчивости.`;
       }
     } catch (e: any) {
       console.warn('[Bot RAG] upcoming tasks failed:', e?.message);
@@ -848,9 +848,9 @@ async function buildBotSystemPrompt(userText: string, userId: string, userTz: st
           const status = t.done ? '[выполнено] ' : '';
           return `- ${when}${status}${t.name}`;
         }).join('\n');
-        return `\n\n## Задачи на сегодня (${todayStr})\nЭто полный и точный список задач на сегодня из календаря. На вопрос «что у меня сегодня» отвечай строго по нему. НЕ добавляй сюда задачи других дней и НЕ выдумывай. Невыполненные задачи прошлых дней в «сегодня» НЕ входят — не приписывай их сегодняшнему дню.\n${lines}`;
+        return `\n\nЗАДАЧИ НА СЕГОДНЯ (${todayStr})\nЭто полный и точный список задач на сегодня из календаря. На вопрос «что у меня сегодня» отвечай строго по нему. НЕ добавляй сюда задачи других дней и НЕ выдумывай. Невыполненные задачи прошлых дней в «сегодня» НЕ входят — не приписывай их сегодняшнему дню.\n${lines}`;
       }
-      return `\n\n## Задачи на сегодня (${todayStr})\nНа сегодня задач нет. Если спросят про сегодня — так и скажи, не выдумывай и не подтягивай задачи других дней.`;
+      return `\n\nЗАДАЧИ НА СЕГОДНЯ (${todayStr})\nНа сегодня задач нет. Если спросят про сегодня — так и скажи, не выдумывай и не подтягивай задачи других дней.`;
     } catch (e: any) {
       console.warn('[Bot RAG] today tasks inject failed:', e?.message);
     }
@@ -877,7 +877,7 @@ async function buildBotSystemPrompt(userText: string, userId: string, userTz: st
       if (ragRows.length > 0 && isExplicit) {
         const contextBlock = ragRows.map((r: any) => `[${r.title}]\n${r.summary}`).join('\n---\n');
         console.log('[Bot RAG] injected:', ragRows.map((r: any) => r.title));
-        return `\n\n## Из архива пользователя\nФрагменты из заметок и прошлых разговоров. Используй как контекст, не упоминай сам факт архива.\n\n${contextBlock}`;
+        return `\n\nИЗ АРХИВА ПОЛЬЗОВАТЕЛЯ\nФрагменты из заметок и прошлых разговоров. Используй как контекст, не упоминай сам факт архива.\n\n${contextBlock}`;
       }
       if (ragRows.length > 0) console.log('[Bot RAG] fallback не инжектим (нет явного совпадения)');
     } catch (e: any) {
@@ -929,7 +929,7 @@ async function processWithAI(
 
   const folded = foldOverflowMessages(threadMessages);
   const fullSystemPrompt = folded
-    ? `${systemPrompt}\n\n## Раньше сегодня (краткая сводка того, что пользователь говорил ранее в этот день — не переспрашивай это)\n${folded}`
+    ? `${systemPrompt}\n\nРАНЬШЕ СЕГОДНЯ (краткая сводка того, что пользователь говорил ранее в этот день — не переспрашивай это)\n${folded}`
     : systemPrompt;
 
   const loopMessages = [
