@@ -1615,20 +1615,28 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
       await execFileAsync('ffmpeg', ['-y', '-i', tmpIn, '-vn', '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le', '-f', 'wav', tmpOut]);
       const wavBuffer = fs.readFileSync(tmpOut);
 
-      // Транскрибируем через RouterAI (тот же эндпоинт что и в вебе)
-      const formData = new FormData();
-      formData.append('file', new Blob([wavBuffer], { type: 'audio/wav' }), 'audio.wav');
-      formData.append('model', 'openai/whisper-large-v3-turbo');
-      formData.append('language', 'ru');
-
-      const whisperRes = await fetch('https://routerai.ru/api/v1/audio/transcriptions', {
+      // Транскрибируем через RouterAI: у них нет отдельного /audio/transcriptions
+      // (это не OpenAI) — аудио идёт через /chat/completions с content-блоком
+      // input_audio, base64. Подтверждено по докам routerai.ru/docs. Название модели
+      // 'openai/whisper-large-v3-turbo' и формат ответа (choices[0].message.content)
+      // — по аналогии с обычным chat/completions, отдельно этой моделью не проверялось.
+      const base64Audio = wavBuffer.toString('base64');
+      const whisperRes = await fetch('https://routerai.ru/api/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${routeraiKey}` },
-        body: formData,
+        headers: { 'Authorization': `Bearer ${routeraiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'openai/whisper-large-v3-turbo',
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'input_audio', input_audio: { data: base64Audio, format: 'wav' } },
+            ],
+          }],
+        }),
       });
-      if (!whisperRes.ok) throw new Error(`RouterAI error: ${whisperRes.status}`);
+      if (!whisperRes.ok) throw new Error(`RouterAI error: ${whisperRes.status} ${await whisperRes.text().catch(() => '')}`);
       const whisperData: any = await whisperRes.json();
-      userText = whisperData.text?.trim() || '';
+      userText = (whisperData?.choices?.[0]?.message?.content || '').trim();
       console.log(`[Bot] Транскрипция получена, длина: ${userText.length}`);
     } catch (e: any) {
       console.error('[Bot] Ошибка транскрипции:', e?.message);
