@@ -21,6 +21,25 @@ import { verifyYandexCode } from './src/lib/yandex-auth.ts';
 import * as polisad from './src/polisad/index.ts';
 import { Resend } from 'resend';
 
+// ── КОРА — агентный харнесс (Фаза 9A) ─────────────────────────────────────
+import type { ChatMessage, GenerateFn, LoopEvent } from './src/kora/loop.ts';
+import { runOrchestrated } from './src/kora/orchestrate.ts';
+import { GraphBuilder, type GraphNode } from './src/kora/graph.ts';
+import { ToolRegistry } from './src/kora/registry.ts';
+import { relsaSearchTool, relsaScrapeTool } from './src/kora/relsa.ts';
+import {
+  ServiceExecutor,
+  serviceListTool,
+  serviceCallTool,
+  isWriteServiceAction,
+  type CredentialResolver,
+} from './src/kora/services.ts';
+import { TELEGRAM_MANIFEST } from './src/kora/manifests/telegram.ts';
+import { InMemorySkillStore, skillListTool, skillLoadTool, skillsCatalog } from './src/kora/skills.ts';
+import { artifactSlidesTool, artifactSiteTool, type ArtifactResult } from './src/kora/artifacts.ts';
+import { confirmPending, rejectPending, resolveUserReply } from './src/kora/hitl.ts';
+import { PgPendingStore, PgGateAuditLog, ensureKoraTables } from './src/kora/pg-stores.ts';
+
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -2497,6 +2516,298 @@ ${ragBlock}`;
   }
 });
 
+// ── КОРА — /api/agent/* (Фаза 9A) ─────────────────────────────────────────
+// Адаптер GenerateFn поверх ТОГО ЖЕ вызова RouterAI, что /api/chat — та же
+// модель/ключ/callRouterAI (с ретраями и OpenRouter-фолбэком), но БЕЗ
+// tool_calls (петля КОРЫ говорит с моделью текстовым <action>-протоколом,
+// не через function-calling).
+function koraGenerate(): GenerateFn {
+  return async (messages: ChatMessage[]) => {
+    const apiKey = process.env.ROUTERAI_API_KEY;
+    if (!apiKey) throw new Error('ROUTERAI_API_KEY не задан');
+    const response = await callRouterAI(apiKey, {
+      model: "deepseek/deepseek-v4-flash",
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      temperature: 0.7,
+      max_tokens: 1024,
+      thinking: false,
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`RouterAI вернул ошибку ${response.status}: ${text.slice(0, 300)}`);
+    }
+    const rawText = await response.text();
+    let data: any;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      throw new Error('RouterAI вернул некорректный JSON');
+    }
+    if (!data.choices?.length) throw new Error('RouterAI вернул пустой список вариантов');
+    const message = data.choices[0].message;
+    return typeof message.content === 'string' ? message.content : JSON.stringify(message.content ?? '');
+  };
+}
+
+// Короткий блок голоса "Мысли" для persona кора-петли (не весь SYSTEM_INSTRUCTION —
+// тот заточен под function-calling чат-эндпоинт, здесь нужен только тон и правила стиля).
+const KORA_PERSONA = `Ты — Мысль, личный ассистент по организации дел и мышлению.
+Отвечай только на русском, без эмодзи и звёздочек. Коротко, прямо, по-человечески — без слащавости и дежурных вводных вроде "Конечно!"/"Отлично!". Если чего-то не знаешь — говори прямо, не выдумывай.`;
+
+const koraSkillStore = new InMemorySkillStore();
+
+/** Сохранённый факт в ПОЛИСАД поверх user_threads — та же таблица и тот же
+ * принцип, что createSelfKnowledgeSkill (источник правды по памяти один). */
+async function polisadRemember(userId: string, key: string, value: string): Promise<{ stored: boolean; key: string }> {
+  if (!db) return { stored: false, key };
+  const id = crypto.randomUUID();
+  const now = Date.now();
+  await db.query(
+    `INSERT INTO user_threads
+       (id, user_id, title, preview, messages, created_at, updated_at, source, summary, is_meaningful)
+     VALUES ($1, $2, $3, $4, '[]'::jsonb, $5, NOW(), 'кора.remember', $6, true)`,
+    [id, userId, key.slice(0, 200), value.slice(0, 100), now, value]
+  );
+  try {
+    const apiKey = process.env.ROUTERAI_API_KEY;
+    const embedding = await polisad.generateEmbedding(value, apiKey);
+    if (embedding) {
+      await db.query(
+        `UPDATE user_threads SET embedding = $1::vector WHERE id = $2 AND user_id = $3`,
+        [`[${embedding.join(',')}]`, id, userId]
+      );
+    }
+  } catch (e) {
+    console.warn('[kora] polisadRemember embedding failed:', e);
+  }
+  return { stored: true, key };
+}
+
+/** Сборка реестра инструментов КОРЫ для одного хода одного пользователя.
+ * НЕ синглтон — новый ToolRegistry на каждый вызов (многопользовательский
+ * сервер, ctx/credentialResolver завязаны на конкретного userId). */
+function buildKoraRegistry(userId: string): { registry: ToolRegistry; executor: ServiceExecutor } {
+  const registry = new ToolRegistry();
+
+  registry.register(relsaSearchTool());
+  registry.register(relsaScrapeTool());
+
+  registry.register({
+    name: 'полисад.search',
+    description: 'Найти в личном архиве пользователя (заметки, прошлые разговоры) по запросу.',
+    argsSchema: {
+      query: { type: 'string', required: true, description: 'поисковый запрос', maxLen: 300 },
+    },
+    isWrite: false,
+    execute: async (args) => {
+      if (!db) return { results: [], error: 'БД недоступна' };
+      const apiKey = process.env.ROUTERAI_API_KEY;
+      const query = String(args.query ?? '');
+      const { rows, isExplicit } = await polisad.retrieveArchive(db, userId, query, apiKey, {
+        vectorEnabled,
+        excludeBotThreads: false,
+      });
+      return {
+        results: rows.map((r: any) => ({ title: r.title, summary: r.summary })),
+        isExplicit,
+      };
+    },
+  });
+
+  registry.register({
+    name: 'полисад.remember',
+    description: 'Запомнить факт о пользователе или его контексте в личный архив.',
+    argsSchema: {
+      key: { type: 'string', required: true, description: 'короткое название факта' },
+      value: { type: 'string', required: true, description: 'содержание факта' },
+    },
+    // isWrite: false — запись в личную память пользователя не требует HITL-
+    // подтверждения (тот же принцип, что в референсе TOOL_BUDGET: remember
+    // не является write-действием во ВНЕШНЕМ сервисе, гейт защищает именно
+    // внешние побочные эффекты — отправку сообщений и т.п.).
+    isWrite: false,
+    execute: async (args) => {
+      const key = String(args.key ?? '');
+      const value = String(args.value ?? '');
+      if (!key || !value) return { error: 'нужны оба поля: key и value' };
+      return polisadRemember(userId, key, value);
+    },
+  });
+
+  registry.register(skillListTool(koraSkillStore));
+  registry.register(skillLoadTool(koraSkillStore));
+
+  const wrapArtifact = (base: ReturnType<typeof artifactSlidesTool>) => ({
+    ...base,
+    execute: async (args: Record<string, unknown>, ctx: unknown) => {
+      const result = (await base.execute(args, ctx)) as ArtifactResult;
+      if (!db) return { error: 'БД недоступна — артефакт не сохранён' };
+      const id = crypto.randomUUID();
+      await db.query(
+        `INSERT INTO kora_artifacts (id, user_id, title, kind, html, created_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+        [id, userId, result.title, result.kind, result.html, Date.now()]
+      );
+      return { url: `/api/agent/artifact/${id}`, title: result.title };
+    },
+  });
+  registry.register(wrapArtifact(artifactSlidesTool()));
+  registry.register(wrapArtifact(artifactSiteTool()));
+
+  const credentialResolver: CredentialResolver = async (name: string) => {
+    if (name === 'telegram_bot_token') return process.env.TELEGRAM_BOT_TOKEN ?? null;
+    return null;
+  };
+  const executor = new ServiceExecutor([TELEGRAM_MANIFEST], credentialResolver);
+  registry.register(serviceListTool(executor));
+  registry.register(serviceCallTool(executor));
+
+  return { registry, executor };
+}
+
+function sseSend(res: express.Response, event: string, data: unknown) {
+  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+app.post("/api/agent/turn", requireAuth, aiRateLimit, async (req, res) => {
+  const userId = (req as any).userId;
+  const { threadId, message, history } = req.body || {};
+
+  if (typeof threadId !== 'string' || !threadId) {
+    return res.status(400).json({ error: 'threadId required' });
+  }
+  if (typeof message !== 'string' || !message.trim()) {
+    return res.status(400).json({ error: 'message required' });
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  const graphBuilder = new GraphBuilder();
+  const onEvent = (evt: LoopEvent) => {
+    try {
+      sseSend(res, 'graph', graphBuilder.apply(evt));
+    } catch (e) {
+      console.warn('[kora] graph event send failed:', e);
+    }
+  };
+
+  try {
+    if (!db) {
+      sseSend(res, 'error', { error: 'БД не настроена — КОРА недоступна.' });
+      return res.end();
+    }
+
+    const store = new PgPendingStore(db);
+    const audit = new PgGateAuditLog(db);
+
+    // ── HITL: активный pending для этого (userId, threadId)? ────────────
+    const now = Date.now();
+    const active = await store.getActive(userId, threadId);
+    if (active) {
+      const verdict = resolveUserReply(message);
+      if (verdict === 'confirm') {
+        const pending = await confirmPending(store, audit, userId, threadId, now);
+        if (pending) {
+          const { registry } = buildKoraRegistry(userId);
+          const results: string[] = [];
+          for (const action of pending.actions) {
+            const def = registry.get(action.tool);
+            if (!def) {
+              results.push(`${action.describe} — не выполнено: инструмент недоступен`);
+              continue;
+            }
+            try {
+              const result = await def.execute(action.args, { userId });
+              const ok = result && typeof result === 'object' && !(result as any).error;
+              results.push(`${action.describe} — ${ok ? 'выполнено' : 'ошибка: ' + JSON.stringify((result as any).error)}`);
+            } catch (e: any) {
+              results.push(`${action.describe} — ошибка: ${e?.message || e}`);
+            }
+          }
+          const answer = results.join('\n');
+          const graph = graphBuilder.apply({ type: 'final', step: 1, detail: answer.slice(0, 200) });
+          sseSend(res, 'graph', graph);
+          sseSend(res, 'final', { answer, stopReason: 'final', graph });
+          return res.end();
+        }
+      } else {
+        // reject или other — сброс pending. При other продолжаем как новое сообщение.
+        await rejectPending(store, audit, userId, threadId, now);
+        if (verdict === 'reject') {
+          const answer = 'Отменил.';
+          const graph = graphBuilder.apply({ type: 'final', step: 1, detail: answer });
+          sseSend(res, 'graph', graph);
+          sseSend(res, 'final', { answer, stopReason: 'final', graph });
+          return res.end();
+        }
+        // verdict === 'other' → падаем ниже, обычный ход
+      }
+    }
+
+    // ── Обычный ход ───────────────────────────────────────────────────────
+    let userTimezone = 'Europe/Moscow';
+    try {
+      const tzRes = await db.query(`SELECT timezone FROM user_profiles WHERE user_id = $1`, [userId]);
+      if (tzRes.rows[0]?.timezone) userTimezone = tzRes.rows[0].timezone;
+    } catch {}
+
+    const { registry, executor } = buildKoraRegistry(userId);
+    const generate = koraGenerate();
+    const chatHistory: ChatMessage[] = Array.isArray(history)
+      ? history.filter((m: any) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+      : [];
+
+    const result = await runOrchestrated({
+      userMsg: message,
+      history: chatHistory,
+      registry,
+      generate,
+      ctx: { userId },
+      onEvent,
+      isWriteAction: (action) => {
+        if (action.tool === 'сервис.call') return isWriteServiceAction(executor, action.args);
+        return registry.get(action.tool)?.isWrite ?? false;
+      },
+      promptOptions: {
+        persona: `${KORA_PERSONA}\n\nТекущие дата и время: ${getNowContext(userTimezone)}`,
+        skillsCatalog: skillsCatalog(koraSkillStore),
+      },
+      hitl: { store, audit, userId, threadId },
+    });
+
+    const graph = graphBuilder.snapshot();
+    sseSend(res, 'final', { answer: result.answer, stopReason: result.stopReason ?? 'final', graph });
+    res.end();
+  } catch (e: any) {
+    console.error('[kora] /api/agent/turn error:', e);
+    try {
+      sseSend(res, 'error', { error: e?.message || 'Внутренняя ошибка КОРЫ' });
+    } catch {}
+    res.end();
+  }
+});
+
+app.get("/api/agent/artifact/:id", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  const { id } = req.params;
+  if (!db) return res.status(503).json({ error: 'БД не настроена — артефакты недоступны.' });
+  try {
+    const { rows } = await db.query(
+      `SELECT user_id, html FROM kora_artifacts WHERE id = $1`,
+      [id]
+    );
+    if (rows.length === 0) return res.status(404).send('Артефакт не найден');
+    if (rows[0].user_id !== userId) return res.status(403).send('Нет доступа к этому артефакту');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(rows[0].html);
+  } catch (e: any) {
+    console.error('[kora] /api/agent/artifact error:', e);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
 const startServer = async () => {
   if (db) {
     let connected = false;
@@ -2517,6 +2828,7 @@ const startServer = async () => {
   // Добавляем колонку notified_at если её нет
   if (db) {
     await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ;`).catch(() => {});
+    await ensureKoraTables(db).catch((e) => console.warn('[kora] ensureKoraTables failed:', e?.message));
   }
 
   if (process.env.NODE_ENV !== "production") {
