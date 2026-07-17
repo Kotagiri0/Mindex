@@ -60,6 +60,10 @@ export interface LoopEvent {
   tool?: string;
   /** Короткая выжимка (аргументы/результат/причина блокировки/текст ответа), усечённая. */
   detail?: string;
+  /** Индекс подзадачи (с нуля), если событие пришло из параллельного
+   * суб-агента оркестрации (Фаза 8, orchestrate.ts). Отсутствует у событий
+   * обычной линейной петли. */
+  subtask?: number;
 }
 
 export interface RunReactLoopOptions<TCtx = unknown> {
