@@ -17,12 +17,24 @@ import {
   truncateAtLastAction,
   sanitizeFinalAnswer,
   runPreCallGuards,
+  checkWritePayloadGuard,
 } from './guards.js';
 import { TurnState, callKey } from './turn-state.js';
 import type { ToolRegistry } from './registry.js';
 import { validateArgs } from './registry.js';
 import type { ParsedAction } from './types.js';
 import { buildSystemPrompt, type BuildSystemPromptOptions } from './prompt.js';
+import {
+  splitWriteActions,
+  evaluatePermission,
+  describeAction,
+  queuePending,
+  renderConfirmQuestion,
+  type PendingStore,
+  type GateAuditLog,
+  type PermissionRules,
+  type QueuedWriteAction,
+} from './hitl.js';
 
 export type { ChatMessage } from './compact.js';
 
@@ -69,12 +81,27 @@ export interface RunReactLoopOptions<TCtx = unknown> {
   isWriteAction?: (action: ParsedAction) => boolean;
   /** Прокидывается в buildSystemPrompt (персона/каталоги навыков-сервисов). */
   promptOptions?: Omit<BuildSystemPromptOptions<TCtx>, 'registry'>;
+  /** HITL-гейт подтверждения write-действий (раздел 5 ТЗ, Фаза 5). Если не
+   * передан — поведение петли ровно как раньше (обратная совместимость):
+   * write-действия исполняются как обычные, без вопроса подтверждения. */
+  hitl?: {
+    store: PendingStore;
+    audit: GateAuditLog;
+    userId: string;
+    threadId: string;
+    permissions?: PermissionRules;
+  };
 }
 
 export interface LoopResult {
   answer: string;
   steps: LoopEvent[];
   turnState: TurnState;
+  /** 'confirm_required' — ход завершился write-гейтом, ответ = вопрос
+   * подтверждения, а не обычный финальный ответ модели. Отсутствие поля
+   * (undefined) эквивалентно обычному 'final' — обратная совместимость с
+   * кодом, который ещё не знает про HITL-гейт. */
+  stopReason?: 'final' | 'confirm_required';
 }
 
 const DEFAULT_MAX_STEPS = 5;
@@ -197,7 +224,7 @@ export async function runReactLoop<TCtx = unknown>(
       throw e;
     }
 
-    const actions = parseActions(out);
+    let actions = parseActions(out);
 
     if (actions.length === 0) {
       // G8 — freshness: свежий вопрос + ноль вызовов ДАННЫХ за весь ход при
@@ -230,6 +257,68 @@ export async function runReactLoop<TCtx = unknown>(
 
     const resultsBlockParts: string[] = [];
     let stepHadFailure = false;
+
+    // ─── HITL-гейт (раздел 5 ТЗ) — пре-пасс ДО исполнения любого действия
+    // шага. deny → блок без исполнения; allow → исполняется как read (не
+    // тратит подтверждение); ask → откладывается, ВСЕ ask-write шага в один
+    // pending (п.3). Reads шага (и allow-writes) остаются в `actions` и
+    // проходят обычный per-action цикл ниже — их результат НЕ теряется
+    // (живой баг из ТЗ п.4: досрочный return до исполнения read).
+    let gatedActions: QueuedWriteAction[] = [];
+    if (opts.hitl && actions.length > 0) {
+      const { writes, reads } = splitWriteActions(actions, isWriteAction);
+      if (writes.length > 0) {
+        const { store, audit, userId, threadId, permissions } = opts.hitl;
+        const now = Date.now();
+        const autoAllowed: ParsedAction[] = [];
+        for (const w of writes) {
+          const dot = w.tool.indexOf('.');
+          const service = dot === -1 ? w.tool : w.tool.slice(0, dot);
+          const actionName = dot === -1 ? '' : w.tool.slice(dot + 1);
+          const verdict = evaluatePermission(permissions, service, actionName, w.args);
+          if (verdict === 'deny') {
+            await audit.append({
+              ts: now,
+              userId,
+              threadId,
+              kind: 'denied_by_policy',
+              payload: { tool: w.tool, args: w.args },
+            });
+            emit({ type: 'blocked', step, tool: w.tool, detail: 'запрещено политикой' });
+            resultsBlockParts.push(
+              `<result tool="${w.rawTool}">${JSON.stringify({
+                error: `ЗАПРЕЩЕНО политикой: ${w.tool} в deny-списке. Не повторяй вызов — сообщи пользователю, что действие запрещено настройками.`,
+              })}</result>`
+            );
+            continue;
+          }
+          if (verdict === 'allow') {
+            await audit.append({
+              ts: now,
+              userId,
+              threadId,
+              kind: 'auto_allowed',
+              payload: { tool: w.tool, args: w.args },
+            });
+            autoAllowed.push(w);
+            continue;
+          }
+          // G6 — write-payload guard ДО постановки в очередь подтверждения
+          // (живой баг безопасности из ТЗ §5: выдуманный URL нельзя даже
+          // ПОКАЗЫВАТЬ в вопросе «подтвердить?» — блок до очереди, не после).
+          const g6 = checkWritePayloadGuard(state, w, true);
+          if (g6) {
+            emit({ type: 'blocked', step, tool: w.tool, detail: truncate(g6, 200) });
+            resultsBlockParts.push(
+              `<result tool="${w.rawTool}">${JSON.stringify({ error: g6 })}</result>`
+            );
+            continue;
+          }
+          gatedActions.push({ tool: w.tool, args: w.args, describe: describeAction(w.tool, w.args) });
+        }
+        actions = [...reads, ...autoAllowed];
+      }
+    }
 
     for (const action of actions) {
       emit({
@@ -346,6 +435,19 @@ export async function runReactLoop<TCtx = unknown>(
           step
         );
       }
+    }
+
+    // HITL-гейт: reads (и allow-writes) этого шага уже исполнены выше —
+    // ask-writes откладываем в один pending и завершаем ход вопросом
+    // подтверждения (п.3-4 раздела 5 ТЗ). Ответ = renderConfirmQuestion,
+    // не sanitizeFinalAnswer — это не ответ модели, а вопрос оркестратора.
+    if (gatedActions.length > 0 && opts.hitl) {
+      const { store, audit, userId, threadId } = opts.hitl;
+      const pending = await queuePending(store, audit, userId, threadId, gatedActions, Date.now());
+      const question = renderConfirmQuestion(pending);
+      emit({ type: 'blocked', step, label: 'Жду подтверждения write-действия', detail: truncate(question, 200) });
+      emit({ type: 'final', step, detail: truncate(question, 200) });
+      return { answer: question, steps, turnState: state, stopReason: 'confirm_required' };
     }
 
     // G9 — reinject исходного вопроса после ошибки: маленькие/слабые модели
