@@ -25,6 +25,8 @@ import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
 import { getCurrentUser, apiFetch } from '../lib/auth';
+import { runAgentTurn, koraEnabled } from '../lib/kora-client';
+import type { GraphNode } from '../kora/graph';
 import { useVoiceInput } from '../lib/useVoiceInput';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
@@ -610,6 +612,9 @@ function ChatView({
 
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  // Живой граф хода КОРА (Фаза 9B, флаг kora=1) — снимки узлов, приходящие
+  // по SSE до финального ответа. null = граф не строится / уже отрисован в сообщении.
+  const [liveGraph, setLiveGraph] = useState<GraphNode[] | null>(null);
   const [thinkingIdx, setThinkingIdx] = useState(0);
   const [animatingContent, setAnimatingContent] = useState<string | null>(null);
   const [replyQuote, setReplyQuote] = useState<string | null>(null);
@@ -764,6 +769,52 @@ function ChatView({
       return t;
     }));
     if (updatedThread) db.saveThread(updatedThread);
+
+    // Фаза 9B: новый агентный путь КОРА (SSE, /api/agent/turn) — временный
+    // опт-ин через localStorage.kora === '1', пока не провалидирован на
+    // реальных сценариях. Старый цикл tool_calls остаётся дефолтом.
+    if (koraEnabled()) {
+      setIsTyping(true);
+      setLiveGraph(null);
+      try {
+        const current = threads.find(t => t.id === threadId);
+        if (!current) return;
+        const koraHistory = [...current.messages, userMsg]
+          .filter(m => m.role === 'user' || m.role === 'assistant')
+          .slice(-20)
+          .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
+        const result = await runAgentTurn({
+          threadId,
+          message: text,
+          history: koraHistory,
+          onGraph: (nodes) => setLiveGraph(nodes),
+        });
+
+        const finalMsg = { role: 'assistant' as const, content: result.answer || 'Готово!', time: nowTime(), graph: result.graph };
+        setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
+          if (t.id === threadId) {
+            const hasUser = t.messages.some(m => m.role === 'user' && m.content === userMsg.content && m.time === userMsg.time);
+            const base = hasUser ? t.messages : [...t.messages, userMsg];
+            const u = { ...t, messages: [...base, finalMsg], preview: finalMsg.content.slice(0, 60) + '…' };
+            db.saveThread(u);
+            return u;
+          }
+          return t;
+        }));
+        if (isFirstMessage) generateTitle(text, finalMsg.content);
+      } catch (err: any) {
+        const errMsg = { role: 'assistant' as const, content: `Ошибка: ${err.message || 'не удалось связаться с агентом'}`, time: nowTime() };
+        setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
+          if (t.id === threadId) { const u = { ...t, messages: [...t.messages, errMsg] }; db.saveThread(u); return u; }
+          return t;
+        }));
+      } finally {
+        setIsTyping(false);
+        setLiveGraph(null);
+      }
+      return;
+    }
 
     setIsTyping(true);
     try {
@@ -1258,7 +1309,12 @@ function ChatView({
               </div>
             );
           })}
-          {isTyping && (
+          {isTyping && liveGraph && liveGraph.length > 0 && (
+            <div style={{ alignSelf: 'flex-start', width: '100%' }}>
+              <AgentThread nodes={liveGraph as any} />
+            </div>
+          )}
+          {isTyping && !(liveGraph && liveGraph.length > 0) && (
             <div style={{ alignSelf: 'flex-start', paddingLeft: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
               <MysliThinking />
               <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', fontStyle: 'italic' }}>

@@ -12,6 +12,8 @@ import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
 import { apiFetch } from '../lib/auth';
+import { runAgentTurn, koraEnabled } from '../lib/kora-client';
+import type { GraphNode } from '../kora/graph';
 import { motion, AnimatePresence } from 'motion/react';
 import { useVoiceInput, isMobileDevice } from '../lib/useVoiceInput';
 
@@ -91,6 +93,8 @@ function checkTaskConflicts(allTasks: Task[], task: { id: string; name: string; 
 export default function AIChat({ threadId, threads, setThreads, tasks, setTasks, onClose, onNavigate, onOpenThread, autoSend, onAutoSentClear, isOnboarding }: AIChatProps) {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  // Живой граф хода КОРА (Фаза 9B, флаг kora=1) — парность с DesktopApp.tsx.
+  const [liveGraph, setLiveGraph] = useState<GraphNode[] | null>(null);
   // На iOS shell сам прибит к visualViewport (см. App.tsx) и поднимает input-бар
   // над клавиатурой — доп. отступ не нужен, иначе бар уехал бы вдвое выше.
   // На Android shell не сжимается, поэтому отступ нужен.
@@ -229,6 +233,58 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
 
     if (updatedThread) {
       db.saveThread(updatedThread);
+    }
+
+    // Фаза 9B: новый агентный путь КОРА (SSE, /api/agent/turn) — временный
+    // опт-ин через localStorage.kora === '1'. Парность с DesktopApp.tsx ChatView.
+    if (koraEnabled()) {
+      setIsTyping(true);
+      setLiveGraph(null);
+      try {
+        const currentThread = threads.find(t => t.id === threadId);
+        if (!currentThread) return;
+        const koraHistory = [...currentThread.messages, userMsg]
+          .filter(m => m.role === 'user' || m.role === 'assistant')
+          .slice(-20)
+          .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
+        const result = await runAgentTurn({
+          threadId: threadId!,
+          message: text,
+          history: koraHistory,
+          onGraph: (nodes) => setLiveGraph(nodes),
+        });
+
+        const assistantMsg: Message = { role: 'assistant', content: result.answer || 'Готово!', time: ft(), graph: result.graph };
+        if (isFirstMessage) generateTitle(text, assistantMsg.content);
+
+        setThreads(prev => prev.map(t => {
+          if (t.id === threadId) {
+            const hasUserMsg = t.messages.some(m => m.role === 'user' && m.content === userMsg.content && m.time === userMsg.time);
+            const baseMessages = hasUserMsg ? t.messages : [...t.messages, userMsg];
+            const updated = { ...t, messages: [...baseMessages, assistantMsg], preview: assistantMsg.content.slice(0, 60) + '…', updatedAt: Date.now() };
+            db.saveThread(updated);
+            return updated;
+          }
+          return t;
+        }));
+      } catch (err: any) {
+        const errorMsg: Message = { role: 'assistant', content: `Ошибка: ${err.message || 'не удалось связаться с агентом'}`, time: ft() };
+        setThreads(prev => prev.map(t => {
+          if (t.id === threadId) {
+            const hasUserMsg = t.messages.some(m => m.role === 'user' && m.content === userMsg.content && m.time === userMsg.time);
+            const baseMessages = hasUserMsg ? t.messages : [...t.messages, userMsg];
+            const updated = { ...t, messages: [...baseMessages, errorMsg] };
+            db.saveThread(updated);
+            return updated;
+          }
+          return t;
+        }));
+      } finally {
+        setIsTyping(false);
+        setLiveGraph(null);
+      }
+      return;
     }
 
     setIsTyping(true);
@@ -1090,7 +1146,12 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           return [backdropEl, ...msgs];
         })()}
 
-        {isTyping && (
+        {isTyping && liveGraph && liveGraph.length > 0 && (
+          <div style={{ alignSelf: 'flex-start', width: '100%', paddingBottom: 4 }}>
+            <AgentThread nodes={liveGraph as any} />
+          </div>
+        )}
+        {isTyping && !(liveGraph && liveGraph.length > 0) && (
           <div style={{ alignSelf: 'flex-start', paddingLeft: 2, paddingBottom: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
             <MysliThinking />
             <ThinkingPhrase />
