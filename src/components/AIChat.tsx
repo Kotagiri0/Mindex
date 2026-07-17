@@ -6,6 +6,7 @@ import { ChatIcon, NoteIcon, SettingsIcon } from './icons';
 import { MysliThinking } from './MysliThinking';
 import NoteView from './NoteView';
 import TelegramConnectBlock from './TelegramConnectBlock';
+import AgentThread from './AgentThread';
 import { Thread, Screen, Message, Task, SubTask } from '../types';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
@@ -889,6 +890,14 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                 ? { background: 'rgba(9,14,23,0.07)', borderRadius: 18, borderBottomRightRadius: 4, padding: '10px 14px', fontSize: 15, lineHeight: 1.5, color: '#222224', fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif" }
                 : { fontSize: 15, lineHeight: 1.75, color: '#222224', fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", width: '100%' }
               }>
+                {/* Живой граф процесса (ТЗ раздел 8): прикреплён к ЭТОМУ сообщению,
+                    не к отдельному блоку — переживает следующий ход, можно вернуться и посмотреть.
+                    Мобильная парность с DesktopApp.tsx ChatView. */}
+                {m.role === 'assistant' && m.graph && m.graph.length > 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <AgentThread nodes={m.graph as any} />
+                  </div>
+                )}
                 {m.role === 'user'
                   ? m.content
                   : showAnimated

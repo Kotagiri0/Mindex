@@ -1,28 +1,22 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, X, ChevronDown } from 'lucide-react';
+import type { GraphNode, GraphNodeStatus } from '../kora/graph';
+
+export type { GraphNode, GraphNodeStatus };
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 
-export type AgentThreadStepStatus = 'done' | 'active' | 'pending';
-
-export interface AgentThreadStep {
-  id: string;
-  label: string;
-  status: AgentThreadStepStatus;
-  /** Необязательный раскрывающийся под-список (детали шага). */
-  subItems?: string[];
-}
-
 interface AgentThreadProps {
-  steps: AgentThreadStep[];
+  nodes: GraphNode[];
   title?: string;
 }
 
 const NODE_SIZE = 20;
 
-/** Нода шага: done — галочка в приглушённой обводке, active — пульсирующая точка, pending — пустой кружок. */
-function StepNode({ status }: { status: AgentThreadStepStatus }) {
+/** Нода узла графа: done — галочка, running — пульсирующая зелёная точка,
+ * queued — пустой кружок, failed — приглушённо-красная точка (#F0B7AC). */
+function StepNode({ status }: { status: GraphNodeStatus }) {
   if (status === 'done') {
     return (
       <div
@@ -37,7 +31,7 @@ function StepNode({ status }: { status: AgentThreadStepStatus }) {
       </div>
     );
   }
-  if (status === 'active') {
+  if (status === 'running') {
     return (
       <div style={{ position: 'relative', width: NODE_SIZE, height: NODE_SIZE, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <motion.span
@@ -49,7 +43,21 @@ function StepNode({ status }: { status: AgentThreadStepStatus }) {
       </div>
     );
   }
-  // pending
+  if (status === 'failed') {
+    return (
+      <div
+        style={{
+          width: NODE_SIZE, height: NODE_SIZE, borderRadius: '50%',
+          border: '1.5px solid rgba(240,183,172,0.5)', background: 'rgba(240,183,172,0.15)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0, color: '#F0B7AC',
+        }}
+      >
+        <X size={12} strokeWidth={2.5} />
+      </div>
+    );
+  }
+  // queued
   return (
     <div
       style={{
@@ -61,11 +69,15 @@ function StepNode({ status }: { status: AgentThreadStepStatus }) {
 }
 
 /**
- * Вертикальный степпер-лог исполнения агента: шаги с соединительной линией слева.
- * Первый шаг может иметь раскрывающийся под-список деталей.
+ * Вертикальный степпер-лог живого графа процесса агента: узлы с соединительной
+ * линией слева. Узел с thought — разворачивается по клику (шеврон), внутри —
+ * размышление модели + краткая сводка результата инструмента (моноширинным,
+ * приглушённым текстом). См. docs/PORTING_TO_TS.md раздел 8.
  */
-export default function AgentThread({ steps, title }: AgentThreadProps) {
+export default function AgentThread({ nodes, title }: AgentThreadProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  if (!nodes.length) return null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -74,36 +86,44 @@ export default function AgentThread({ steps, title }: AgentThreadProps) {
           {title}
         </div>
       )}
-      {steps.map((step, idx) => {
-        const isLast = idx === steps.length - 1;
-        const isExpanded = expandedId === step.id;
-        const hasSub = !!step.subItems?.length;
+      {nodes.map((node, idx) => {
+        const isLast = idx === nodes.length - 1;
+        const isExpanded = expandedId === node.id;
+        const hasThought = !!node.thought;
         return (
-          <div key={step.id} style={{ display: 'flex', flexDirection: 'column' }}>
+          <div key={node.id} style={{ display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
-                <StepNode status={step.status} />
+                <StepNode status={node.status} />
                 {!isLast && (
                   <div style={{ width: 1, flex: 1, minHeight: 16, background: 'rgba(0,0,0,0.12)' }} />
                 )}
               </div>
               <div
-                onClick={hasSub ? () => setExpandedId(isExpanded ? null : step.id) : undefined}
+                onClick={hasThought ? () => setExpandedId(isExpanded ? null : node.id) : undefined}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6,
-                  height: NODE_SIZE, cursor: hasSub ? 'pointer' : 'default',
+                  minHeight: NODE_SIZE, cursor: hasThought ? 'pointer' : 'default',
+                  padding: '0 0 4px',
                 }}
               >
                 <span
                   style={{
                     fontFamily: M,
                     fontSize: 14,
-                    color: step.status === 'active' ? 'var(--text-primary)' : 'var(--text-muted, var(--text-30))',
+                    color: node.status === 'running' ? 'var(--text-primary)'
+                      : node.status === 'failed' ? '#F0B7AC'
+                      : 'var(--text-muted, var(--text-30))',
                   }}
                 >
-                  {step.label}
+                  {node.label}
                 </span>
-                {hasSub && (
+                {node.detail && (
+                  <span style={{ fontFamily: M, fontSize: 12, color: 'var(--text-30)' }}>
+                    {node.detail}
+                  </span>
+                )}
+                {hasThought && (
                   <motion.span
                     animate={{ rotate: isExpanded ? 180 : 0 }}
                     transition={{ duration: 0.15 }}
@@ -114,13 +134,17 @@ export default function AgentThread({ steps, title }: AgentThreadProps) {
                 )}
               </div>
             </div>
-            {hasSub && isExpanded && (
+            {hasThought && isExpanded && (
               <div style={{ marginLeft: NODE_SIZE + 10, padding: '4px 0 8px' }}>
-                {step.subItems!.map((item, i) => (
-                  <div key={i} style={{ fontFamily: M, fontSize: 13, color: 'var(--text-30)', padding: '2px 0' }}>
-                    {item}
-                  </div>
-                ))}
+                <pre
+                  style={{
+                    fontFamily: "'SFMono-Regular', Consolas, monospace",
+                    fontSize: 12, lineHeight: 1.5, color: 'var(--text-30)',
+                    whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0,
+                  }}
+                >
+                  {node.thought}
+                </pre>
               </div>
             )}
           </div>

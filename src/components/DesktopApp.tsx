@@ -15,6 +15,7 @@ import DayTimeline from './DayTimeline';
 import TimelineCreatePopover from './TimelineCreatePopover';
 import * as MxIcon from './icons';
 import AgentStatus from './AgentStatus';
+import AgentThread from './AgentThread';
 import AgentTaskCard from './AgentTaskCard';
 import { deriveAgentStatus } from '../lib/agentStatus';
 import SettingsScreen from './Settings';
@@ -1036,6 +1037,13 @@ function ChatView({
                   </div>
                 ) : (
                   <div style={{ width: '100%' }}>
+                    {/* Живой граф процесса (ТЗ раздел 8): прикреплён к ЭТОМУ сообщению,
+                        не к отдельному блоку — переживает следующий ход, можно вернуться и посмотреть. */}
+                    {m.graph && m.graph.length > 0 && (
+                      <div style={{ marginBottom: 12 }}>
+                        <AgentThread nodes={m.graph as any} />
+                      </div>
+                    )}
                     {showAnimated
                       ? <span style={{ fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>{animatingContent}</span>
                       : <MarkdownText text={m.content} style={{ fontFamily: M, fontSize: 15, color: 'var(--text-80)', lineHeight: 1.75 }} />

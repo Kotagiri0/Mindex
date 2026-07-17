@@ -58,6 +58,14 @@ export interface Message {
   tool_call_id?: string;
   reasoning_content?: string;
   sources?: { title: string; snippet?: string }[];
+  /**
+   * Живой граф процесса хода (раздел 8 ТЗ переноса): плоский сериализуемый
+   * снимок узлов на момент завершения хода. Прикреплён к КОНКРЕТНОМУ
+   * сообщению — не к отдельному блоку, который затирается следующим ходом
+   * (живой баг из ТЗ: иначе пользователь не может вернуться и посмотреть,
+   * что происходило в прошлом ответе).
+   */
+  graph?: { id: string; label: string; status: string; detail?: string; thought?: string }[];
   planning_data?: {
     questions: {
       id: string;
