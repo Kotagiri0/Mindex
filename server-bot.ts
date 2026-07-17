@@ -17,6 +17,27 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
+// ─── КОРА — импорты агентной петли (Фаза 9B: параллельный опт-ин путь бота) ──
+// Только импорт — сама петля/граф/HITL/реестр не трогаются, переиспользуются
+// ровно как на вебе (server.ts, блок "КОРА — /api/agent/*").
+import type { ChatMessage, GenerateFn, LoopEvent } from './src/kora/loop.ts';
+import { runOrchestrated } from './src/kora/orchestrate.ts';
+import { GraphBuilder, type GraphNode } from './src/kora/graph.ts';
+import { ToolRegistry } from './src/kora/registry.ts';
+import { relsaSearchTool, relsaScrapeTool } from './src/kora/relsa.ts';
+import {
+  ServiceExecutor,
+  serviceListTool,
+  serviceCallTool,
+  isWriteServiceAction,
+  type CredentialResolver,
+} from './src/kora/services.ts';
+import { TELEGRAM_MANIFEST } from './src/kora/manifests/telegram.ts';
+import { InMemorySkillStore, skillListTool, skillLoadTool, skillsCatalog } from './src/kora/skills.ts';
+import { artifactSlidesTool, artifactSiteTool, type ArtifactResult } from './src/kora/artifacts.ts';
+import { confirmPending, rejectPending, resolveUserReply } from './src/kora/hitl.ts';
+import { PgPendingStore, PgGateAuditLog, ensureKoraTables } from './src/kora/pg-stores.ts';
+
 const execFileAsync = promisify(execFile);
 
 // Тёплый пул соединений: бот получает сообщения редко, дефолтный keepAliveTimeout
@@ -78,6 +99,13 @@ const CONTEXT_WINDOW = polisad.CONTEXT_WINDOW;
 const MAX_TOOL_ITERATIONS = 5;
 const MAX_BUTTON_TEXT_LENGTH = 32;
 const POLLING_ERROR_RETRY_DELAY_MS = 5_000;
+
+// HITL-гейт: инструменты, необратимые при выполнении, требуют подтверждения
+// пользователя (см. docs/PORTING_TO_TS.md, раздел 5). Постановка задачи
+// (add_task/update_task/create_note/set_reminder) НЕ гейтится — трение только
+// на реально опасное действие, не на сам факт «сделай».
+export const HARMFUL_TOOLS = new Set(['delete_task']);
+const PENDING_ACTION_TTL_MINUTES = 15;
 
 // Rich Messages (Bot API 10.1+): бот шлёт Markdown, Telegram сам рендерит списки/
 // код/таблицы на клиенте. За флагом — при любой проблеме выключается без деплоя.
@@ -328,6 +356,117 @@ async function checkTaskConflicts(
   }
 
   return warnings;
+}
+
+// ─── HITL-гейт для harmful-действий (docs/PORTING_TO_TS.md, раздел 5) ─────────
+
+export async function getConfirmSetting(db: Pool, userId: string): Promise<boolean> {
+  const { rows } = await db.query(
+    `SELECT COALESCE((settings->>'confirm')::boolean, true) AS confirm FROM user_profiles WHERE user_id = $1`,
+    [userId]
+  );
+  return rows[0]?.confirm ?? true;
+}
+
+// Описание рендерится КОДОМ по реальным данным из БД, не пересказом модели —
+// иначе показанный текст может разойтись с тем, что реально удалится.
+export async function describeHarmfulCall(name: string, args: any, db: Pool, userId: string): Promise<string> {
+  if (name === 'delete_task') {
+    const { rows } = await db.query(
+      `SELECT name, date, time FROM user_tasks WHERE id = $1 AND user_id = $2`,
+      [String(args.id), userId]
+    );
+    const t = rows[0];
+    if (!t) return 'Удалить задачу (уже не найдена в списке)';
+    const when = t.time ? `${t.date} в ${t.time}` : t.date;
+    return `Удалить задачу «${t.name}» (${when})`;
+  }
+  return `Выполнить ${name}`;
+}
+
+export async function queueConfirmation(
+  db: Pool,
+  userId: string,
+  threadId: string,
+  token: string,
+  chatId: number,
+  harmfulCalls: any[]
+): Promise<void> {
+  const id = crypto.randomUUID();
+  const descriptions = await Promise.all(
+    harmfulCalls.map(tc => describeHarmfulCall(tc.function.name, JSON.parse(tc.function.arguments || '{}'), db, userId))
+  );
+  const description = descriptions.join('\n');
+  await db.query(
+    `INSERT INTO pending_actions (id, user_id, thread_id, tool_calls, description, expires_at)
+     VALUES ($1, $2, $3, $4, $5, NOW() + INTERVAL '${PENDING_ACTION_TTL_MINUTES} minutes')`,
+    [id, userId, threadId, JSON.stringify(harmfulCalls), description]
+  );
+  await db.query(
+    `INSERT INTO action_audit_log (id, user_id, thread_id, tool_calls, event) VALUES ($1, $2, $3, $4, 'queued')`,
+    [crypto.randomUUID(), userId, threadId, JSON.stringify(harmfulCalls)]
+  );
+  await tgApi(token, 'sendMessage', {
+    chat_id: chatId,
+    text: `⚠️ ${description}\n\nПодтвердить?`,
+    reply_markup: {
+      inline_keyboard: [[
+        { text: 'Подтвердить', callback_data: `confirm_action:${id}` },
+        { text: 'Отмена', callback_data: `cancel_action:${id}` },
+      ]]
+    }
+  });
+}
+
+export async function resolvePendingAction(
+  pendingId: string,
+  decision: 'confirmed' | 'cancelled',
+  token: string,
+  db: Pool,
+  cq: TgCallbackQuery
+): Promise<void> {
+  const { rows } = await db.query(
+    `SELECT user_id, thread_id, tool_calls, description FROM pending_actions
+     WHERE id = $1 AND status = 'pending' AND expires_at > NOW()`,
+    [pendingId]
+  );
+  const pending = rows[0];
+  if (!pending) {
+    await tgApi(token, 'answerCallbackQuery', { callback_query_id: cq.id, text: 'Действие устарело, повтори запрос' });
+    await db.query(
+      `UPDATE pending_actions SET status = 'expired', resolved_at = NOW() WHERE id = $1 AND status = 'pending'`,
+      [pendingId]
+    );
+    return;
+  }
+  // Дедуп: чужой callback (не тот userId) не может решать за pending другого пользователя.
+  const userId = `tg_${cq.from.id}`;
+  if (userId !== pending.user_id) {
+    await tgApi(token, 'answerCallbackQuery', { callback_query_id: cq.id, text: 'Это не твоё подтверждение' });
+    return;
+  }
+
+  await db.query(`UPDATE pending_actions SET status = $1, resolved_at = NOW() WHERE id = $2`, [decision, pendingId]);
+  await db.query(
+    `INSERT INTO action_audit_log (id, user_id, thread_id, tool_calls, event) VALUES ($1, $2, $3, $4, $5)`,
+    [crypto.randomUUID(), pending.user_id, pending.thread_id, JSON.stringify(pending.tool_calls), decision]
+  );
+
+  if (decision === 'cancelled') {
+    await tgApi(token, 'answerCallbackQuery', { callback_query_id: cq.id, text: 'Отменено' });
+    await tgApi(token, 'editMessageText', {
+      chat_id: cq.message.chat.id, message_id: cq.message.message_id, text: `${pending.description}\n\n❌ Отменено`,
+    }).catch(() => {});
+    return;
+  }
+
+  for (const tc of pending.tool_calls) {
+    await executeTool(tc.function.name, JSON.parse(tc.function.arguments || '{}'), db, pending.user_id);
+  }
+  await tgApi(token, 'answerCallbackQuery', { callback_query_id: cq.id, text: '✅ Выполнено' });
+  await tgApi(token, 'editMessageText', {
+    chat_id: cq.message.chat.id, message_id: cq.message.message_id, text: `${pending.description}\n\n✅ Выполнено`,
+  }).catch(() => {});
 }
 
 // ─── Tool execution ───────────────────────────────────────────────────────────
@@ -873,8 +1012,12 @@ async function processWithAI(
   db: Pool,
   userId: string,
   apiKey: string,
-  sink?: StreamSink
-): Promise<{ aiResponse: string; newMessages: StoredMessage[] }> {
+  sink?: StreamSink,
+  // Нужны только для HITL-гейта (queueConfirmation шлёт отдельное сообщение
+  // с кнопками) — без Telegram-контекста (веб-путь) гейт не сработает,
+  // harmful-инструменты выполнятся как раньше.
+  telegram?: { token: string; chatId: number; threadId: string }
+): Promise<{ aiResponse: string; newMessages: StoredMessage[]; awaitingConfirmation?: boolean }> {
   const now = () => new Date().toISOString();
   const userMsg: StoredMessage = { role: 'user', content: userText, time: now() };
   const userTz = await getUserTimezone(db, userId);
@@ -928,6 +1071,23 @@ async function processWithAI(
     });
 
     if (msg.tool_calls && msg.tool_calls.length > 0) {
+      const harmfulCalls = msg.tool_calls.filter((tc: any) => HARMFUL_TOOLS.has(tc.function.name));
+      if (harmfulCalls.length > 0 && telegram) {
+        // Пре-пасс ДО исполнения любого действия шага (в т.ч. read) — раздел 5
+        // п.4 PORTING_TO_TS.md: иначе read-результат того же шага теряется при
+        // досрочном возврате. Согласие Вадима: гейтим только harmful-действия
+        // ПРИ ВЫПОЛНЕНИИ (delete_task), не сам факт постановки задачи.
+        const confirmRequired = await getConfirmSetting(db, userId);
+        if (confirmRequired) {
+          // Закрываем стрим-плейсхолдер коротким текстом, а не 'Готово' —
+          // само подтверждение с описанием и кнопками уходит отдельным сообщением.
+          if (sink) await sink.finish('Нужно подтверждение действия — смотри ниже 👇');
+          await queueConfirmation(db, userId, telegram.threadId, telegram.token, telegram.chatId, harmfulCalls);
+          // Ход модели с этим tool_calls в историю не пишем — он не исполнен,
+          // а незакрытый tool_calls в истории сломает следующий вызов API.
+          return { aiResponse: '', newMessages: [userMsg], awaitingConfirmation: true };
+        }
+      }
       const assistantEntry: StoredMessage = {
         role: 'assistant',
         content: typeof msg.content === 'string' ? msg.content : '',
@@ -1450,6 +1610,14 @@ async function handleTasks(token: string, chatId: number, db: Pool, userId: stri
 }
 
 async function handleCallback(cq: TgCallbackQuery, token: string, db: Pool): Promise<void> {
+  if (cq.data?.startsWith('confirm_action:')) {
+    await resolvePendingAction(cq.data.slice('confirm_action:'.length), 'confirmed', token, db, cq);
+    return;
+  }
+  if (cq.data?.startsWith('cancel_action:')) {
+    await resolvePendingAction(cq.data.slice('cancel_action:'.length), 'cancelled', token, db, cq);
+    return;
+  }
   if (!cq.data?.startsWith('done:')) {
     await tgApi(token, 'answerCallbackQuery', { callback_query_id: cq.id });
     return;
@@ -1474,6 +1642,421 @@ async function handleCallback(cq: TgCallbackQuery, token: string, db: Pool): Pro
     message_id: cq.message.message_id,
     reply_markup: { inline_keyboard: newKeyboard }
   }).catch(() => {}); // игнорируем, если сообщение слишком старое
+}
+
+// ─── КОРА — параллельный опт-ин путь бота ─────────────────────────────────────
+// Опт-ин через env KORA_BOT_USERS: список telegram user id через запятую,
+// либо 'all'. Пусто/нет переменной → путь ВЫКЛЮЧЕН, бот работает старым
+// циклом ровно как раньше — нулевая деградация без переменной.
+function koraBotEnabled(tgUserId: number): boolean {
+  const raw = (process.env.KORA_BOT_USERS || '').trim();
+  if (!raw) return false;
+  if (raw === 'all') return true;
+  return raw.split(',').map(s => s.trim()).includes(String(tgUserId));
+}
+
+function getKoraNowContext(tz = 'Europe/Moscow'): string {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('sv-SE', { timeZone: tz }); // YYYY-MM-DD
+  const timeStr = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: tz });
+  return `${dateStr}, ${timeStr} (${tz})`;
+}
+
+// Адаптер GenerateFn поверх ТОГО ЖЕ (нестримингового) callRouterAI, что уже
+// использует бот — та же модель/ключ/ретраи/OpenRouter-фолбэк. Стриминг тут
+// не нужен: прогресс пользователю даёт живой граф, не токен-поток.
+function koraBotGenerate(apiKey: string): GenerateFn {
+  return async (messages: ChatMessage[]) => {
+    const data = await callRouterAI(apiKey, {
+      model: "deepseek/deepseek-v4-flash",
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      temperature: 0.7,
+      max_tokens: 1024,
+      thinking: false,
+    });
+    if (!data?.choices?.length) throw new Error('RouterAI вернул пустой список вариантов');
+    const message = data.choices[0].message;
+    return typeof message.content === 'string' ? message.content : JSON.stringify(message.content ?? '');
+  };
+}
+
+// Короткий блок голоса "Мысли" для persona кора-петли бота — не весь
+// SYSTEM_INSTRUCTION старого пути (тот заточен под function-calling), здесь
+// нужен только тон и правила стиля, остальное строит buildSystemPrompt.
+const KORA_BOT_PERSONA = `Ты — Мысль, персональный ИИ-ассистент по планированию в Telegram.
+Отвечай только на русском, без эмодзи и звёздочек. Коротко, прямо, по-человечески — без слащавости и дежурных вводных вроде "Конечно!"/"Отлично!". Если чего-то не знаешь — говори прямо, не выдумывай.`;
+
+const koraBotSkillStore = new InMemorySkillStore();
+
+// Отправка артефакта (слайды/сайт) ДОКУМЕНТОМ — у телеграм-юзера нет веб-
+// сессии, чтобы открыть /api/agent/artifact/:id, поэтому HTML шлётся файлом.
+async function sendArtifactDocument(token: string, chatId: number, title: string, html: string): Promise<void> {
+  const formData = new FormData();
+  formData.append('chat_id', String(chatId));
+  const filename = `${(title || 'artifact').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60)}.html`;
+  formData.append('document', new Blob([html], { type: 'text/html' }), filename);
+  const res = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, tgFetchOptions({
+    method: 'POST',
+    body: formData,
+  }));
+  const data: any = await res.json().catch(() => null);
+  if (!data?.ok) throw new Error(`sendDocument отклонён: ${data?.description || res.status}`);
+}
+
+/** Сборка реестра инструментов КОРЫ для одного хода одного пользователя бота.
+ * НЕ синглтон — новый ToolRegistry на каждый вызов (ctx/credentialResolver
+ * завязаны на конкретного userId/chatId). Поверх реестра с веба (рельса/
+ * полисад/навык/артефакт/сервис) добавлен домен 'задача' — ядро продукта,
+ * которого у веб-реестра нет. canon.ts не знает домен 'з' (кириллица) —
+ * это ОСОЗНАННО: canonicalizeTool на неизвестном домене возвращает имя как
+ * есть, реестр регистрирует точные имена 'задача.*', а buildSystemPrompt
+ * перечисляет их из реестра как есть — модели этого достаточно. */
+function buildKoraBotRegistry(
+  userId: string,
+  db: Pool,
+  chatId: number,
+  token: string
+): { registry: ToolRegistry; executor: ServiceExecutor } {
+  const registry = new ToolRegistry();
+
+  registry.register(relsaSearchTool());
+  registry.register(relsaScrapeTool());
+
+  registry.register({
+    name: 'полисад.search',
+    description: 'Найти в личном архиве пользователя (заметки, прошлые разговоры) по запросу.',
+    argsSchema: {
+      query: { type: 'string', required: true, description: 'поисковый запрос', maxLen: 300 },
+    },
+    isWrite: false,
+    execute: async (args) => {
+      const apiKey = process.env.ROUTERAI_API_KEY;
+      const query = String(args.query ?? '');
+      const { rows, isExplicit } = await polisad.retrieveArchive(db, userId, query, apiKey, {
+        vectorEnabled: true,
+        excludeBotThreads: false,
+      });
+      return {
+        results: rows.map((r: any) => ({ title: r.title, summary: r.summary })),
+        isExplicit,
+      };
+    },
+  });
+
+  registry.register({
+    name: 'полисад.remember',
+    description: 'Запомнить факт о пользователе или его контексте в личный архив.',
+    argsSchema: {
+      key: { type: 'string', required: true, description: 'короткое название факта' },
+      value: { type: 'string', required: true, description: 'содержание факта' },
+    },
+    isWrite: false,
+    execute: async (args) => {
+      const key = String(args.key ?? '');
+      const value = String(args.value ?? '');
+      if (!key || !value) return { error: 'нужны оба поля: key и value' };
+      const id = crypto.randomUUID();
+      const now = Date.now();
+      await db.query(
+        `INSERT INTO user_threads
+           (id, user_id, title, preview, messages, created_at, updated_at, source, summary, is_meaningful)
+         VALUES ($1, $2, $3, $4, '[]'::jsonb, $5, NOW(), 'кора.remember', $6, true)`,
+        [id, userId, key.slice(0, 200), value.slice(0, 100), now, value]
+      );
+      try {
+        const apiKey = process.env.ROUTERAI_API_KEY;
+        const embedding = await polisad.generateEmbedding(value, apiKey);
+        if (embedding) {
+          await db.query(
+            `UPDATE user_threads SET embedding = $1::vector WHERE id = $2 AND user_id = $3`,
+            [`[${embedding.join(',')}]`, id, userId]
+          );
+        }
+      } catch (e) {
+        console.warn('[kora-bot] remember embedding failed:', e);
+      }
+      return { stored: true, key };
+    },
+  });
+
+  registry.register(skillListTool(koraBotSkillStore));
+  registry.register(skillLoadTool(koraBotSkillStore));
+
+  const wrapArtifact = (base: ReturnType<typeof artifactSlidesTool>) => ({
+    ...base,
+    execute: async (args: Record<string, unknown>, ctx: unknown) => {
+      const result = (await base.execute(args, ctx)) as ArtifactResult;
+      const id = crypto.randomUUID();
+      await db.query(
+        `INSERT INTO kora_artifacts (id, user_id, title, kind, html, created_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+        [id, userId, result.title, result.kind, result.html, Date.now()]
+      );
+      try {
+        await sendArtifactDocument(token, chatId, result.title, result.html);
+        return { sent: true, title: result.title };
+      } catch (e: any) {
+        console.warn('[kora-bot] отправка артефакта документом не удалась:', e?.message);
+        return { sent: false, title: result.title, error: e?.message };
+      }
+    },
+  });
+  registry.register(wrapArtifact(artifactSlidesTool()));
+  registry.register(wrapArtifact(artifactSiteTool()));
+
+  const credentialResolver: CredentialResolver = async (name: string) => {
+    if (name === 'telegram_bot_token') return process.env.TELEGRAM_BOT_TOKEN ?? null;
+    return null;
+  };
+  const executor = new ServiceExecutor([TELEGRAM_MANIFEST], credentialResolver);
+  registry.register(serviceListTool(executor));
+  registry.register(serviceCallTool(executor));
+
+  // ── Задачи — ядро продукта. Обёртки над УЖЕ существующим executeTool бота
+  // (никакой новой бизнес-логики, только тонкий адаптер под ToolDef). ──────
+  registry.register({
+    name: 'задача.add',
+    description: 'Добавить задачу в список дел пользователя.',
+    argsSchema: {
+      name: { type: 'string', required: true, description: 'название задачи', maxLen: 200 },
+      date: { type: 'string', required: false, description: 'дата в формате YYYY-MM-DD, по умолчанию сегодня' },
+      time: { type: 'string', required: false, description: 'время начала HH:MM' },
+    },
+    isWrite: false,
+    execute: async (args) => executeTool('add_task', args, db, userId),
+  });
+  registry.register({
+    name: 'задача.list',
+    description: 'Получить список задач пользователя (опционально — на конкретную дату).',
+    argsSchema: {
+      date: { type: 'string', required: false, description: 'дата в формате YYYY-MM-DD' },
+    },
+    isWrite: false,
+    execute: async (args) => executeTool('get_tasks', args, db, userId),
+  });
+  registry.register({
+    name: 'задача.done',
+    description: 'Отметить задачу выполненной.',
+    argsSchema: {
+      id: { type: 'string', required: true, description: 'id задачи' },
+    },
+    isWrite: false,
+    execute: async (args) => executeTool('update_task', { id: args.id, done: true }, db, userId),
+  });
+  registry.register({
+    name: 'задача.delete',
+    description: 'Удалить задачу безвозвратно.',
+    argsSchema: {
+      id: { type: 'string', required: true, description: 'id задачи' },
+    },
+    isWrite: true,
+    execute: async (args) => executeTool('delete_task', args, db, userId),
+  });
+
+  return { registry, executor };
+}
+
+const KORA_GRAPH_EDIT_THROTTLE_MS = 1500; // ~1 правка в 1.5с — Telegram rate limit на editMessageText
+
+function renderKoraGraphText(nodes: GraphNode[]): string {
+  if (nodes.length === 0) return '⚙️ Думаю…';
+  const icon = (s: GraphNode['status']) =>
+    s === 'running' ? '⏳' : s === 'done' ? '✅' : s === 'failed' ? '✖' : '·';
+  return nodes
+    .map(n => `${icon(n.status)} ${n.label}${n.detail ? ` (${n.detail.slice(0, 60)})` : ''}`)
+    .join('\n');
+}
+
+interface KoraGraphSink {
+  onEvent(graph: GraphNode[]): void;
+  finish(answer: string): Promise<void>;
+}
+
+// Живой граф в Telegram: sendMessage «⚙️ Думаю…» → на каждое событие правим
+// то же сообщение списком узлов (throttled). Финал коммитится тем же
+// editMessageText (rich, с фолбэком — тот же паттерн, что StreamSink.finish).
+async function createKoraGraphSink(token: string, chatId: number): Promise<KoraGraphSink> {
+  const sent = await tgApi(token, 'sendMessage', { chat_id: chatId, text: '⚙️ Думаю…' });
+  const messageId: number | undefined = sent?.result?.message_id;
+
+  let lastText = '⚙️ Думаю…';
+  let lastEditAt = Date.now();
+  let timer: NodeJS.Timeout | null = null;
+  let pendingText: string | null = null;
+  let finished = false;
+  let editChain: Promise<void> = Promise.resolve();
+
+  const doEdit = async (text: string) => {
+    if (!messageId || finished || text === lastText) return;
+    lastText = text;
+    await tgApi(token, 'editMessageText', { chat_id: chatId, message_id: messageId, text: text.slice(0, TG_MAX_LEN) })
+      .catch(() => {});
+  };
+  const flush = () => {
+    if (pendingText === null) return;
+    const t = pendingText;
+    pendingText = null;
+    lastEditAt = Date.now();
+    editChain = editChain.then(() => doEdit(t));
+  };
+
+  return {
+    onEvent(graph: GraphNode[]) {
+      if (finished || !messageId) return;
+      pendingText = renderKoraGraphText(graph);
+      const since = Date.now() - lastEditAt;
+      if (since >= KORA_GRAPH_EDIT_THROTTLE_MS) {
+        if (timer) { clearTimeout(timer); timer = null; }
+        flush();
+      } else if (!timer) {
+        timer = setTimeout(() => { timer = null; flush(); }, KORA_GRAPH_EDIT_THROTTLE_MS - since);
+      }
+    },
+    async finish(answer: string) {
+      finished = true;
+      if (timer) { clearTimeout(timer); timer = null; }
+      pendingText = null;
+      await editChain.catch(() => {});
+
+      const raw = (answer || '').trim() || 'Готово';
+      // Rich-коммит с фолбэком на новую отправку, если editMessageText отклонён
+      // (тот же паттерн, что sendFinalMessage/StreamSink.finish старого пути).
+      if (RICH_MESSAGES_ENABLED && raw.length <= RICH_MAX_LEN) {
+        if (messageId) {
+          const res = await tgApi(token, 'editMessageText', {
+            chat_id: chatId, message_id: messageId, rich_message: { markdown: raw },
+          }).catch(() => null);
+          if (res?.ok) return;
+          if (res && !res.ok) console.warn('[kora-bot] rich edit отклонён:', res.description);
+        }
+        const sentRich = await tgApi(token, 'sendRichMessage', {
+          chat_id: chatId, rich_message: { markdown: raw },
+        }).catch(() => null);
+        if (sentRich?.ok) {
+          if (messageId) tgApi(token, 'deleteMessage', { chat_id: chatId, message_id: messageId }).catch(() => {});
+          return;
+        }
+        if (sentRich && !sentRich.ok) console.warn('[kora-bot] sendRichMessage отклонён:', sentRich.description);
+      }
+
+      const clean = cleanBotText(raw).trim() || 'Готово';
+      if (!messageId) {
+        for (const part of splitForTelegram(clean)) {
+          await tgApi(token, 'sendMessage', { chat_id: chatId, text: part }).catch(() => {});
+        }
+        return;
+      }
+      const parts = splitForTelegram(clean);
+      await tgApi(token, 'editMessageText', { chat_id: chatId, message_id: messageId, text: parts[0] }).catch(() => {});
+      for (let i = 1; i < parts.length; i++) {
+        await tgApi(token, 'sendMessage', { chat_id: chatId, text: parts[i] }).catch(() => {});
+      }
+    },
+  };
+}
+
+/** Один ход по КОРА-пути: HITL-предпасс + runOrchestrated + живой граф в
+ * Telegram. Бросает исключение наружу — вызывающий код (processUpdate)
+ * обязан обернуть в try/catch и ответить честным "Не получилось: …". */
+async function processKoraTurn(
+  token: string,
+  chatId: number,
+  userId: string,
+  threadId: string,
+  userText: string,
+  historyMessages: StoredMessage[],
+  db: Pool
+): Promise<string> {
+  const apiKey = process.env.ROUTERAI_API_KEY;
+  if (!apiKey) throw new Error('ROUTERAI_API_KEY не задан');
+
+  const store = new PgPendingStore(db);
+  const audit = new PgGateAuditLog(db);
+  const now = Date.now();
+
+  let graphSink: KoraGraphSink | null = null;
+  try {
+    graphSink = await createKoraGraphSink(token, chatId);
+  } catch (e: any) {
+    console.warn('[kora-bot] не удалось создать граф-сток, работаем без живого графа:', e?.message);
+  }
+  const graphBuilder = new GraphBuilder();
+  const onEvent = (evt: LoopEvent) => {
+    try {
+      const graph = graphBuilder.apply(evt);
+      graphSink?.onEvent(graph);
+    } catch (e) {
+      console.warn('[kora-bot] обработка события графа упала:', e);
+    }
+  };
+
+  const finishText = async (answer: string): Promise<string> => {
+    if (graphSink) await graphSink.finish(answer);
+    else await sendFinalMessage(token, chatId, answer);
+    return answer;
+  };
+
+  // ── HITL: активный pending для этого (userId, threadId)? ────────────────
+  const active = await store.getActive(userId, threadId);
+  if (active) {
+    const verdict = resolveUserReply(userText);
+    if (verdict === 'confirm') {
+      const pending = await confirmPending(store, audit, userId, threadId, now);
+      if (pending) {
+        const { registry } = buildKoraBotRegistry(userId, db, chatId, token);
+        const results: string[] = [];
+        for (const action of pending.actions) {
+          const def = registry.get(action.tool);
+          if (!def) {
+            results.push(`${action.describe} — не выполнено: инструмент недоступен`);
+            continue;
+          }
+          try {
+            const result = await def.execute(action.args, { userId });
+            const ok = result && typeof result === 'object' && !(result as any).error;
+            results.push(`${action.describe} — ${ok ? 'выполнено' : 'ошибка: ' + JSON.stringify((result as any).error)}`);
+          } catch (e: any) {
+            results.push(`${action.describe} — ошибка: ${e?.message || e}`);
+          }
+        }
+        return finishText(results.join('\n'));
+      }
+    } else {
+      await rejectPending(store, audit, userId, threadId, now);
+      if (verdict === 'reject') {
+        return finishText('Отменил.');
+      }
+      // verdict === 'other' → падаем ниже, обычный ход
+    }
+  }
+
+  // ── Обычный ход ───────────────────────────────────────────────────────────
+  const userTz = await getUserTimezone(db, userId);
+  const { registry, executor } = buildKoraBotRegistry(userId, db, chatId, token);
+  const generate = koraBotGenerate(apiKey);
+  const chatHistory: ChatMessage[] = historyMessages
+    .filter(m => m.role === 'user' || m.role === 'assistant')
+    .slice(-20)
+    .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
+  const result = await runOrchestrated({
+    userMsg: userText,
+    history: chatHistory,
+    registry,
+    generate,
+    ctx: { userId },
+    onEvent,
+    isWriteAction: (action) => {
+      if (action.tool === 'сервис.call') return isWriteServiceAction(executor, action.args);
+      return registry.get(action.tool)?.isWrite ?? false;
+    },
+    promptOptions: {
+      persona: `${KORA_BOT_PERSONA}\n\nТекущие дата и время: ${getKoraNowContext(userTz)}`,
+      skillsCatalog: skillsCatalog(koraBotSkillStore),
+    },
+    hitl: { store, audit, userId, threadId },
+  });
+
+  return finishText(result.answer);
 }
 
 // ─── Обработка одного обновления ─────────────────────────────────────────────
@@ -1586,6 +2169,26 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
   const thread = await loadBotThread(db, webUserId, userTz, apiKey);
   const existingMessages = thread.messages;
 
+  // ── КОРА — параллельный опт-ин путь (не трогает старый цикл ниже) ────────
+  if (koraBotEnabled(message.from.id)) {
+    try {
+      const answer = await processKoraTurn(token, chatId, webUserId, thread.id, userText, existingMessages, db);
+      const nowIso = new Date().toISOString();
+      await saveBotThread(db, webUserId, thread.id, [
+        ...existingMessages,
+        { role: 'user', content: userText, time: nowIso },
+        { role: 'assistant', content: answer, time: nowIso },
+      ]);
+    } catch (e: any) {
+      console.error('[kora-bot] ошибка кора-пути:', e?.message || e);
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: `Не получилось: ${e?.message || 'внутренняя ошибка'}`,
+      }).catch(() => {});
+    }
+    return;
+  }
+
   console.log(`[Bot] вызываю AI для ${webUserId}, длина сообщения: ${userText.length}${thread.isNew ? ' [новый тред]' : ''}`);
 
   // Стрим-сток: плейсхолдер + «печатает…». Если создать не удалось (сеть),
@@ -1599,20 +2202,28 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
   }
 
   try {
-    const { aiResponse, newMessages } = await processWithAI(
+    const { aiResponse, newMessages, awaitingConfirmation } = await processWithAI(
       userText,
       existingMessages,
       db,
       webUserId,
       apiKey,
-      sink ?? undefined
+      sink ?? undefined,
+      { token, chatId, threadId: thread.id }
     );
     console.log(`[Bot] AI ответил: "${aiResponse?.slice(0, 80)}"`);
     await saveBotThread(db, webUserId, thread.id, [...existingMessages, ...newMessages]);
-    // Сырой ответ (с Markdown) — rich-путь отрендерит его структурой; при откате
-    // на чистый текст разметка снимается внутри finish/sendFinalMessage.
-    if (sink) await sink.finish(aiResponse ?? '');
-    else await sendFinalMessage(token, chatId, aiResponse ?? '');
+    // HITL-гейт уже отправил своё сообщение и закрыл стрим-плейсхолдер сам —
+    // финальную отправку здесь пропускаем, иначе затрём подтверждение 'Готово'.
+    if (awaitingConfirmation) {
+      // ничего не делаем
+    } else if (sink) {
+      // Сырой ответ (с Markdown) — rich-путь отрендерит его структурой; при откате
+      // на чистый текст разметка снимается внутри finish/sendFinalMessage.
+      await sink.finish(aiResponse ?? '');
+    } else {
+      await sendFinalMessage(token, chatId, aiResponse ?? '');
+    }
   } catch (e: any) {
     console.error(`[Bot] ошибка AI:`, e?.message || e);
     const errText = 'Не могу ответить прямо сейчас, попробуй позже.';
@@ -1780,6 +2391,37 @@ export async function startBot(db: Pool): Promise<void> {
       task_id TEXT,
       added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (event_id, user_id)
+    );
+  `).catch(() => {});
+
+  // КОРА (Фаза 9B): те же kora_* таблицы, что на вебе (server.ts) —
+  // ensureKoraTables идемпотентен (CREATE IF NOT EXISTS), безопасно вызывать
+  // из обоих серверов при каждом старте.
+  await ensureKoraTables(db).catch((e: any) => console.warn('[kora-bot] ensureKoraTables failed:', e?.message));
+
+  // HITL-гейт (docs/PORTING_TO_TS.md, раздел 5): отложенные harmful-действия
+  // и append-only аудит-лог решений по ним.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS pending_actions (
+      id UUID PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      thread_id TEXT NOT NULL,
+      tool_calls JSONB NOT NULL,
+      description TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL,
+      resolved_at TIMESTAMPTZ
+    );
+  `).catch(() => {});
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS action_audit_log (
+      id UUID PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      thread_id TEXT NOT NULL,
+      tool_calls JSONB NOT NULL,
+      event TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `).catch(() => {});
 
