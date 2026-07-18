@@ -17,6 +17,7 @@
 
 import type { ToolDef } from './registry.js';
 import { stripSpecialTokens } from './sanitize.js';
+import { assertPublicUrl, type LookupFn } from './url-guard.js';
 
 export interface SearchResult {
   title: string;
@@ -48,6 +49,55 @@ export interface RelsaOptions {
   fetchImpl?: typeof fetch;
   /** Таймаут одного HTTP-вызова на станцию, мс. relsa/core.py: 15.0с. */
   timeoutMs?: number;
+  /** DNS-резолвер для SSRF-гарда scrape_url (инжектируется в тестах). */
+  lookupImpl?: LookupFn;
+}
+
+const MAX_REDIRECT_HOPS = 5;
+
+/** Фетч URL, заданного моделью, с SSRF-гардом на КАЖДОМ хопе. Редиректы
+ * следуем вручную (redirect: 'manual') и перепроверяем Location — иначе
+ * публичный URL, отвечающий 302 на 169.254.169.254, обошёл бы проверку. */
+interface SafeFetchResult {
+  response: Response | null;
+  error: string | null;
+}
+
+async function safeFetchFollow(
+  startUrl: string,
+  fetchImpl: typeof fetch,
+  timeoutMs: number,
+  lookupImpl?: LookupFn,
+): Promise<SafeFetchResult> {
+  let current = startUrl;
+  for (let hop = 0; hop < MAX_REDIRECT_HOPS; hop++) {
+    const blocked = await assertPublicUrl(current, lookupImpl);
+    if (blocked) return { response: null, error: `запрос заблокирован: ${blocked}` };
+    let resp: Response;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        resp = await fetchImpl(current, { headers: HEADERS, redirect: 'manual', signal: controller.signal });
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (exc: any) {
+      return { response: null, error: `${exc?.name || 'Error'}: ${exc?.message || exc}` };
+    }
+    if (resp.status >= 300 && resp.status < 400) {
+      const loc = resp.headers.get('location');
+      if (!loc) return { response: resp, error: null };
+      try {
+        current = new URL(loc, current).toString();
+      } catch {
+        return { response: null, error: 'некорректный Location в редиректе' };
+      }
+      continue;
+    }
+    return { response: resp, error: null };
+  }
+  return { response: null, error: 'слишком много редиректов' };
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -272,12 +322,17 @@ export async function scrapeUrl(url: string, opts: RelsaOptions = {}): Promise<S
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   let body: string;
+  // SSRF-гард: URL приходит от модели (=пользователя) — тянуть внутренние/
+  // метаданные-адреса нельзя. Проверка + ручное следование редиректам внутри.
+  const fetched = await safeFetchFollow(url, fetchImpl, timeoutMs, opts.lookupImpl);
+  if (fetched.error || !fetched.response) {
+    return { url, title: '', text: '', error: fetched.error || 'запрос не выполнен' };
+  }
+  if (!fetched.response.ok) {
+    return { url, title: '', text: '', error: `HTTP ${fetched.response.status}` };
+  }
   try {
-    const resp = await fetchWithTimeout(url, fetchImpl, timeoutMs);
-    if (!resp.ok) {
-      return { url, title: '', text: '', error: `HTTP ${resp.status}` };
-    }
-    body = await resp.text();
+    body = await fetched.response.text();
   } catch (exc: any) {
     return { url, title: '', text: '', error: `${exc?.name || 'Error'}: ${exc?.message || exc}` };
   }
