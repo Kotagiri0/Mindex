@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, MessageSquare, Trash2, Check } from 'lucide-react';
-import { Task, TaskCategory } from '../types';
+import { Task, TaskCategory, Thread } from '../types';
 import { TaskEditPatch } from './EditTaskModal';
 import { CATEGORY_COLORS, CATEGORY_LABELS, ORDERED_CATEGORIES } from '../lib/taskCategories';
+import PrimeMascot from './PrimeMascot';
+import TaskThread from './TaskThread';
+import type { GraphNode } from '../kora/graph';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 
@@ -26,9 +29,14 @@ interface TaskDetailPanelProps {
   onCreate?: (patch: TaskCreatePatch) => void;
   initialDate?: string;
   isCreating?: boolean;
+  /** Тред задачи ("Обсудить с Мыслью") — врезка живёт внутри этой же панели. */
+  thread?: Thread | null;
+  onSendThreadMessage?: (text: string) => void;
+  threadBusy?: boolean;
+  liveGraph?: GraphNode[] | null;
 }
 
-export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onOpenThread, onCreate, initialDate, isCreating }: TaskDetailPanelProps) {
+export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onOpenThread, onCreate, initialDate, isCreating, thread, onSendThreadMessage, threadBusy, liveGraph }: TaskDetailPanelProps) {
   const [name, setName] = useState('');
   const [time, setTime] = useState('');
   const [endTime, setEndTime] = useState('');
@@ -38,6 +46,8 @@ export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onO
   const [category, setCategory] = useState<TaskCategory>('none');
   const [initialTime, setInitialTime] = useState('');
   const [initialEnd, setInitialEnd] = useState('');
+  // Тред виден сразу, если задачу ведёт агент; иначе — по тихому тапу "Обсудить с Мыслью".
+  const [threadOpen, setThreadOpen] = useState(false);
 
   useEffect(() => {
     if (isCreating) {
@@ -61,6 +71,7 @@ export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onO
       setInitialTime(task.time || '');
       setInitialEnd(task.endTime || '');
     }
+    setThreadOpen(false);
   }, [task?.id, isCreating]);
 
   // Авто-сохранение по onBlur. Передаём текущие значения явно, т.к. setState асинхронен.
@@ -249,6 +260,33 @@ export default function TaskDetailPanel({ task, onClose, onUpdate, onDelete, onO
                 onBlur={() => handleUpdate()}
               />
             </div>
+
+            {/* Тред задачи: сразу развёрнут, если задачу ведёт агент; иначе — тихий переход */}
+            {task && !isCreating && (
+              (task.agent || threadOpen) ? (
+                <div style={{ marginBottom: 20, paddingTop: 16, borderTop: '1px solid rgba(0,0,0,0.05)' }}>
+                  <TaskThread
+                    task={task}
+                    thread={thread || null}
+                    onSend={text => onSendThreadMessage?.(text)}
+                    busy={threadBusy}
+                    liveGraph={liveGraph}
+                  />
+                </div>
+              ) : (
+                <button
+                  onClick={() => setThreadOpen(true)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    width: '100%', background: 'none', border: 'none', cursor: 'pointer',
+                    fontFamily: M, fontSize: 13, color: 'rgba(34,34,36,0.4)', padding: '0 0 20px',
+                  }}
+                >
+                  <PrimeMascot size={18} eyes="idle" decor="none" drop="none" />
+                  Обсудить с Мыслью
+                </button>
+              )
+            )}
 
             {/* Open in chat */}
             {task?.threadId && onOpenThread && (

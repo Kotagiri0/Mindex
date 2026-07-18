@@ -34,7 +34,7 @@ function getContent(state: AgentState, workingCount: number) {
   switch (state) {
     case 'ok':
       return {
-        eyes: 'idle' as const,
+        mood: 'idle' as const,
         decor: 'none' as const,
         drop: 'none' as const,
         title: 'Всё в порядке',
@@ -42,7 +42,7 @@ function getContent(state: AgentState, workingCount: number) {
       };
     case 'working':
       return {
-        eyes: 'idle' as const,
+        mood: 'working' as const,
         decor: 'none' as const,
         drop: 'working' as const,
         title: 'Всё в порядке',
@@ -50,7 +50,7 @@ function getContent(state: AgentState, workingCount: number) {
       };
     case 'needs':
       return {
-        eyes: 'idle' as const,
+        mood: 'ask' as const,
         decor: 'question' as const,
         drop: 'needs' as const,
         title: 'Нужна помощь',
@@ -82,7 +82,7 @@ export default function AgentStatus({ state, workingCount = 0, collapsed = false
           textAlign: 'left',
         }}
       >
-        <PrimeMascot size={26} eyes={content.eyes} decor={content.decor} drop={content.drop} />
+        <PrimeMascot size={26} mood={content.mood} decor={content.decor} drop={content.drop} />
         <span
           style={{
             fontFamily: M,
@@ -124,7 +124,7 @@ export default function AgentStatus({ state, workingCount = 0, collapsed = false
         transition: 'background 0.12s',
       }}
     >
-      <PrimeMascot size={40} eyes={content.eyes} decor={content.decor} drop={content.drop} />
+      <PrimeMascot size={40} mood={content.mood} decor={content.decor} drop={content.drop} />
 
       {!collapsed && (
         <>

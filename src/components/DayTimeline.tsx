@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Task } from '../types';
 import { categoryColors } from '../lib/taskCategories';
 import {
@@ -36,6 +36,16 @@ interface DayTimelineProps {
   onUntimedClick: (task: Task) => void;
   /** Перетаскивание блока: новое время начала/конца ("HH:MM"). Длительность сохраняется. */
   onTaskMove?: (taskId: string, time: string, endTime: string) => void;
+  /** Переключить "ведёт агент" ↔ "обычная задача" — пункт долгого нажатия. */
+  onToggleAgent?: (task: Task) => void;
+}
+
+/** Состояние поповера контекст-меню долгого нажатия на карточке. */
+interface CardMenuState {
+  task: Task;
+  untimed: boolean;
+  x: number;
+  y: number;
 }
 
 /** Шаг привязки при перетаскивании, минут. */
@@ -53,9 +63,13 @@ export default function DayTimeline({
   onCreateAt,
   onUntimedClick,
   onTaskMove,
+  onToggleAgent,
 }: DayTimelineProps) {
   // Высота часа — управляется щипком/Ctrl+колесом. Зум вокруг центра вьюпорта.
   const [hourH, setHourH] = useState(HOUR_H_DEFAULT);
+
+  // Поповер долгого нажатия ("Передать Мысли" / "Сделаю сам" / "Открыть").
+  const [cardMenu, setCardMenu] = useState<CardMenuState | null>(null);
 
   // Текущее время и дата — обновляем раз в минуту для красной линии и isToday.
   const [now, setNow] = useState(nowMinutes());
@@ -244,6 +258,7 @@ export default function DayTimeline({
               maxEnd={endHour * 60}
               onClick={() => (p.untimed ? onUntimedClick(p.task) : onTaskClick(p.task))}
               onMove={onTaskMove}
+              onLongPress={onToggleAgent ? (x, y) => setCardMenu({ task: p.task, untimed: p.untimed, x, y }) : undefined}
             />
           ))}
 
@@ -267,6 +282,64 @@ export default function DayTimeline({
           )}
         </div>
       </div>
+
+      {/* Контекст-меню долгого нажатия: "Передать Мысли"/"Сделаю сам" + "Открыть" */}
+      <AnimatePresence>
+        {cardMenu && (
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 998 }}
+            onClick={() => setCardMenu(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.12 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: 'fixed',
+                left: Math.min(cardMenu.x, window.innerWidth - 200),
+                top: Math.min(cardMenu.y, window.innerHeight - 140),
+                zIndex: 999,
+                background: '#fff',
+                borderRadius: 14,
+                boxShadow: '0 8px 28px rgba(0,0,0,0.18)',
+                overflow: 'hidden',
+                minWidth: 180,
+              }}
+            >
+              {onToggleAgent && (
+                <button
+                  onClick={() => { onToggleAgent(cardMenu.task); setCardMenu(null); }}
+                  style={{
+                    display: 'block', width: '100%', textAlign: 'left',
+                    padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer',
+                    fontFamily: M, fontSize: 14, color: '#222224',
+                    borderBottom: '1px solid rgba(0,0,0,0.06)',
+                  }}
+                >
+                  {cardMenu.task.agent ? 'Сделаю сам' : 'Передать Мысли'}
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  const t = cardMenu.task;
+                  const untimed = cardMenu.untimed;
+                  setCardMenu(null);
+                  untimed ? onUntimedClick(t) : onTaskClick(t);
+                }}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer',
+                  fontFamily: M, fontSize: 14, color: '#222224',
+                }}
+              >
+                Открыть
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -294,6 +367,11 @@ function TelegramMark() {
   );
 }
 
+/** Долгое нажатие БЕЗ движения дольше этого порога → контекст-меню (отменяет drag). */
+const LONG_PRESS_MENU_MS = 450;
+/** Смещение по Y (px), после которого нажатие считается перетаскиванием, а не долгим тапом. */
+const MENU_MOVE_TOLERANCE = 6;
+
 function TimelineBlock({
   placed,
   top,
@@ -303,6 +381,7 @@ function TimelineBlock({
   maxEnd,
   onClick,
   onMove,
+  onLongPress,
 }: {
   placed: PlacedTask;
   top: number;
@@ -312,6 +391,8 @@ function TimelineBlock({
   maxEnd: number;
   onClick: () => void;
   onMove?: (taskId: string, time: string, endTime: string) => void;
+  /** Долгое нажатие без движения → координаты тапа для контекст-меню (см. DayTimeline). */
+  onLongPress?: (clientX: number, clientY: number) => void;
 }) {
   const { task, startMin, endMin, col, cols, untimed } = placed;
   const colors = categoryColors(task.category);
@@ -325,6 +406,7 @@ function TimelineBlock({
     startY: number;
     active: boolean;
     longPressId: ReturnType<typeof setTimeout> | null;
+    menuTimerId: ReturnType<typeof setTimeout> | null;
     pointerId: number;
   } | null>(null);
   // Гасит click, который браузер генерит сразу после pointerup завершившегося drag.
@@ -364,7 +446,7 @@ function TimelineBlock({
   // не перехватывал движение пальца под скролл).
   const [dragActive, setDragActive] = useState(false);
 
-  const beginDrag = (clientY: number, pointerId: number, el: HTMLElement, immediate: boolean) => {
+  const beginDrag = (clientX: number, clientY: number, pointerId: number, el: HTMLElement, immediate: boolean) => {
     // Захватываем pointer сразу — иначе на тач браузер заберёт события под скролл.
     try { el.setPointerCapture(pointerId); } catch {}
     const startDrag = () => {
@@ -374,15 +456,36 @@ function TimelineBlock({
       setDragActive(true);
       setDragDy(0);
     };
-    drag.current = { startY: clientY, active: false, longPressId: null, pointerId };
-    if (immediate) startDrag();
-    else drag.current.longPressId = setTimeout(startDrag, 200); // long-press на тач
+    drag.current = { startY: clientY, active: false, longPressId: null, menuTimerId: null, pointerId };
+    // Перетаскивание доступно только когда передан onMove — карточка без него (напр.,
+    // при отключённом drag) всё равно должна ловить долгое нажатие для меню ниже.
+    if (draggable) {
+      if (immediate) startDrag();
+      else drag.current.longPressId = setTimeout(startDrag, 200); // long-press на тач
+    }
+
+    // Долгое нажатие БЕЗ движения дольше LONG_PRESS_MENU_MS → контекст-меню, отменяем drag.
+    // Если за это время пользователь начал реально двигать блок — это обычный drag,
+    // меню не показываем (проверяем накопленное смещение dyRef на момент срабатывания).
+    if (onLongPress) {
+      drag.current.menuTimerId = setTimeout(() => {
+        const cur = drag.current;
+        if (!cur || Math.abs(dyRef.current) > MENU_MOVE_TOLERANCE) return;
+        if (cur.longPressId) clearTimeout(cur.longPressId);
+        try { el.releasePointerCapture(cur.pointerId); } catch {}
+        drag.current = null;
+        setDragDy(null);
+        setDragActive(false);
+        suppressClick.current = true; // это было долгое нажатие, не тап — гасим следующий click
+        onLongPress(clientX, clientY);
+      }, LONG_PRESS_MENU_MS);
+    }
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!draggable) return;
+    if (!draggable && !onLongPress) return;
     // Мышь/перо — тащим сразу; палец — через long-press, чтобы не мешать скроллу.
-    beginDrag(e.clientY, e.pointerId, e.currentTarget, e.pointerType !== 'touch');
+    beginDrag(e.clientX, e.clientY, e.pointerId, e.currentTarget, e.pointerType !== 'touch');
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -391,8 +494,9 @@ function TimelineBlock({
     // До срабатывания long-press: заметное вертикальное движение = пользователь скроллит,
     // отменяем подготовку drag и отпускаем pointer обратно скроллу.
     if (!d.active) {
-      if (Math.abs(e.clientY - d.startY) > 10 && d.longPressId) {
-        clearTimeout(d.longPressId);
+      if (Math.abs(e.clientY - d.startY) > 10) {
+        if (d.longPressId) clearTimeout(d.longPressId);
+        if (d.menuTimerId) clearTimeout(d.menuTimerId);
         try { e.currentTarget.releasePointerCapture(d.pointerId); } catch {}
         drag.current = null;
       }
@@ -408,6 +512,7 @@ function TimelineBlock({
     const d = drag.current;
     if (!d) return;
     if (d.longPressId) clearTimeout(d.longPressId);
+    if (d.menuTimerId) clearTimeout(d.menuTimerId);
     if (d.active) {
       const deltaMin = Math.round(dyRef.current / pxPerMin / SNAP_MIN) * SNAP_MIN;
       let newStart = startMin + deltaMin;

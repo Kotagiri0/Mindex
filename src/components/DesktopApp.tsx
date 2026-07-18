@@ -28,6 +28,7 @@ import { getCurrentUser, apiFetch } from '../lib/auth';
 import { runAgentTurn, koraEnabled } from '../lib/kora-client';
 import type { GraphNode } from '../kora/graph';
 import { useVoiceInput } from '../lib/useVoiceInput';
+import { useTaskThread } from '../hooks/useTaskThread';
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
@@ -1796,6 +1797,15 @@ function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
   const toggleTask = (id: string) => setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => { if (t.id === id) { const u = { ...t, done: !t.done }; db.saveTask(u); return u; } return t; }));
   const toggleSubtask = (taskId: string, subId: string) => setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => { if (t.id !== taskId) return t; const u = { ...t, subtasks: t.subtasks?.map(s => s.id === subId ? { ...s, done: !s.done } : s) }; db.saveTask(u); return u; }));
 
+  // Долгое нажатие на карточке таймлайна → "Передать Мысли" / "Сделаю сам".
+  // Та же карточка меняет вид (лицо появляется/исчезает) — новая не создаётся.
+  const toggleAgent = (task: Task) => setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
+    if (t.id !== task.id) return t;
+    const u: Task = { ...t, agent: t.agent ? undefined : 'working' };
+    db.saveTask(u);
+    return u;
+  }));
+
   const handleAddTask = async () => {
     if (!addInput.trim()) return;
     const t: Task = { id: uuid(), name: addInput.trim(), time: '', date: selectedDate, done: false, category: 'none' };
@@ -2051,6 +2061,7 @@ function CalendarView({ tasks, setTasks, onEditTask, onQuickChat }: {
                 onUntimedClick={onEditTask}
                 onCreateAt={(time) => setCreateAt(time)}
                 onTaskMove={moveTask}
+                onToggleAgent={toggleAgent}
               />
             </div>
           )}
@@ -2407,6 +2418,10 @@ export default function DesktopApp({
     db.saveThread(newTh);
   };
 
+  // Тред задачи ("Обсудить с Мыслью") — врезка живёт внутри TaskDetailPanel.
+  const { thread: editingTaskThread, busy: editingTaskThreadBusy, liveGraph: editingTaskLiveGraph, sendMessage: sendEditingTaskThreadMessage } =
+    useTaskThread({ task: editingTask, threads, setThreads, setTasks });
+
   // Глобальное состояние агента выводится из реальных задач.
   const { state: agentState, workingCount: agentWorkingCount } = deriveAgentStatus(tasks);
 
@@ -2541,6 +2556,10 @@ export default function DesktopApp({
           onDelete={deleteTask}
           onCreate={createTaskFromPanel}
           onOpenThread={id => { setCurTh(id); setScreen('ai'); }}
+          thread={editingTaskThread}
+          onSendThreadMessage={sendEditingTaskThreadMessage}
+          threadBusy={editingTaskThreadBusy}
+          liveGraph={editingTaskLiveGraph}
         />
       </div>
 

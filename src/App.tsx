@@ -424,6 +424,8 @@ export default function App() {
             <Dashboard
               tasks={tasks}
               setTasks={updateTasks}
+              threads={threads}
+              setThreads={updateThreads}
               onNavigate={navigateMobile}
               onNewThread={startNewThread}
               onLogout={handleLogout}

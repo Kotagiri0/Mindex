@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Task, TaskCategory } from '../types';
+import { Task, TaskCategory, Thread } from '../types';
 import { CATEGORY_COLORS, CATEGORY_LABELS, ORDERED_CATEGORIES } from '../lib/taskCategories';
 import { useSquircle } from '../hooks/useSquircle';
 import { useKeyboardInset } from '../hooks/useKeyboardInset';
+import PrimeMascot from './PrimeMascot';
+import TaskThread from './TaskThread';
+import type { GraphNode } from '../kora/graph';
 
 const taskTimeIcon = `data:image/svg+xml,%3Csvg width='55' height='55' viewBox='0 0 55 55' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M27.5 2.75C41.169 2.75 52.25 13.831 52.25 27.5C52.25 41.169 41.169 52.25 27.5 52.25C13.831 52.25 2.75 41.169 2.75 27.5C2.75 13.831 13.831 2.75 27.5 2.75Z' stroke='%237E7F80' stroke-width='5.5'/%3E%3Cpath d='M27.5 15.7812L27.5 28.0035' stroke='%237E7F80' stroke-width='5.5' stroke-linecap='round'/%3E%3Cpath d='M27.5 28.6094L37.2216 38.331' stroke='%237E7F80' stroke-width='5.5' stroke-linecap='round'/%3E%3C/svg%3E`;
 const taskDateIcon = `data:image/svg+xml,%3Csvg width='50' height='56' viewBox='0 0 50 56' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M34.375 0C35.8938 2.06051e-08 37.125 1.23122 37.125 2.75V6.74414C44.0268 8.60239 49.1073 14.9039 49.1074 22.3926V39.0889L49.1016 39.5078C48.8829 48.1251 41.9376 55.0706 33.3203 55.2891L32.9014 55.2949H16.2051L15.7871 55.2891C7.0306 55.0672 0.000257744 47.8988 0 39.0889V22.3926C0.000117721 15.0824 4.84063 8.90273 11.4912 6.88379V2.75C11.4912 1.23122 12.7224 5.61746e-08 14.2412 0C15.7599 7.52798e-05 16.9912 1.23126 16.9912 2.75V6.1875H31.625V2.75C31.625 1.23122 32.8562 5.61746e-08 34.375 0ZM5.5 39.0889C5.50026 45.001 10.293 49.7948 16.2051 49.7949H32.9014C38.8136 49.7949 43.6072 45.001 43.6074 39.0889V23.1777H5.5V39.0889ZM16.2051 11.6875C11.9849 11.6876 8.33625 14.1297 6.59277 17.6777H42.5146C40.7709 14.1296 37.1217 11.6875 32.9014 11.6875H16.2051Z' fill='%237E7F80'/%3E%3C/svg%3E`;
@@ -28,11 +31,16 @@ interface EditTaskModalProps {
   onUpdate: (id: string, patch: TaskEditPatch) => void;
   onDelete: (id: string) => void;
   onOpenThread?: (id: string) => void;
+  /** Тред задачи ("Обсудить с Мыслью") — врезка живёт внутри этого же bottom sheet. */
+  thread?: Thread | null;
+  onSendThreadMessage?: (text: string) => void;
+  threadBusy?: boolean;
+  liveGraph?: GraphNode[] | null;
 }
 
 const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
 
-export default function EditTaskModal({ task, isCreate, initialDate, onClose, onUpdate, onDelete }: EditTaskModalProps) {
+export default function EditTaskModal({ task, isCreate, initialDate, onClose, onUpdate, onDelete, thread, onSendThreadMessage, threadBusy, liveGraph }: EditTaskModalProps) {
   const [name, setName] = useState('');
   const [time, setTime] = useState('');
   const [endTime, setEndTime] = useState('');
@@ -42,6 +50,8 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
   const [category, setCategory] = useState<TaskCategory>('none');
   const [initialTime, setInitialTime] = useState('');
   const [initialEnd, setInitialEnd] = useState('');
+  // Тред виден сразу, если задачу ведёт агент; иначе — по тихому тапу "Обсудить с Мыслью".
+  const [threadOpen, setThreadOpen] = useState(false);
   const { ref: squircleRef, clipPath } = useSquircle({ cornerRadius: 36, cornerSmoothing: 0.6 });
   const keyboardInset = useKeyboardInset();
 
@@ -61,6 +71,7 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
       setDate(initialDate || ''); setDescription(''); setLocation('');
       setCategory('none'); setInitialTime(''); setInitialEnd('');
     }
+    setThreadOpen(false);
   }, [task, isCreate, initialDate]);
 
   const handleSave = () => {
@@ -184,6 +195,31 @@ export default function EditTaskModal({ task, isCreate, initialDate, onClose, on
                 }}
               />
             </FieldBox>
+
+            {/* Тред задачи: сразу развёрнут, если задачу ведёт агент; иначе — тихий переход */}
+            {(task.agent || threadOpen) ? (
+              <div style={{ marginBottom: 17, paddingTop: 14, borderTop: '1px solid rgba(11,13,16,0.06)' }}>
+                <TaskThread
+                  task={task}
+                  thread={thread || null}
+                  onSend={text => onSendThreadMessage?.(text)}
+                  busy={threadBusy}
+                  liveGraph={liveGraph}
+                />
+              </div>
+            ) : (
+              <button
+                onClick={() => setThreadOpen(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  width: '100%', background: 'none', border: 'none', cursor: 'pointer',
+                  fontFamily: M, fontSize: 13, color: 'rgba(11,13,16,0.4)', padding: '0 0 17px',
+                }}
+              >
+                <PrimeMascot size={18} eyes="idle" decor="none" drop="none" />
+                Обсудить с Мыслью
+              </button>
+            )}
 
             <CategoryPicker value={category} onChange={setCategory} />
 

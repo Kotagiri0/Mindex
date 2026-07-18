@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Plus, ArrowUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Task, Screen, TaskCategory } from '../types';
+import { Task, Thread, Screen, TaskCategory } from '../types';
 import TaskItem from './TaskItem';
 import EditTaskModal, { TaskEditPatch } from './EditTaskModal';
 import DayTimeline from './DayTimeline';
@@ -11,6 +11,7 @@ import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
 import AgentStatus from './AgentStatus';
 import { deriveAgentStatus } from '../lib/agentStatus';
+import { useTaskThread } from '../hooks/useTaskThread';
 
 // Вид панели задач: список (как было) или таймлайн (календарь дня). Запоминается навсегда.
 type DashView = 'list' | 'timeline';
@@ -20,6 +21,8 @@ const readView = (): DashView => (localStorage.getItem(VIEW_KEY) === 'timeline' 
 interface DashboardProps {
   tasks: Task[];
   setTasks: (tasks: Task[] | ((prev: Task[]) => Task[])) => void;
+  threads: Thread[];
+  setThreads: (threads: Thread[] | ((prev: Thread[]) => Thread[])) => void;
   onNavigate: (screen: Screen) => void;
   onNewThread: () => void;
   onOpenThread: (id: string) => void;
@@ -151,10 +154,13 @@ function MiniCalendar({ selected, onSelect, onClose }: {
 
 // ─── Dashboard ──────────────────────────────────────────────────────────────
 
-export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }: DashboardProps) {
+export default function Dashboard({ tasks, setTasks, threads, setThreads, onNavigate, onOpenThread }: DashboardProps) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  // Тред задачи ("Обсудить с Мыслью") — врезка живёт внутри EditTaskModal (bottom sheet).
+  const { thread: editingTaskThread, busy: editingTaskThreadBusy, liveGraph: editingTaskLiveGraph, sendMessage: sendEditingTaskThreadMessage } =
+    useTaskThread({ task: editingTask, threads, setThreads, setTasks });
   const [weekDir, setWeekDir] = useState(0);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const touchStartX = useRef(0);
@@ -283,6 +289,17 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
         return u;
       }
       return t;
+    }));
+  };
+
+  // Долгое нажатие на карточке таймлайна → "Передать Мысли" / "Сделаю сам".
+  // Та же карточка меняет вид (лицо появляется/исчезает) — новая не создаётся.
+  const toggleAgent = (task: Task) => {
+    setTasks(prev => prev.map(t => {
+      if (t.id !== task.id) return t;
+      const u: Task = { ...t, agent: t.agent ? undefined : 'working' };
+      db.saveTask(u);
+      return u;
     }));
   };
 
@@ -584,6 +601,7 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
               onUntimedClick={(t) => setEditingTask(t)}
               onCreateAt={(time) => setCreateAt(time)}
               onTaskMove={moveTask}
+              onToggleAgent={toggleAgent}
             />
           </div>
         )}
@@ -640,6 +658,10 @@ export default function Dashboard({ tasks, setTasks, onNavigate, onOpenThread }:
         onUpdate={updateTask}
         onDelete={deleteTask}
         onOpenThread={onOpenThread}
+        thread={editingTaskThread}
+        onSendThreadMessage={sendEditingTaskThreadMessage}
+        threadBusy={editingTaskThreadBusy}
+        liveGraph={editingTaskLiveGraph}
       />
 
       {/* Создание задачи тапом по таймлайну */}
