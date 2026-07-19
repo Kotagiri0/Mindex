@@ -48,7 +48,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.mindex.app.data.model.Task
 import ru.mindex.app.ui.theme.Muller
-import ru.mindex.app.ui.theme.TaskCategoryPalette
 
 // Цвета — 1:1 с src/components/TaskItem.tsx
 private val CheckboxBorderIdle = Color(0x40222224)   // rgba(34,34,36,0.25)
@@ -113,25 +112,6 @@ fun TaskItem(
                 overflow = TextOverflow.Ellipsis,
             )
 
-            // Пастельный чип категории
-            val category = task.category
-            if (!category.isNullOrEmpty() && category != "none") {
-                val c = TaskCategoryPalette.colors(category)
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(c.bg)
-                        .border(1.dp, c.border, CircleShape)
-                        .padding(horizontal = 9.dp, vertical = 3.dp),
-                ) {
-                    Text(
-                        text = (TaskCategoryPalette.labels[category] ?: category).lowercase(),
-                        style = TextStyle(fontFamily = Muller, fontSize = 11.sp, color = c.text),
-                        maxLines = 1,
-                    )
-                }
-            }
-
             // Время (и диапазон, если есть конец)
             if (task.time.isNotEmpty()) {
                 Text(
@@ -140,12 +120,8 @@ fun TaskItem(
                 )
             }
 
-            // Прогресс и разворот подзадач
+            // Разворот подзадач
             if (hasSubtasks) {
-                Text(
-                    text = "${subtasks.count { it.done }}/${subtasks.size}",
-                    style = TextStyle(fontFamily = Muller, fontSize = 12.sp, color = TimeColor),
-                )
                 val rotation by animateFloatAsState(
                     targetValue = if (isExpanded) 180f else 0f,
                     animationSpec = tween(200),
@@ -153,7 +129,7 @@ fun TaskItem(
                 )
                 Box(
                     modifier = Modifier
-                        .size(24.dp)
+                        .size(16.dp)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
@@ -264,18 +240,19 @@ private fun TaskCheckbox(
                     .size(size * 0.45f)
                     .graphicsLayer { scaleX = checkScale; scaleY = checkScale },
             ) {
+                // Геометрия lucide Check ("M20 6 9 17l-5-5"), strokeWidth 2.5/24.
                 val w = this.size.width
                 val h = this.size.height
                 val path = Path().apply {
-                    moveTo(w * 0.05f, h * 0.55f)
-                    lineTo(w * 0.38f, h * 0.88f)
-                    lineTo(w * 0.95f, h * 0.15f)
+                    moveTo(w * 0.167f, h * 0.5f)
+                    lineTo(w * 0.375f, h * 0.708f)
+                    lineTo(w * 0.833f, h * 0.25f)
                 }
                 drawPath(
                     path = path,
                     color = Color.White,
                     style = Stroke(
-                        width = w * 0.22f,
+                        width = w * 0.104f,
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
@@ -288,14 +265,15 @@ private fun TaskCheckbox(
 /** Шеврон вниз (16dp, stroke) — раскрытие подзадач. */
 @Composable
 private fun ChevronDownIcon(color: Color, modifier: Modifier = Modifier) {
+    // Геометрия lucide ChevronDown ("m6 9 6 6 6-6"), strokeWidth 2/24.
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
-        val stroke = Stroke(width = w * 0.11f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val stroke = Stroke(width = w * 0.083f, cap = StrokeCap.Round, join = StrokeJoin.Round)
         val path = Path().apply {
-            moveTo(w * 0.25f, h * 0.4f)
-            lineTo(w * 0.5f, h * 0.65f)
-            lineTo(w * 0.75f, h * 0.4f)
+            moveTo(w * 0.25f, h * 0.375f)
+            lineTo(w * 0.5f, h * 0.625f)
+            lineTo(w * 0.75f, h * 0.375f)
         }
         drawPath(path = path, color = color, style = stroke)
     }
@@ -304,16 +282,17 @@ private fun ChevronDownIcon(color: Color, modifier: Modifier = Modifier) {
 /** Публичная утилита: галочка для повторного использования (например, в мини-списках). */
 @Composable
 fun TaskCheckMark(color: Color, modifier: Modifier = Modifier) {
+    // Геометрия lucide Check ("M20 6 9 17l-5-5"), strokeWidth 2.5/24.
     Canvas(modifier = modifier) {
         val path = Path().apply {
-            moveTo(size.width * 0.05f, size.height * 0.55f)
-            lineTo(size.width * 0.38f, size.height * 0.88f)
-            lineTo(size.width * 0.95f, size.height * 0.15f)
+            moveTo(size.width * 0.167f, size.height * 0.5f)
+            lineTo(size.width * 0.375f, size.height * 0.708f)
+            lineTo(size.width * 0.833f, size.height * 0.25f)
         }
         drawPath(
             path = path,
             color = color,
-            style = Stroke(width = size.width * 0.22f, cap = StrokeCap.Round, join = StrokeJoin.Round),
+            style = Stroke(width = size.width * 0.104f, cap = StrokeCap.Round, join = StrokeJoin.Round),
         )
     }
 }

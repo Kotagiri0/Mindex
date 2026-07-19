@@ -22,6 +22,13 @@ private val LightColors = lightColorScheme(
     onSurfaceVariant = MindexColors.TextMuted,
     outline = MindexColors.Border,
     error = MindexColors.Danger,
+    // Меню и диалоги в вебе — чисто белые, без M3-тонирования.
+    surfaceTint = MindexColors.Surface,
+    surfaceContainerLowest = MindexColors.Surface,
+    surfaceContainerLow = MindexColors.Surface,
+    surfaceContainer = MindexColors.Surface,
+    surfaceContainerHigh = MindexColors.Surface,
+    surfaceContainerHighest = MindexColors.Surface,
 )
 
 /** Радиусы — единая система из DESIGN.md: 8/12/16/20/24/40px. */

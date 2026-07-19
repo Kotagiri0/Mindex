@@ -61,6 +61,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -79,6 +80,7 @@ import ru.mindex.app.ui.components.BottomNav
 import ru.mindex.app.ui.components.EditTaskModal
 import ru.mindex.app.ui.components.TaskItem
 import ru.mindex.app.ui.navigation.Routes
+import ru.mindex.app.ui.screens.today.DayTimeline
 import ru.mindex.app.ui.theme.Muller
 import ru.mindex.app.ui.theme.RandomGrotesque
 import ru.mindex.app.ui.theme.RussischSans
@@ -122,14 +124,28 @@ fun DashboardScreen(appViewModel: AppViewModel, navController: NavHostController
     val scope = rememberCoroutineScope()
     val repo = appViewModel.container.dataRepository
     val tasks by appViewModel.tasks.collectAsState()
+    val appContext = LocalContext.current.applicationContext
 
     var today by remember { mutableStateOf(LocalDate.now().toString()) }
     var selectedDate by remember { mutableStateOf(today) }
     var weekOffset by remember { mutableStateOf(0) }
     var addInput by remember { mutableStateOf("") }
     var editingTask by remember { mutableStateOf<Task?>(null) }
-    var addSheetOpen by remember { mutableStateOf(false) }
     var miniCalOpen by remember { mutableStateOf(false) }
+    // Время, по которому тапнули на таймлайне для создания задачи (null — шторка закрыта).
+    var createAt by remember { mutableStateOf<String?>(null) }
+
+    // Вид панели: список или таймлайн дня. Запоминается навсегда (mx_dash_view в вебе).
+    val prefs = remember {
+        appContext.getSharedPreferences("mindex_ui", android.content.Context.MODE_PRIVATE)
+    }
+    var view by remember {
+        mutableStateOf(prefs.getString("mx_dash_view", "list") ?: "list")
+    }
+    fun toggleView() {
+        view = if (view == "list") "timeline" else "list"
+        prefs.edit().putString("mx_dash_view", view).apply()
+    }
 
     // Обновляем «сегодня» при смене суток — без перезапуска экрана.
     LaunchedEffect(Unit) {
@@ -188,10 +204,12 @@ fun DashboardScreen(appViewModel: AppViewModel, navController: NavHostController
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                HeaderIconButton(onClick = { navController.navigate(Routes.CALENDAR) }) {
+                // Переключатель список ⇄ таймлайн (как в вебе):
+                // открыт список → иконка календаря; открыт таймлайн → иконка to-do.
+                HeaderIconButton(onClick = { toggleView() }) {
                     Icon(
-                        imageVector = CalendarGridIconVector,
-                        contentDescription = "Календарь",
+                        imageVector = if (view == "list") CalendarGridIconVector else TodoIconVector,
+                        contentDescription = if (view == "list") "Календарь" else "Список",
                         tint = HeaderIconTint,
                         modifier = Modifier.size(22.dp),
                     )
@@ -246,7 +264,11 @@ fun DashboardScreen(appViewModel: AppViewModel, navController: NavHostController
                         (slideOutHorizontally { -dir * 60 } + fadeOut(tween(200)))
                 },
                 label = "weekStrip",
-                modifier = Modifier.horizontalSwipe(swipeThresholdPx) { dir -> weekOffset += dir },
+                modifier = Modifier.horizontalSwipe(swipeThresholdPx) { dir ->
+                    // Как в вебе: свайп недели переносит и выбранный день на понедельник новой недели.
+                    weekOffset += dir
+                    selectedDate = weekDaysFor(weekOffset).first().toString()
+                },
             ) { offset ->
                 val days = weekDaysFor(offset)
                 Row(
@@ -324,6 +346,7 @@ fun DashboardScreen(appViewModel: AppViewModel, navController: NavHostController
                         selectDate(LocalDate.parse(selectedDate).plusDays(dir.toLong()).toString())
                     },
             ) {
+                if (view == "list") {
                 // Строка быстрого добавления
                 Box(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp)) {
                     Row(
@@ -335,19 +358,8 @@ fun DashboardScreen(appViewModel: AppViewModel, navController: NavHostController
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        // Плюс — открывает полную шторку создания
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                ) { addSheetOpen = true },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            PlusIcon(color = PlusTint, modifier = Modifier.size(18.dp))
-                        }
+                        // Плюс — декоративный, как в вебе
+                        PlusIcon(color = PlusTint, modifier = Modifier.size(18.dp))
 
                         BasicTextField(
                             value = addInput,
@@ -419,7 +431,7 @@ fun DashboardScreen(appViewModel: AppViewModel, navController: NavHostController
                     LazyColumn(
                         modifier = Modifier.weight(1f),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                            start = 20.dp, end = 20.dp, bottom = 140.dp,
+                            start = 20.dp, end = 20.dp, bottom = 120.dp,
                         ),
                     ) {
                         items(filteredTasks, key = { it.id }) { t ->
@@ -438,6 +450,31 @@ fun DashboardScreen(appViewModel: AppViewModel, navController: NavHostController
                                 },
                             )
                         }
+                    }
+                }
+                } else {
+                    // ─── Таймлайн дня (порт view === 'timeline' из Dashboard.tsx) ───
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                    ) {
+                        DayTimeline(
+                            date = selectedDate,
+                            tasks = filteredTasks,
+                            onTaskClick = { editingTask = it },
+                            onUntimedClick = { editingTask = it },
+                            onCreateAt = { time -> createAt = time },
+                            onTaskMove = { taskId, time, endTime ->
+                                // Человек явно переместил блок → timeSource: 'user' (как в вебе).
+                                tasks.firstOrNull { it.id == taskId }?.let { t ->
+                                    scope.launch {
+                                        repo.upsertTask(t.copy(time = time, endTime = endTime, timeSource = "user"))
+                                    }
+                                }
+                            },
+                        )
                     }
                 }
             }
@@ -486,13 +523,16 @@ fun DashboardScreen(appViewModel: AppViewModel, navController: NavHostController
     }
 
     // ─── Шторки ──────────────────────────────────────────────
-    if (addSheetOpen) {
+    // Создание задачи тапом по пустому месту таймлайна — время предзаполнено.
+    createAt?.let { time ->
         AddTaskModal(
             initialDate = selectedDate,
-            onDismiss = { addSheetOpen = false },
+            initialTime = time,
+            onDismiss = { createAt = null },
             onAdd = { newTask ->
-                scope.launch { repo.upsertTask(newTask) }
-                addSheetOpen = false
+                // Человек явно указал время на таймлайне → timeSource: 'user' (как в вебе).
+                scope.launch { repo.upsertTask(newTask.copy(timeSource = "user")) }
+                createAt = null
             },
         )
     }
@@ -649,7 +689,8 @@ private fun MiniCalendarSheet(
                                     Text(
                                         text = day.toString(),
                                         style = TextStyle(
-                                            fontFamily = FontFamily.SansSerif,
+                                            // В вебе: Helvetica для выбранного/сегодня, Muller для остальных.
+                                            fontFamily = if (isSel || isToday) FontFamily.SansSerif else Muller,
                                             fontSize = 15.sp,
                                             fontWeight = if (isSel || isToday) FontWeight.Bold else FontWeight.Normal,
                                             color = when {
@@ -785,6 +826,30 @@ private val CalendarGridIconVector: ImageVector = ImageVector.Builder(
             "M21 64a5 5 0 1 0 10 0a5 5 0 1 0 -10 0Z" +
             "M36 64a5 5 0 1 0 10 0a5 5 0 1 0 -10 0Z" +
             "M51 64a5 5 0 1 0 10 0a5 5 0 1 0 -10 0Z",
+    ),
+    fill = SolidColor(Color.Black),
+).build()
+
+/** Чек-в-скобке (to-do) — переключатель обратно в список. Источник: to-do.svg. */
+private val TodoIconVector: ImageVector = ImageVector.Builder(
+    name = "MindexTodo",
+    defaultWidth = 22.dp,
+    defaultHeight = 22.dp,
+    viewportWidth = 81f,
+    viewportHeight = 81f,
+).addPath(
+    pathData = addPathNodes("M77.0001 4L40.0005 50L24.0781 32.716"),
+    stroke = SolidColor(Color.Black),
+    strokeLineWidth = 8f,
+    strokeLineCap = StrokeCap.Round,
+).addPath(
+    pathData = addPathNodes(
+        "M54.2695 0C57.2101 0 60.0393 0.476324 62.6855 1.35352L57.1982 8.22852C56.244 " +
+            "8.07865 55.2659 8 54.2695 8H26.7305C16.3862 8 8 16.3862 8 26.7305V54.2695C8 " +
+            "64.6138 16.3862 73 26.7305 73H54.2695C64.6138 73 73 64.6138 73 54.2695V" +
+            "30.1318L80.3613 20.9082C80.7778 22.7827 81 24.7306 81 26.7305V54.2695C81 " +
+            "69.0321 69.0321 81 54.2695 81H26.7305L26.04 80.9912C11.5963 80.6253 0 68.8014 " +
+            "0 54.2695V26.7305C0 12.1986 11.5963 0.374748 26.04 0.00878906L26.7305 0H54.2695Z",
     ),
     fill = SolidColor(Color.Black),
 ).build()

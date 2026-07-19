@@ -1,5 +1,6 @@
 package ru.mindex.app.ui.screens.chat
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,8 +30,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.text.AnnotatedString
@@ -87,11 +94,76 @@ internal val StarIcon: ImageVector = chatIcon(
     "M12,17.27L18.18,21l-1.64,-7.03L22,9.24l-7.19,-0.61L12,2L9.19,8.63L2,9.24l5.46,4.73L5.82,21L12,17.27z",
 )
 
+/** Копировать — панель действий под ответом Мысли (lucide Copy). */
+internal val CopyIcon: ImageVector = chatIcon(
+    "ChatCopy",
+    "M16,1L4,1C2.9,1 2,1.9 2,3v14h2L4,3h12V1zM19,5L8,5C6.9,5 6,5.9 6,7v14c0,1.1 0.9,2 2,2h11c1.1,0 2,-0.9 2,-2L21,7c0,-1.1 -0.9,-2 -2,-2zM19,21L8,21L8,7h11v14z",
+)
+
+/** «⋯» — меню действий сообщения (lucide MoreHorizontal). */
+internal val MoreHorizontalIcon: ImageVector = chatIcon(
+    "ChatMoreHorizontal",
+    "M6,10c-1.1,0 -2,0.9 -2,2s0.9,2 2,2s2,-0.9 2,-2s-0.9,-2 -2,-2zM18,10c-1.1,0 -2,0.9 -2,2s0.9,2 2,2s2,-0.9 2,-2s-0.9,-2 -2,-2zM12,10c-1.1,0 -2,0.9 -2,2s0.9,2 2,2s2,-0.9 2,-2s-0.9,-2 -2,-2z",
+)
+
+/** Крестик — закрыть цитату ответа (lucide X). */
+internal val CloseIcon: ImageVector = chatIcon(
+    "ChatClose",
+    "M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12z",
+)
+
 /** Шестерёнка — переход в настройки из шапки чата. */
 internal val GearIcon: ImageVector = chatIcon(
     "ChatGear",
     "M19.14,12.94c0.04,-0.3 0.06,-0.61 0.06,-0.94c0,-0.32 -0.02,-0.64 -0.07,-0.94l2.03,-1.58c0.18,-0.14 0.23,-0.41 0.12,-0.61l-1.92,-3.32c-0.12,-0.22 -0.37,-0.29 -0.59,-0.22l-2.39,0.96c-0.5,-0.38 -1.03,-0.7 -1.62,-0.94L14.4,2.81c-0.04,-0.24 -0.24,-0.41 -0.48,-0.41h-3.84c-0.24,0 -0.43,0.17 -0.47,0.41L9.25,5.35C8.66,5.59 8.12,5.92 7.63,6.29L5.24,5.33c-0.22,-0.08 -0.47,0 -0.59,0.22L2.74,8.87C2.62,9.08 2.66,9.34 2.86,9.48l2.03,1.58C4.84,11.36 4.8,11.69 4.8,12s0.02,0.64 0.07,0.94l-2.03,1.58c-0.18,0.14 -0.23,0.41 -0.12,0.61l1.92,3.32c0.12,0.22 0.37,0.29 0.59,0.22l2.39,-0.96c0.5,0.38 1.03,0.7 1.62,0.94l0.36,2.54c0.05,0.24 0.24,0.41 0.48,0.41h3.84c0.24,0 0.44,-0.17 0.47,-0.41l0.36,-2.54c0.59,-0.24 1.13,-0.56 1.62,-0.94l2.39,0.96c0.22,0.08 0.47,0 0.59,-0.22l1.92,-3.32c0.12,-0.22 0.07,-0.47 -0.12,-0.61L19.14,12.94zM12,15.6c-1.98,0 -3.6,-1.62 -3.6,-3.6s1.62,-3.6 3.6,-3.6s3.6,1.62 3.6,3.6S13.98,15.6 12,15.6z",
 )
+
+// ─── Иконки переключателя чат/заметка (порт ChatIcon/NoteIcon из icons) ─────
+
+/** Круглый чат-пузырь с «хвостиком» — режим чата в пилюле шапки. */
+@Composable
+internal fun ChatTabIcon(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val w = this.size.width
+        val h = this.size.height
+        val stroke = Stroke(width = w * 0.1f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val path = Path().apply {
+            addArc(
+                oval = Rect(Offset(w * 0.1f, h * 0.1f), Offset(w * 0.9f, h * 0.9f)),
+                startAngleDegrees = 160f,
+                sweepAngleDegrees = 330f,
+            )
+            lineTo(w * 0.12f, h * 0.88f)
+        }
+        drawPath(path = path, color = color, style = stroke)
+    }
+}
+
+/** Квадратный пузырь с загибом угла — режим заметки в пилюле шапки. */
+@Composable
+internal fun NoteTabIcon(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val w = this.size.width
+        val h = this.size.height
+        val stroke = Stroke(width = w * 0.1f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        // Скруглённый квадрат
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(w * 0.08f, h * 0.08f),
+            size = androidx.compose.ui.geometry.Size(w * 0.84f, h * 0.84f),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.3f, h * 0.3f),
+            style = stroke,
+        )
+        // Загиб нижнего правого угла
+        val fold = Path().apply {
+            moveTo(w * 0.57f, h * 0.9f)
+            lineTo(w * 0.57f, h * 0.68f)
+            quadraticBezierTo(w * 0.57f, h * 0.56f, w * 0.69f, h * 0.56f)
+            lineTo(w * 0.9f, h * 0.56f)
+        }
+        drawPath(path = fold, color = color, style = stroke)
+    }
+}
 
 // ─── Markdown ────────────────────────────────────────────────────────────────
 
@@ -290,7 +362,8 @@ internal fun PlanningBlock(
                                 Modifier
                                     .size(20.dp)
                                     .clip(CircleShape)
-                                    .background(MindexColors.AccentLight),
+                                    // bg-accent/10 — rgba(34,34,36,0.1), как в вебе
+                                    .background(Color(0x1A222224)),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(

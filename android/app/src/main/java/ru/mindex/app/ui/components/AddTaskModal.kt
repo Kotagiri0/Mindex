@@ -38,7 +38,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,7 +48,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import ru.mindex.app.data.model.SubTask
 import ru.mindex.app.data.model.Task
 import ru.mindex.app.ui.theme.MindexColors
 import ru.mindex.app.ui.theme.Muller
@@ -59,10 +57,12 @@ import java.util.Locale
 import java.util.UUID
 
 /**
- * Шторка «Новая задача» — порт src/components/AddTaskModal.tsx,
- * дополненный концом интервала, категорией и подзадачами (как в EditTaskModal).
+ * Шторка «Новая задача» — порт src/components/AddTaskModal.tsx (1:1).
+ * Поля: название, время, дата. Кнопка «Создать задачу».
  *
  * Собирает готовый Task и отдаёт наверх через [onAdd].
+ *
+ * @param initialTime стартовое время "HH:MM" (тап по пустому месту таймлайна).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,16 +70,14 @@ fun AddTaskModal(
     initialDate: String,
     onDismiss: () -> Unit,
     onAdd: (Task) -> Unit,
+    initialTime: String = "",
 ) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var name by rememberSaveable { mutableStateOf("") }
-    var time by rememberSaveable { mutableStateOf("") }
-    var endTime by rememberSaveable { mutableStateOf("") }
+    var time by rememberSaveable { mutableStateOf(initialTime) }
     var date by rememberSaveable { mutableStateOf(initialDate) }
-    var category by rememberSaveable { mutableStateOf("none") }
-    val subtasks = remember { emptyList<SubTask>().toMutableStateList() }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -118,7 +116,7 @@ fun AddTaskModal(
             }
             Box(Modifier.height(12.dp))
 
-            // ─── Время / Конец ───────────────────────────────
+            // ─── Время / Дата ────────────────────────────────
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column(Modifier.weight(1f)) {
                     FieldLabel("Время")
@@ -129,111 +127,37 @@ fun AddTaskModal(
                     )
                 }
                 Column(Modifier.weight(1f)) {
-                    FieldLabel("Конец")
+                    FieldLabel("Дата")
                     PickerBox(
-                        value = endTime,
-                        placeholder = "—:—",
-                        onClick = { showTimePickerDialog(context, endTime) { endTime = it } },
+                        value = formatDateRu(date),
+                        placeholder = "В какой день?",
+                        onClick = { showDatePickerDialog(context, date) { date = it } },
                     )
                 }
             }
             Box(Modifier.height(12.dp))
-
-            // ─── Дата ────────────────────────────────────────
-            FieldLabel("Дата")
-            PickerBox(
-                value = formatDateRu(date),
-                placeholder = "В какой день?",
-                onClick = { showDatePickerDialog(context, date) { date = it } },
-            )
-            Box(Modifier.height(14.dp))
-
-            // ─── Категория ───────────────────────────────────
-            CategoryPicker(value = category, onChange = { category = it })
-            Box(Modifier.height(14.dp))
-
-            // ─── Подзадачи ───────────────────────────────────
-            if (subtasks.isNotEmpty()) {
-                FieldLabel("Подзадачи")
-                subtasks.forEachIndexed { index, st ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Box(Modifier.weight(1f)) {
-                            InputBox {
-                                SheetTextField(
-                                    value = st.name,
-                                    onValueChange = { subtasks[index] = st.copy(name = it) },
-                                    placeholder = "Подзадача",
-                                )
-                            }
-                        }
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                ) { subtasks.removeAt(index) },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = "×",
-                                style = TextStyle(
-                                    fontFamily = Muller,
-                                    fontSize = 20.sp,
-                                    color = Color(0x66222224),
-                                ),
-                            )
-                        }
-                    }
-                }
-            }
-            Text(
-                text = "+ Добавить подзадачу",
-                style = TextStyle(fontFamily = Muller, fontSize = 14.sp, color = Color(0x99222224)),
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { subtasks.add(SubTask(id = UUID.randomUUID().toString(), name = "")) }
-                    .padding(vertical = 8.dp, horizontal = 4.dp),
-            )
             Box(Modifier.height(6.dp))
 
             // ─── Кнопка «Создать задачу» ─────────────────────
-            val canSubmit = name.isNotBlank()
+            // Как в вебе: кнопка всегда акцентная, при пустом названии тап игнорируется.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
                     .clip(RoundedCornerShape(13.dp))
-                    .background(if (canSubmit) MindexColors.Accent else Color(0x2E0B0D10))
+                    .background(MindexColors.Accent)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        enabled = canSubmit,
                     ) {
+                        if (name.isBlank()) return@clickable
                         onAdd(
                             Task(
                                 id = UUID.randomUUID().toString(),
-                                name = name.trim(),
+                                name = name,
                                 time = time,
                                 date = date,
                                 done = false,
-                                endTime = endTime.takeIf { it.isNotEmpty() },
-                                category = category,
-                                subtasks = subtasks
-                                    .filter { it.name.isNotBlank() }
-                                    .map { it.copy(name = it.name.trim()) }
-                                    .takeIf { it.isNotEmpty() },
-                                timeSource = "user",
                             ),
                         )
                     },
@@ -267,7 +191,7 @@ internal fun SheetDragHandle() {
     )
 }
 
-/** Ярлык поля — 11sp bold uppercase, как в AddTaskModal.tsx. */
+/** Ярлык поля — 11sp bold uppercase, tracking-wider, text-tertiary — как в AddTaskModal.tsx. */
 @Composable
 internal fun FieldLabel(text: String) {
     Text(
@@ -276,8 +200,8 @@ internal fun FieldLabel(text: String) {
             fontFamily = Muller,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp,
-            color = MindexColors.Text40,
+            letterSpacing = 0.55.sp,
+            color = MindexColors.Text30,
         ),
         modifier = Modifier.padding(bottom = 4.dp),
     )

@@ -18,7 +18,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -26,20 +25,17 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,22 +55,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
-import kotlinx.coroutines.launch
-import ru.mindex.app.data.model.Task
 import ru.mindex.app.ui.AppViewModel
-import ru.mindex.app.ui.components.AddTaskModal
 import ru.mindex.app.ui.components.BottomNav
-import ru.mindex.app.ui.components.EditTaskModal
-import ru.mindex.app.ui.components.TaskItem
 import ru.mindex.app.ui.navigation.Routes
 import ru.mindex.app.ui.theme.MindexColors
-import ru.mindex.app.ui.theme.Muller
 import ru.mindex.app.ui.theme.RandomGrotesque
-import ru.mindex.app.ui.theme.TaskCategoryPalette
 import java.time.LocalDate
 import java.time.YearMonth
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -91,39 +78,21 @@ private val WeekdayColor = Color(0x61222224)     // rgba(34,34,36,0.38)
 private val OutMonthColor = Color(0x47222224)    // rgba(34,34,36,0.28)
 private val SelectedBg = Color(0xFF222224)
 private val TodayRing = Color(0x24222224)        // rgba(34,34,36,0.14)
-private val EmptyStateColor = Color(0xFFBBBBBB)
-
-/** Заголовок выбранного дня — «15 июля». */
-private val DayTitleFormat = DateTimeFormatter.ofPattern("d MMMM", Locale("ru"))
 
 /**
- * Экран календаря — порт src/components/Calendar.tsx.
+ * Экран календаря — порт src/components/Calendar.tsx (1:1).
  *
  * Месячная сетка с понедельника, свайп и стрелки для навигации по месяцам,
- * индикаторы задач в ячейках (цвет — категория задачи), под сеткой —
- * задачи выбранного дня и добавление через AddTaskModal.
+ * тап по заголовку месяца — прыжок к сегодняшнему дню.
  */
 @Composable
 fun CalendarScreen(appViewModel: AppViewModel, navController: NavHostController) {
-    val scope = rememberCoroutineScope()
-    val repo = appViewModel.container.dataRepository
-    val tasks by appViewModel.tasks.collectAsState()
-
     val today = remember { LocalDate.now().toString() }
     var selectedDate by rememberSaveable { mutableStateOf(today) }
     var displayMonthStr by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
     var direction by remember { mutableStateOf(1) }
-    var addSheetOpen by remember { mutableStateOf(false) }
-    var editingTask by remember { mutableStateOf<Task?>(null) }
 
     val displayMonth = remember(displayMonthStr) { YearMonth.parse(displayMonthStr) }
-    val tasksByDate = remember(tasks, today) {
-        tasks.groupBy { it.date.ifEmpty { today } }
-    }
-    val dayTasks = remember(tasksByDate, selectedDate) {
-        tasksByDate[selectedDate].orEmpty()
-            .sortedWith(compareBy({ it.time.isEmpty() }, { it.time }))
-    }
 
     // Смена месяца: выбранный день переносится в новый месяц (как в вебе).
     fun slideToMonth(delta: Int) {
@@ -218,6 +187,8 @@ fun CalendarScreen(appViewModel: AppViewModel, navController: NavHostController)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    // min-h-[316px] — карточка не «прыгает» между месяцами в 5 и 6 строк (как в вебе)
+                    .heightIn(min = 316.dp)
                     .clip(RoundedCornerShape(24.dp))
                     .background(Color.White)
                     .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 16.dp)
@@ -269,7 +240,6 @@ fun CalendarScreen(appViewModel: AppViewModel, navController: NavHostController)
                                         month = month,
                                         selectedDate = selectedDate,
                                         today = today,
-                                        dayTasks = tasksByDate[date.toString()].orEmpty(),
                                         onSelect = { selectedDate = it },
                                     )
                                 }
@@ -279,110 +249,12 @@ fun CalendarScreen(appViewModel: AppViewModel, navController: NavHostController)
                 }
             }
 
-            // ─── Выбранный день: дата + добавление задачи ────────
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 4.dp, end = 4.dp, top = 20.dp, bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = remember(selectedDate) {
-                        runCatching { LocalDate.parse(selectedDate).format(DayTitleFormat) }
-                            .getOrDefault(selectedDate)
-                    },
-                    style = TextStyle(
-                        fontFamily = RandomGrotesque,
-                        fontSize = 16.sp,
-                        color = MindexColors.Text80,
-                    ),
-                )
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(MindexColors.FabDark)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) { addSheetOpen = true },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    PlusIcon(color = Color.White, modifier = Modifier.size(16.dp))
-                }
-            }
-
-            // ─── Задачи выбранного дня ───────────────────────────
-            if (dayTasks.isEmpty()) {
-                Text(
-                    text = "Нет задач на этот день",
-                    style = TextStyle(
-                        fontFamily = Muller,
-                        fontSize = 15.sp,
-                        color = EmptyStateColor,
-                        textAlign = TextAlign.Center,
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 40.dp),
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(start = 4.dp, end = 4.dp, bottom = 140.dp),
-                ) {
-                    items(dayTasks, key = { it.id }) { t ->
-                        TaskItem(
-                            task = t,
-                            onToggle = { scope.launch { repo.toggleTask(t.id) } },
-                            onClick = { editingTask = t },
-                            onToggleSubtask = { taskId, subtaskId ->
-                                val target = tasks.firstOrNull { it.id == taskId } ?: return@TaskItem
-                                val updated = target.copy(
-                                    subtasks = target.subtasks?.map { st ->
-                                        if (st.id == subtaskId) st.copy(done = !st.done) else st
-                                    },
-                                )
-                                scope.launch { repo.upsertTask(updated) }
-                            },
-                        )
-                    }
-                }
-            }
         }
 
-        // ─── Нижняя навигация ────────────────────────────────────
+        // ─── Нижняя навигация — в вебе BottomNav виден на экране календаря ──
         Box(modifier = Modifier.align(Alignment.BottomCenter)) {
             BottomNav(navController = navController, current = Routes.CALENDAR)
         }
-    }
-
-    // ─── Шторки ──────────────────────────────────────────────────
-    if (addSheetOpen) {
-        AddTaskModal(
-            initialDate = selectedDate,
-            onDismiss = { addSheetOpen = false },
-            onAdd = { newTask ->
-                scope.launch { repo.upsertTask(newTask) }
-                addSheetOpen = false
-            },
-        )
-    }
-
-    editingTask?.let { t ->
-        EditTaskModal(
-            task = t,
-            onDismiss = { editingTask = null },
-            onSave = { updated ->
-                scope.launch { repo.upsertTask(updated) }
-                editingTask = null
-            },
-            onDelete = { id ->
-                scope.launch { repo.deleteTask(id) }
-                editingTask = null
-            },
-        )
     }
 }
 
@@ -390,8 +262,7 @@ fun CalendarScreen(appViewModel: AppViewModel, navController: NavHostController)
 
 /**
  * День в сетке: скругление 14, выбранный — чёрный с тенью,
- * сегодня — кольцо; внизу до трёх точек-индикаторов задач
- * в цветах категорий.
+ * сегодня — кольцо и точка снизу (как в Calendar.tsx).
  */
 @Composable
 private fun RowScope.DayCell(
@@ -399,7 +270,6 @@ private fun RowScope.DayCell(
     month: YearMonth,
     selectedDate: String,
     today: String,
-    dayTasks: List<Task>,
     onSelect: (String) -> Unit,
 ) {
     val key = date.toString()
@@ -441,28 +311,8 @@ private fun RowScope.DayCell(
             ),
         )
 
-        // Индикаторы: точки задач (до трёх) либо точка «сегодня»
-        val dots = dayTasks.take(3)
-        if (dots.isNotEmpty()) {
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
-            ) {
-                dots.forEach { t ->
-                    Box(
-                        modifier = Modifier
-                            .size(4.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isSelected) Color.White
-                                else TaskCategoryPalette.colors(t.category).text,
-                            ),
-                    )
-                }
-            }
-        } else if (isToday && !isSelected) {
+        // Точка «сегодня» снизу (только если день не выбран) — как в Calendar.tsx
+        if (isToday && !isSelected) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -543,19 +393,3 @@ private fun ChevronIcon(pointsLeft: Boolean) {
     }
 }
 
-@Composable
-private fun PlusIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier) {
-        val stroke = Stroke(width = size.width * 0.12f, cap = StrokeCap.Round)
-        drawPath(
-            path = Path().apply {
-                moveTo(size.width / 2f, size.height * 0.12f)
-                lineTo(size.width / 2f, size.height * 0.88f)
-                moveTo(size.width * 0.12f, size.height / 2f)
-                lineTo(size.width * 0.88f, size.height / 2f)
-            },
-            color = color,
-            style = stroke,
-        )
-    }
-}

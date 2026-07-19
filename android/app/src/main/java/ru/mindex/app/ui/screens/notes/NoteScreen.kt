@@ -1,5 +1,10 @@
 package ru.mindex.app.ui.screens.notes
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -38,6 +43,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -119,6 +125,7 @@ fun NoteScreen(appViewModel: AppViewModel, navController: NavHostController, not
         NoteViewContent(
             thread = thread,
             tasks = tasks,
+            appViewModel = appViewModel,
             navController = navController,
         )
     }
@@ -322,20 +329,26 @@ private fun NoteEditorContent(
 private fun NoteViewContent(
     thread: Thread,
     tasks: List<Task>,
+    appViewModel: AppViewModel,
     navController: NavHostController,
 ) {
-    val threadTasks = remember(tasks, thread.id) { tasks.filter { it.threadId == thread.id } }
-    val dateStr = remember(thread.createdAt) {
-        Instant.ofEpochMilli(thread.createdAt)
-            .atZone(ZoneId.systemDefault())
-            .toLocalDate()
-            .format(NoteDateFormat)
-    }
-    val sourceTag = when (thread.source) {
-        "text" -> "Текст"
-        "заметка" -> "Заметка"
-        "skill" -> "Скилл"
-        else -> "Мысль"
+    // Порт эффекта из NoteView.tsx: если саммари ещё нет (и тред не помечен
+    // как незначимый) — генерируем его при открытии, показывая скелетон.
+    var loading by remember(thread.id) { mutableStateOf(false) }
+    LaunchedEffect(thread.id) {
+        if (thread.summary.isNullOrBlank() &&
+            thread.isMeaningful != false &&
+            thread.messages.any { it.role == "user" || it.role == "assistant" }
+        ) {
+            loading = true
+            val summary = appViewModel.container.chatRepository.summarize(thread.messages)
+            if (!summary.isNullOrBlank()) {
+                appViewModel.container.dataRepository.upsertThread(
+                    thread.copy(summary = summary, isMeaningful = true),
+                )
+            }
+            loading = false
+        }
     }
 
     Column(
@@ -373,160 +386,228 @@ private fun NoteViewContent(
                 .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                 .background(Color.White),
         ) {
+            NoteViewBody(
+                thread = thread,
+                tasks = tasks,
+                loading = loading,
+                onOpenChat = { navController.navigate(Routes.chat(thread.id)) },
+            )
+        }
+    }
+}
+
+/**
+ * Контент просмотра заметки (без шапки) — порт тела NoteView.tsx.
+ * Используется и в NoteScreen, и в режиме заметки на экране чата
+ * (переключатель чат/заметка в шапке AIChat).
+ */
+@Composable
+internal fun NoteViewBody(
+    thread: Thread,
+    tasks: List<Task>,
+    loading: Boolean = false,
+    onOpenChat: (() -> Unit)? = null,
+) {
+    val threadTasks = remember(tasks, thread.id) { tasks.filter { it.threadId == thread.id } }
+    val dateStr = remember(thread.createdAt) {
+        Instant.ofEpochMilli(thread.createdAt)
+            .atZone(ZoneId.systemDefault())
+            .toLocalDate()
+            .format(NoteDateFormat)
+    }
+    val sourceTag = when (thread.source) {
+        "text" -> "Текст"
+        "заметка" -> "Заметка"
+        "skill" -> "Скилл"
+        else -> "Мысль"
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(start = 24.dp, end = 24.dp, top = 48.dp, bottom = 60.dp),
+    ) {
+        // Тег источника + дата
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(bottom = 16.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(TagBg)
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    text = sourceTag.uppercase(Locale("ru")),
+                    style = TextStyle(
+                        fontFamily = Muller,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.9.sp,
+                        color = MindexColors.TextMuted,
+                    ),
+                )
+            }
+            Text(
+                text = dateStr,
+                style = TextStyle(
+                    fontFamily = Muller,
+                    fontSize = 13.sp,
+                    color = MindexColors.Text30,
+                ),
+            )
+        }
+
+        // Заголовок
+        Text(
+            text = thread.title,
+            style = TextStyle(
+                fontFamily = RandomGrotesque,
+                fontSize = 32.sp,
+                lineHeight = 37.sp,
+                color = MindexColors.Text80,
+            ),
+            modifier = Modifier.padding(bottom = 32.dp),
+        )
+
+        // ─── Саммари ─────────────────────────────────────
+        SectionLabel("Саммари")
+        when {
+            loading -> SummarySkeleton()
+
+            thread.isMeaningful == false -> Text(
+                text = "Эта мысль не попала в архив — слишком короткая или операционная.",
+                style = TextStyle(
+                    fontFamily = Muller,
+                    fontSize = 14.sp,
+                    fontStyle = FontStyle.Italic,
+                    color = MindexColors.Text30,
+                ),
+            )
+
+            !thread.summary.isNullOrBlank() -> MarkdownText(thread.summary.orEmpty())
+
+            else -> Text(
+                text = "Нет сообщений для саммари.",
+                style = TextStyle(
+                    fontFamily = Muller,
+                    fontSize = 15.sp,
+                    color = MindexColors.Text80,
+                ),
+            )
+        }
+        Spacer(modifier = Modifier.height(36.dp))
+
+        // ─── Задачи из этой мысли ────────────────────────
+        if (threadTasks.isNotEmpty()) {
+            SectionLabel("Задачи из этой мысли")
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(start = 24.dp, end = 24.dp, top = 48.dp, bottom = 60.dp),
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MindexColors.Surface)
+                    .border(1.dp, MindexColors.Border, RoundedCornerShape(16.dp)),
             ) {
-                // Тег источника + дата
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.padding(bottom = 16.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(TagBg)
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
-                    ) {
-                        Text(
-                            text = sourceTag.uppercase(Locale("ru")),
-                            style = TextStyle(
-                                fontFamily = Muller,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                letterSpacing = 0.9.sp,
-                                color = MindexColors.TextMuted,
-                            ),
+                threadTasks.forEachIndexed { idx, task ->
+                    NoteTaskRow(task)
+                    if (idx < threadTasks.size - 1) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(MindexColors.Border),
                         )
                     }
-                    Text(
-                        text = dateStr,
-                        style = TextStyle(
-                            fontFamily = Muller,
-                            fontSize = 13.sp,
-                            color = MindexColors.Text30,
-                        ),
-                    )
                 }
+            }
+            Spacer(modifier = Modifier.height(36.dp))
+        }
 
-                // Заголовок
+        // ─── Сохранённый текст (для source == "text") ────
+        if (thread.source == "text" && thread.messages.isNotEmpty()) {
+            SectionLabel("Сохранённый текст")
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MindexColors.Surface)
+                    .border(1.dp, MindexColors.Border, RoundedCornerShape(16.dp))
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+            ) {
                 Text(
-                    text = thread.title,
+                    text = thread.messages.first().content,
                     style = TextStyle(
-                        fontFamily = RandomGrotesque,
-                        fontSize = 32.sp,
-                        lineHeight = 37.sp,
+                        fontFamily = Muller,
+                        fontSize = 15.sp,
+                        lineHeight = 26.sp,
                         color = MindexColors.Text80,
                     ),
-                    modifier = Modifier.padding(bottom = 32.dp),
                 )
+            }
+            Spacer(modifier = Modifier.height(36.dp))
+        }
 
-                // ─── Саммари ─────────────────────────────────────
-                SectionLabel("Саммари")
-                when {
-                    thread.isMeaningful == false -> Text(
-                        text = "Эта мысль не попала в архив — слишком короткая или операционная.",
-                        style = TextStyle(
-                            fontFamily = Muller,
-                            fontSize = 14.sp,
-                            fontStyle = FontStyle.Italic,
-                            color = MindexColors.Text30,
-                        ),
+        // ─── «Открыть диалог» ────────────────────────────
+        if (thread.source != "text" && onOpenChat != null) {
+            Row(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .border(1.dp, OpenChatBorder, CircleShape)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onOpenChat,
                     )
+                    .padding(horizontal = 20.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ChatBubbleIcon(
+                    color = MindexColors.TextPrimary,
+                    modifier = Modifier.size(15.dp),
+                )
+                Text(
+                    text = "Открыть диалог",
+                    style = TextStyle(
+                        fontFamily = Muller,
+                        fontSize = 14.sp,
+                        color = MindexColors.TextPrimary,
+                    ),
+                )
+            }
+        }
+    }
+}
 
-                    !thread.summary.isNullOrBlank() -> MarkdownText(thread.summary.orEmpty())
-
-                    else -> Text(
-                        text = "Нет сообщений для саммари.",
-                        style = TextStyle(
-                            fontFamily = Muller,
-                            fontSize = 15.sp,
-                            color = MindexColors.Text80,
-                        ),
-                    )
-                }
-                Spacer(modifier = Modifier.height(36.dp))
-
-                // ─── Задачи из этой мысли ────────────────────────
-                if (threadTasks.isNotEmpty()) {
-                    SectionLabel("Задачи из этой мысли")
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MindexColors.Surface)
-                            .border(1.dp, MindexColors.Border, RoundedCornerShape(16.dp)),
-                    ) {
-                        threadTasks.forEachIndexed { idx, task ->
-                            NoteTaskRow(task)
-                            if (idx < threadTasks.size - 1) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(1.dp)
-                                        .background(MindexColors.Border),
-                                )
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(36.dp))
-                }
-
-                // ─── Сохранённый текст (для source == "text") ────
-                if (thread.source == "text" && thread.messages.isNotEmpty()) {
-                    SectionLabel("Сохранённый текст")
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MindexColors.Surface)
-                            .border(1.dp, MindexColors.Border, RoundedCornerShape(16.dp))
-                            .padding(horizontal = 20.dp, vertical = 16.dp),
-                    ) {
-                        Text(
-                            text = thread.messages.first().content,
-                            style = TextStyle(
-                                fontFamily = Muller,
-                                fontSize = 15.sp,
-                                lineHeight = 26.sp,
-                                color = MindexColors.Text80,
-                            ),
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(36.dp))
-                }
-
-                // ─── «Открыть диалог» ────────────────────────────
-                if (thread.source != "text") {
-                    Row(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .border(1.dp, OpenChatBorder, CircleShape)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) { navController.navigate(Routes.chat(thread.id)) }
-                            .padding(horizontal = 20.dp, vertical = 9.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        ChatBubbleIcon(
-                            color = MindexColors.TextPrimary,
-                            modifier = Modifier.size(15.dp),
-                        )
-                        Text(
-                            text = "Открыть диалог",
-                            style = TextStyle(
-                                fontFamily = Muller,
-                                fontSize = 14.sp,
-                                color = MindexColors.TextPrimary,
-                            ),
-                        )
-                    }
-                }
+/** Скелетон саммари — порт SkeletonLine из NoteView.tsx (пульсирующие полосы). */
+@Composable
+private fun SummarySkeleton() {
+    val transition = rememberInfiniteTransition(label = "skeleton")
+    val pulse by transition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(700),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "skeleton_pulse",
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        listOf(0.9f, 1f, 0.75f, 0f, 0.6f, 0.85f, 0.5f).forEach { w ->
+            if (w == 0f) {
+                Spacer(Modifier.height(8.dp))
+            } else {
+                Box(
+                    Modifier
+                        .fillMaxWidth(w)
+                        .height(16.dp)
+                        .alpha(pulse)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0x14000000)),
+                )
             }
         }
     }

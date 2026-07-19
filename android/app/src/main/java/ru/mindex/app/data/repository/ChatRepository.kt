@@ -58,11 +58,15 @@ class ChatRepository(
     private fun today(): String =
         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 
-    suspend fun sendMessage(history: List<Message>, threadId: String?): ChatTurn {
+    suspend fun sendMessage(
+        history: List<Message>,
+        threadId: String?,
+        noTools: Boolean = false,
+    ): ChatTurn {
         var conversation = history.toMutableList()
         val turnMessages = mutableListOf<Message>()
 
-        var response = requestChat(conversation)
+        var response = requestChat(conversation, noTools = noTools)
 
         while (!response.toolCalls.isNullOrEmpty()) {
             val assistantToolMsg = Message(
@@ -110,7 +114,7 @@ class ChatRepository(
 
             turnMessages += toolResults
             conversation += toolResults
-            response = requestChat(conversation)
+            response = requestChat(conversation, noTools = noTools)
         }
 
         val finalMessage = Message(
@@ -274,14 +278,19 @@ class ChatRepository(
         return warnings
     }
 
-    /** Заголовок треда по первому обмену (no_tools-запрос, как generateTitle()). */
+    /** Заголовок треда по первому обмену — промпт 1:1 с generateTitle() из AIChat.tsx. */
     suspend fun generateTitle(userText: String, assistantText: String): String? = runCatching {
-        val prompt = "Придумай короткий заголовок (3–5 слов, без кавычек) для диалога:\n" +
-            "Пользователь: ${userText.take(300)}\nОтвет: ${assistantText.take(300)}"
+        val prompt = "Придумай короткое название (3-5 слов, без кавычек) для чата, " +
+            "где пользователь написал:\n«$userText»\nИИ ответил:\n«${assistantText.take(200)}»\n" +
+            "Только название, без пояснений"
         requestChat(
-            listOf(Message(role = "user", content = prompt, time = ft())),
+            listOf(Message(role = "user", content = prompt, time = "")),
             noTools = true,
-        ).content?.trim()?.trim('"')?.takeIf { it.isNotBlank() }
+        ).content?.trim()
+            ?.removePrefix("\"")?.removePrefix("«")
+            ?.removeSuffix("\"")?.removeSuffix("»")
+            ?.take(60)
+            ?.takeIf { it.isNotBlank() }
     }.getOrNull()
 
     suspend fun summarize(messages: List<Message>): String? = runCatching {
@@ -298,7 +307,7 @@ class ChatRepository(
         api.transcribe(part).text?.takeIf { it.isNotBlank() }
     }.getOrNull()
 
-    /** Создание задач из принятого плана (accepted). */
+    /** Создание задач из принятого плана (accepted) — type 'thought', как в вебе. */
     suspend fun acceptPlan(plan: Plan, threadId: String?) {
         val date = today()
         val parent = Task(
@@ -308,6 +317,7 @@ class ChatRepository(
             date = date,
             done = false,
             threadId = threadId,
+            type = "thought",
             subtasks = plan.steps.map { SubTask(UUID.randomUUID().toString(), it, false) },
         )
         data.upsertTask(parent)

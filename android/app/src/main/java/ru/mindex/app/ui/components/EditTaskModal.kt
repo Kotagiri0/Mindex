@@ -189,7 +189,7 @@ fun EditTaskModal(
                         fontSize = 15.sp,
                         fontWeight = if (description.isNotEmpty()) FontWeight.Medium else FontWeight.Normal,
                         color = ValueColor,
-                        lineHeight = 22.sp,
+                        lineHeight = 22.5.sp, // 15px × 1.5, как в вебе
                     ),
                     cursorBrush = SolidColor(ValueColor),
                     modifier = Modifier

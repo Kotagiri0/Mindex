@@ -110,6 +110,7 @@ fun SettingsScreen(appViewModel: AppViewModel, navController: NavHostController)
     var showNameDialog by remember { mutableStateOf(false) }
     var nameDraft by remember { mutableStateOf("") }
     var confirmClear by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
 
     val displayName = settings.name?.takeIf { it.isNotBlank() }
         ?: user?.displayName?.takeIf { it.isNotBlank() }
@@ -283,6 +284,12 @@ fun SettingsScreen(appViewModel: AppViewModel, navController: NavHostController)
             danger = true,
             onAction = { confirmClear = true },
         )
+        AccountRow(
+            label = "Удалить аккаунт",
+            action = "Удалить",
+            danger = true,
+            onAction = { confirmDelete = true },
+        )
     }
 
     // ─── Модалка «Очистить память?» ──────────────────────────
@@ -296,6 +303,22 @@ fun SettingsScreen(appViewModel: AppViewModel, navController: NavHostController)
                 confirmClear = false
             },
             onDismiss = { confirmClear = false },
+        )
+    }
+
+    // ─── Модалка «Удалить аккаунт?» — как в вебе ─────────────
+    if (confirmDelete) {
+        ConfirmModal(
+            title = "Удалить аккаунт?",
+            body = "Будут безвозвратно удалены аккаунт, все задачи, переписки и память — " +
+                "без остаточных копий на сервере. Это действие нельзя отменить.",
+            confirmLabel = "Удалить аккаунт навсегда",
+            onConfirm = {
+                confirmDelete = false
+                repo.clearMemory()
+                appViewModel.logout()
+            },
+            onDismiss = { confirmDelete = false },
         )
     }
 

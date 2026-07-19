@@ -108,7 +108,8 @@ fun TodayScreen(appViewModel: AppViewModel, navController: NavHostController) {
     var today by remember { mutableStateOf(LocalDate.now().toString()) }
     var selectedDate by remember { mutableStateOf(today) }
     var editingTask by remember { mutableStateOf<Task?>(null) }
-    var addSheetOpen by remember { mutableStateOf(false) }
+    // Время, по которому тапнули на таймлайне для создания задачи (null — шторка закрыта).
+    var createAt by remember { mutableStateOf<String?>(null) }
     // Только что выполненные — держим в списке 800 мс, как в TodayMobile.tsx.
     val justDone = remember { mutableStateListOf<String>() }
 
@@ -248,7 +249,7 @@ fun TodayScreen(appViewModel: AppViewModel, navController: NavHostController) {
                         tasks = timelineTasks,
                         onTaskClick = { editingTask = it },
                         onUntimedClick = { editingTask = it },
-                        onCreateAt = { addSheetOpen = true },
+                        onCreateAt = { time -> createAt = time },
                         onTaskMove = { taskId, time, endTime ->
                             // Человек явно переместил блок → timeSource: 'user' (как в вебе).
                             tasks.firstOrNull { it.id == taskId }?.let { t ->
@@ -317,13 +318,16 @@ fun TodayScreen(appViewModel: AppViewModel, navController: NavHostController) {
     }
 
     // ─── Шторки ──────────────────────────────────────────────
-    if (addSheetOpen) {
+    // Создание задачи тапом по пустому месту таймлайна — время предзаполнено.
+    createAt?.let { time ->
         AddTaskModal(
             initialDate = selectedDate,
-            onDismiss = { addSheetOpen = false },
+            initialTime = time,
+            onDismiss = { createAt = null },
             onAdd = { newTask ->
-                scope.launch { repo.upsertTask(newTask) }
-                addSheetOpen = false
+                // Человек явно указал время на таймлайне → timeSource: 'user' (как в вебе).
+                scope.launch { repo.upsertTask(newTask.copy(timeSource = "user")) }
+                createAt = null
             },
         )
     }

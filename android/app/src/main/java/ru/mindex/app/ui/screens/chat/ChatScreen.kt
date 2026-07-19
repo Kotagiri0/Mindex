@@ -10,6 +10,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,13 +34,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -49,12 +53,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -69,6 +83,7 @@ import ru.mindex.app.data.model.Thread
 import ru.mindex.app.data.repository.ChatTurn
 import ru.mindex.app.ui.AppViewModel
 import ru.mindex.app.ui.navigation.Routes
+import ru.mindex.app.ui.screens.notes.NoteViewBody
 import ru.mindex.app.ui.theme.MindexColors
 import ru.mindex.app.ui.theme.Muller
 import java.io.File
@@ -110,6 +125,7 @@ fun ChatScreen(appViewModel: AppViewModel, navController: NavHostController, thr
     val json = container.json
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
 
     val actualThreadId = rememberSaveable(threadId) {
         if (threadId == "new") UUID.randomUUID().toString() else threadId
@@ -120,6 +136,7 @@ fun ChatScreen(appViewModel: AppViewModel, navController: NavHostController, thr
     val initialThread = remember(actualThreadId) {
         appViewModel.threads.value.firstOrNull { it.id == actualThreadId }
     }
+    val allTasks by appViewModel.tasks.collectAsState()
 
     var messages by remember { mutableStateOf(initialThread?.messages ?: emptyList()) }
     var title by remember { mutableStateOf(initialThread?.title ?: "Новая мысль") }
@@ -132,9 +149,28 @@ fun ChatScreen(appViewModel: AppViewModel, navController: NavHostController, thr
 
     var input by remember { mutableStateOf("") }
     var isTyping by remember { mutableStateOf(false) }
+    var noteMode by rememberSaveable { mutableStateOf(false) }
+    var noteLoading by remember { mutableStateOf(false) }
+    var replyQuote by remember { mutableStateOf<String?>(null) }
     var voiceState by remember { mutableStateOf(VoiceState.Idle) }
-    var voiceError by remember { mutableStateOf<String?>(null) }
     val recorderHolder = remember { RecorderHolder() }
+
+    // «Печатающийся» ответ — порт animatingContent из AIChat.tsx.
+    var animatingText by remember { mutableStateOf<String?>(null) }
+    var animSeq by remember { mutableIntStateOf(0) }
+    val animTarget = remember { arrayOfNulls<String>(1) }
+    LaunchedEffect(animSeq) {
+        val full = animTarget[0] ?: return@LaunchedEffect
+        var i = 0
+        animatingText = ""
+        while (i + 6 < full.length) {
+            delay(10)
+            i += 6
+            animatingText = full.take(i)
+        }
+        animatingText = null
+        animTarget[0] = null
+    }
 
     val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
     fun ft(): String = LocalTime.now().format(timeFormatter)
@@ -176,6 +212,9 @@ fun ChatScreen(appViewModel: AppViewModel, navController: NavHostController, thr
                             messages = messages + turn.turnMessages + turn.finalMessage
                             preview = turn.finalMessage.content.take(60) + "…"
                             runCatching { persist() }
+                            // Анимация «печати» финального ответа — как в вебе.
+                            animTarget[0] = turn.finalMessage.content
+                            animSeq++
                             if (isFirstMessage) {
                                 launch {
                                     chatRepo.generateTitle(text, turn.finalMessage.content)?.let {
@@ -220,9 +259,11 @@ fun ChatScreen(appViewModel: AppViewModel, navController: NavHostController, thr
                     "Отвечай СТРОГО в формате JSON:\n" +
                     "{\n  \"title\": \"Название плана\",\n  \"steps\": [\"шаг 1\", \"шаг 2\", ...]\n}"
 
+                // Как в вебе: генерация плана идёт с no_tools.
                 val turn = chatRepo.sendMessage(
                     messages + Message(role = "user", content = prompt, time = ft()),
                     actualThreadId,
+                    noTools = true,
                 )
                 val content = when (turn) {
                     is ChatTurn.Answer -> turn.finalMessage.content
@@ -310,11 +351,31 @@ fun ChatScreen(appViewModel: AppViewModel, navController: NavHostController, thr
         scope.launch { runCatching { persist() } }
     }
 
+    // ─── Действия с сообщением — порт saveMessageAsNote / deleteMessage ──
+
+    fun saveMessageAsNote(content: String) {
+        val note = Thread(
+            id = UUID.randomUUID().toString(),
+            title = content.trim().take(40).ifBlank { "Заметка" },
+            preview = content.trim().take(100),
+            messages = emptyList(),
+            createdAt = System.currentTimeMillis(),
+            source = "заметка",
+            isMeaningful = true,
+            summary = content.trim(),
+        )
+        scope.launch { runCatching { dataRepo.upsertThread(note) } }
+    }
+
+    fun deleteMessage(msg: Message) {
+        messages = messages.filterNot { it === msg }
+        scope.launch { runCatching { persist() } }
+    }
+
     // ─── Голосовой ввод — порт useVoiceInput.ts на MediaRecorder ─────────
 
     fun startRecording() {
         if (voiceState != VoiceState.Idle) return
-        voiceError = null
         val file = File(context.cacheDir, "voice_${System.currentTimeMillis()}.m4a")
         try {
             val rec = createMediaRecorder(context).apply {
@@ -334,7 +395,6 @@ fun ChatScreen(appViewModel: AppViewModel, navController: NavHostController, thr
         } catch (_: Exception) {
             recorderHolder.recorder?.let { runCatching { it.release() } }
             recorderHolder.recorder = null
-            voiceError = "Не удалось записать звук."
             voiceState = VoiceState.Error
         }
     }
@@ -352,7 +412,6 @@ fun ChatScreen(appViewModel: AppViewModel, navController: NavHostController, thr
 
         if (!stopped || durationMs < 300 || file == null || !file.exists() || file.length() == 0L) {
             file?.delete()
-            voiceError = if (durationMs < 300) "Слишком короткая запись." else "Не удалось записать звук."
             voiceState = VoiceState.Error
             return
         }
@@ -364,7 +423,6 @@ fun ChatScreen(appViewModel: AppViewModel, navController: NavHostController, thr
                 input = if (input.isBlank()) text else input + " " + text
                 voiceState = VoiceState.Idle
             } else {
-                voiceError = "Ошибка при транскрибации."
                 voiceState = VoiceState.Error
             }
         }
@@ -373,33 +431,15 @@ fun ChatScreen(appViewModel: AppViewModel, navController: NavHostController, thr
     val micPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
-        if (granted) {
-            startRecording()
-        } else {
-            voiceError = "Нет доступа к микрофону."
-            voiceState = VoiceState.Error
-        }
+        // После выдачи разрешения следующее удержание микрофона начнёт запись.
+        if (!granted) voiceState = VoiceState.Error
     }
 
-    fun onMicTap() {
-        when (voiceState) {
-            VoiceState.Recording -> stopRecording()
-            VoiceState.Idle -> {
-                val granted = ContextCompat.checkSelfPermission(
-                    context, Manifest.permission.RECORD_AUDIO,
-                ) == PackageManager.PERMISSION_GRANTED
-                if (granted) startRecording() else micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-            }
-            else -> Unit
-        }
-    }
-
-    // Ошибка голосового ввода гаснет через 2 секунды — как в вебе.
+    // Ошибка голосового ввода тихо гаснет через 2 секунды — как в вебе.
     LaunchedEffect(voiceState) {
         if (voiceState == VoiceState.Error) {
             delay(2000)
             voiceState = VoiceState.Idle
-            voiceError = null
         }
     }
 
@@ -413,13 +453,37 @@ fun ChatScreen(appViewModel: AppViewModel, navController: NavHostController, thr
         }
     }
 
+    // ─── Режим заметки: досчитать саммари, как NoteView.tsx ──────────────
+
+    LaunchedEffect(noteMode) {
+        if (noteMode && summary.isNullOrBlank() && meaningful != false &&
+            messages.any { it.role == "user" || it.role == "assistant" }
+        ) {
+            noteLoading = true
+            chatRepo.summarize(messages)?.let {
+                summary = it
+                meaningful = true
+                runCatching { persist() }
+            }
+            noteLoading = false
+        }
+    }
+
     // ─── Отправка и закрытие ──────────────────────────────────────────────
 
     fun handleSend() {
         val text = input.trim()
         if (text.isEmpty()) return
+        val quote = replyQuote
+        val finalText = if (quote != null) {
+            val q = if (quote.length > 100) quote.take(100) + "..." else quote
+            "[Ответ на: \"$q\"]\n$text"
+        } else {
+            text
+        }
         input = ""
-        sendText(text)
+        replyQuote = null
+        sendText(finalText)
     }
 
     // Порт handleClose(): при выходе из содержательного диалога — резюме
@@ -442,6 +506,7 @@ fun ChatScreen(appViewModel: AppViewModel, navController: NavHostController, thr
 
     val visibleMessages = messages.withIndex()
         .filter { it.value.role != "tool" && it.value.toolCalls == null }
+    val lastAssistantVisibleIdx = visibleMessages.indexOfLast { it.value.role == "assistant" }
     val listState = rememberLazyListState()
 
     LaunchedEffect(messages.size, isTyping) {
@@ -457,11 +522,11 @@ fun ChatScreen(appViewModel: AppViewModel, navController: NavHostController, thr
             .navigationBarsPadding()
             .imePadding(),
     ) {
-        // ─── Шапка ────────────────────────────────────────────
+        // ─── Шапка: назад / пилюля чат-заметка / настройки ────
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -473,39 +538,131 @@ fun ChatScreen(appViewModel: AppViewModel, navController: NavHostController, thr
                     modifier = Modifier.size(28.dp),
                 )
             }
+
+            // Переключатель чат/заметка — белая пилюля, как в AIChat.tsx.
+            Row(
+                Modifier
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(if (!noteMode) Color(0x14222224) else Color.Transparent)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { noteMode = false },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    ChatTabIcon(
+                        color = if (!noteMode) MindexColors.TextPrimary else Color(0x4D222224),
+                        modifier = Modifier.size(19.dp),
+                    )
+                }
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(if (noteMode) Color(0x14222224) else Color.Transparent)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { noteMode = true },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    NoteTabIcon(
+                        color = if (noteMode) MindexColors.TextPrimary else Color(0x4D222224),
+                        modifier = Modifier.size(19.dp),
+                    )
+                }
+            }
+
             IconButton(onClick = { navController.navigate(Routes.SETTINGS) }) {
                 Icon(
                     imageVector = GearIcon,
                     contentDescription = "Настройки",
                     tint = Color(0x80222224),
-                    modifier = Modifier.size(24.dp),
+                    modifier = Modifier.size(26.dp),
                 )
             }
         }
 
-        // ─── Лента сообщений / пустое состояние ───────────────
-        if (visibleMessages.isEmpty() && !isTyping) {
-            Column(
-                Modifier.weight(1f).fillMaxWidth().padding(horizontal = 32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    "есть мысли?",
-                    style = MaterialTheme.typography.displaySmall,
-                    textAlign = TextAlign.Center,
+        // ─── Контент: заметка или лента сообщений ─────────────
+        if (noteMode) {
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                NoteViewBody(
+                    thread = buildThread(),
+                    tasks = allTasks,
+                    loading = noteLoading,
+                    onOpenChat = { noteMode = false },
                 )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Поделись тем, что на уме",
-                    style = MaterialTheme.typography.bodySmall,
-                    textAlign = TextAlign.Center,
-                )
+            }
+        } else if (visibleMessages.isEmpty()) {
+            // Пустое состояние — «Привет! Есть мысли?», как в вебе.
+            Column(Modifier.weight(1f).fillMaxWidth()) {
+                Column(
+                    Modifier.weight(1f).fillMaxWidth().padding(horizontal = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        "Привет!\nЕсть мысли?",
+                        fontFamily = Muller,
+                        fontSize = 28.sp,
+                        lineHeight = 35.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MindexColors.TextPrimary,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Поделись тем, что на уме",
+                        fontFamily = Muller,
+                        fontSize = 15.sp,
+                        color = MindexColors.Text30,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                if (isTyping) {
+                    Row(
+                        Modifier.padding(start = 18.dp, bottom = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        MysliThinking()
+                        Spacer(Modifier.width(10.dp))
+                        ThinkingPhrase()
+                    }
+                }
             }
         } else {
             LazyColumn(
                 state = listState,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    // maskImage: растворение контента у шапки и панели ввода.
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                0f to Color.Black, 1f to Color.Transparent,
+                                startY = 0f, endY = 48.dp.toPx(),
+                            ),
+                            blendMode = BlendMode.DstOut,
+                        )
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                0f to Color.Transparent, 1f to Color.Black,
+                                startY = size.height - 80.dp.toPx(), endY = size.height,
+                            ),
+                            blendMode = BlendMode.DstOut,
+                        )
+                    },
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -514,12 +671,19 @@ fun ChatScreen(appViewModel: AppViewModel, navController: NavHostController, thr
                     if (message.role == "user") {
                         UserMessage(message)
                     } else {
+                        val isLast = i == visibleMessages.size - 1
                         AssistantMessage(
                             message = message,
+                            overrideText = if (isLast) animatingText else null,
+                            showActions = i == lastAssistantVisibleIdx,
                             onAnswer = { qId, answer -> handleAnswer(origIndex, qId, answer) },
                             onUpdateStep = { sIdx, value -> updatePlanStep(origIndex, sIdx, value) },
                             onAccept = { handleAcceptPlan(origIndex) },
                             onReject = { handleRejectPlan(origIndex) },
+                            onCopy = { clipboard.setText(AnnotatedString(message.content)) },
+                            onSaveNote = { saveMessageAsNote(message.content) },
+                            onReply = { replyQuote = message.content },
+                            onDelete = { deleteMessage(message) },
                         )
                     }
                 }
@@ -543,16 +707,53 @@ fun ChatScreen(appViewModel: AppViewModel, navController: NavHostController, thr
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
-                .padding(top = 8.dp, bottom = 16.dp),
+                .padding(top = 16.dp, bottom = 16.dp),
         ) {
-            voiceError?.let {
-                Text(
-                    it,
-                    fontFamily = Muller,
-                    fontSize = 12.sp,
-                    color = MindexColors.Danger,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
-                )
+            // Цитата «Ответить» над полем ввода — как replyQuote в вебе.
+            replyQuote?.let { quote ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFFF5F5F5))
+                        .padding(start = 0.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier
+                            .width(2.dp)
+                            .height(32.dp)
+                            .background(Color(0xFFAAAAAA)),
+                    )
+                    Text(
+                        if (quote.length > 100) quote.take(100) + "..." else quote,
+                        fontFamily = Muller,
+                        fontSize = 12.sp,
+                        color = Color(0xFF888888),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
+                    Box(
+                        Modifier
+                            .size(28.dp)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) { replyQuote = null },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = CloseIcon,
+                            contentDescription = "Убрать цитату",
+                            tint = Color(0xFFAAAAAA),
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
+                }
             }
             Column(
                 Modifier
@@ -594,7 +795,8 @@ fun ChatScreen(appViewModel: AppViewModel, navController: NavHostController, thr
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // Микрофон: idle → серый, запись → красный, обработка → спиннер.
+                    // Микрофон: удерживай для записи (мобильный веб-паттерн),
+                    // idle → серый, запись → красный, обработка → спиннер.
                     val micBg = when (voiceState) {
                         VoiceState.Recording -> MindexColors.Danger
                         VoiceState.Processing -> Color(0x26222224)
@@ -605,7 +807,24 @@ fun ChatScreen(appViewModel: AppViewModel, navController: NavHostController, thr
                             .size(32.dp)
                             .clip(CircleShape)
                             .background(micBg)
-                            .clickable(enabled = voiceState != VoiceState.Processing) { onMicTap() },
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onPress = {
+                                        if (voiceState == VoiceState.Idle) {
+                                            val granted = ContextCompat.checkSelfPermission(
+                                                context, Manifest.permission.RECORD_AUDIO,
+                                            ) == PackageManager.PERMISSION_GRANTED
+                                            if (!granted) {
+                                                micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                            } else {
+                                                startRecording()
+                                                tryAwaitRelease()
+                                                stopRecording()
+                                            }
+                                        }
+                                    },
+                                )
+                            },
                         contentAlignment = Alignment.Center,
                     ) {
                         if (voiceState == VoiceState.Processing) {
@@ -618,12 +837,12 @@ fun ChatScreen(appViewModel: AppViewModel, navController: NavHostController, thr
                             Icon(
                                 imageVector = MicIcon,
                                 contentDescription = if (voiceState == VoiceState.Recording) {
-                                    "Остановить запись"
+                                    "Отпусти, чтобы остановить"
                                 } else {
-                                    "Голосовой ввод"
+                                    "Удерживай для записи"
                                 },
                                 tint = if (voiceState == VoiceState.Recording) Color.White else Color(0x80222224),
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier.size(15.dp),
                             )
                         }
                     }
@@ -696,17 +915,41 @@ private fun UserMessage(message: Message) {
     }
 }
 
-/** Ответ Мысли — plain text слева на всю ширину + блок планирования. */
+/**
+ * Ответ Мысли — plain text слева на всю ширину + блок планирования
+ * + панель действий (копировать / «⋯»: заметка, ответить, удалить).
+ * overrideText != null → идёт анимация «печати», действия скрыты.
+ */
 @Composable
 private fun AssistantMessage(
     message: Message,
+    overrideText: String?,
+    showActions: Boolean,
     onAnswer: (questionId: String, answer: String) -> Unit,
     onUpdateStep: (stepIndex: Int, value: String) -> Unit,
     onAccept: () -> Unit,
     onReject: () -> Unit,
+    onCopy: () -> Unit,
+    onSaveNote: () -> Unit,
+    onReply: () -> Unit,
+    onDelete: () -> Unit,
 ) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val animating = overrideText != null
+
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
-        MarkdownText(message.content, modifier = Modifier.fillMaxWidth())
+        if (animating) {
+            Text(
+                overrideText.orEmpty(),
+                fontFamily = Muller,
+                fontSize = 15.sp,
+                lineHeight = 26.sp,
+                color = MindexColors.TextPrimary,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else {
+            MarkdownText(message.content, modifier = Modifier.fillMaxWidth())
+        }
         message.planningData?.let { pd ->
             PlanningBlock(
                 planningData = pd,
@@ -724,6 +967,90 @@ private fun AssistantMessage(
                 color = MindexColors.Text30,
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 3.dp),
             )
+        }
+
+        // Панель действий — только у последнего ответа (как на тач-устройствах в вебе).
+        if (showActions && !animating) {
+            Row(
+                Modifier.fillMaxWidth().padding(top = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Box(
+                    Modifier
+                        .size(28.dp)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onCopy,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = CopyIcon,
+                        contentDescription = "Копировать",
+                        tint = Color(0xFFBBBBBB),
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
+
+                Box {
+                    Box(
+                        Modifier
+                            .size(28.dp)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) { menuOpen = !menuOpen },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = MoreHorizontalIcon,
+                            contentDescription = "Действия",
+                            tint = Color(0xFFBBBBBB),
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "Сохранить как заметку",
+                                    fontFamily = Muller,
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF222222),
+                                )
+                            },
+                            onClick = { menuOpen = false; onSaveNote() },
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "Ответить",
+                                    fontFamily = Muller,
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF222222),
+                                )
+                            },
+                            onClick = { menuOpen = false; onReply() },
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "Удалить",
+                                    fontFamily = Muller,
+                                    fontSize = 13.sp,
+                                    color = Color(0xFFE53E3E),
+                                )
+                            },
+                            onClick = { menuOpen = false; onDelete() },
+                        )
+                    }
+                }
+            }
         }
     }
 }

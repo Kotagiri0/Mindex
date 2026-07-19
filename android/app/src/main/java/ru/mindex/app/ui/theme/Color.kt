@@ -21,7 +21,7 @@ object MindexColors {
     val AccentText = Color(0xFFF0F0F0)            // --accent-text
     val AccentLight = Color(0x14222224)           // rgba(34,34,36,0.08)
     val Danger = Color(0xFFC0392B)                // --color-danger
-    val UserBubble = Color(0x0F090E17)            // rgba(9,14,23,0.06) — пузырь пользователя
+    val UserBubble = Color(0x12090E17)            // rgba(9,14,23,0.07) — пузырь пользователя (AIChat.tsx)
     val NavInactive = Color(0xFF9A9A9A)           // неактивная иконка нижней навигации
     val NavContainer = Color(0xFFECECEC)          // подложка нижней навигации
     val FabDark = Color(0xFF0B0D10)               // центральная FAB
