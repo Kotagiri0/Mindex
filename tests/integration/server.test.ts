@@ -11,6 +11,8 @@ import { startTestServer } from '../helpers/server';
 process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = 'postgres://test';
 process.env.GOOGLE_CLIENT_ID = 'google-id';
+process.env.YANDEX_CLIENT_ID = 'yandex-id';
+process.env.YANDEX_CLIENT_SECRET = 'yandex-secret';
 process.env.ADMIN_SECRET = 'test-admin-secret';
 process.env.METRICS_TOKEN = 'test-metrics-token';
 // Empty string instead of delete — prevents dotenv from loading the real value
@@ -407,6 +409,26 @@ describe('POST /api/auth/google', () => {
     const data = await res.json();
     assert.equal(res.status, 400);
     assert.equal(data.error, 'Google credential обязателен.');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── /api/auth/yandex ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('POST /api/auth/yandex', () => {
+  test('rejects missing code', async () => {
+    const res = await post('/api/auth/yandex', {});
+    const data = await res.json();
+    assert.equal(res.status, 400);
+    assert.equal(data.error, 'Яндекс authorization code обязателен.');
+  });
+
+  test('rejects blank code', async () => {
+    const res = await post('/api/auth/yandex', { code: '   ' });
+    const data = await res.json();
+    assert.equal(res.status, 400);
+    assert.equal(data.error, 'Яндекс authorization code обязателен.');
   });
 });
 
