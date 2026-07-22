@@ -9,7 +9,7 @@
 import type { ArchiveResult, Db, RetrieveOptions } from './types.ts';
 import { generateEmbedding } from './embeddings.ts';
 import { BOT_THREAD_TITLE } from './temporal.ts';
-import { ACCESS_MASS_SQL, ASSOC_MASS_SQL, activationScore, logAccess, logRetrieval, recordCoRetrieval } from './activation.ts';
+import { ACCESS_MASS_SQL, ASSOC_MASS_SQL, activationScore, baseLevelActivation, isFactStillFresh, logAccess, logRetrieval, recordCoRetrieval } from './activation.ts';
 import { extractKeywords } from './morphology.ts';
 
 // MMR-дедупликация: почти одинаковые воспоминания (30 дневных тредов про один
@@ -21,24 +21,50 @@ const DEDUP_SIMILARITY = 0.92;
 // Экономит сетевой round-trip к провайдеру эмбеддингов на каждом таком сообщении.
 const MIN_VECTOR_QUERY_CHARS = 6;
 
-// Слой 1: профильные треды — всегда в промпте, без keyword-matching.
-// Возвращает массив summary (до 3), порядок created_at ASC.
+// Слой 1: профильные треды — идентичность пользователя в промпте.
+//
+// Раньше: первые 3 профильных треда инжектились безусловно — отсюда «бородатые
+// факты», которые ассистент пихает в сообщение, хотя им год.
+// Теперь: каждый факт проходит проверку на свежесть (base-level activation, ACT-R).
+// Подтверждённый или недавний факт остаётся; старый и ни разу не всплывавший —
+// «промолчать», выпадает. Перезаписанные (superseded) факты исключаются на уровне SQL.
+// Инвариант: хотя бы один факт идентичности всегда остаётся (самый живой),
+// чтобы агент не потерял, кто перед ним.
 export async function getProfileSummaries(db: Db, userId: string): Promise<string[]> {
   const { rows } = await db.query(
-    `SELECT summary FROM user_threads
-     WHERE user_id = $1
-       AND summary IS NOT NULL
-       AND is_meaningful IS NOT FALSE
+    `SELECT t.summary,
+            EXTRACT(EPOCH FROM (NOW() - t.created_at)) / 86400.0 AS age_days,
+            ${ACCESS_MASS_SQL} AS access_mass
+     FROM user_threads t
+     WHERE t.user_id = $1
+       AND t.summary IS NOT NULL
+       AND t.is_meaningful IS NOT FALSE
+       AND t.superseded_at IS NULL
        AND (
-         title = 'О себе'
-         OR label = 'profile'
-         OR (source = 'заметка' AND title ILIKE '%себ%')
+         t.title = 'О себе'
+         OR t.label = 'profile'
+         OR (t.source = 'заметка' AND t.title ILIKE '%себ%')
        )
-     ORDER BY created_at ASC
-     LIMIT 3`,
+     ORDER BY t.created_at ASC
+     LIMIT 5`,
     [userId]
   );
-  return rows.map((r: any) => r.summary);
+  if (rows.length === 0) return [];
+
+  // Считаем base-level активацию каждого факта; ранжируем по свежести.
+  const scored = rows.map((r: any) => ({
+    summary: r.summary as string,
+    age: Number(r.age_days),
+    score: baseLevelActivation(Number(r.age_days), Number(r.access_mass)),
+    fresh: isFactStillFresh(Number(r.age_days), Number(r.access_mass)),
+  }));
+  scored.sort((a, b) => b.score - a.score);
+
+  // Свежие факты (до 3). Если все «остыли» — оставляем один самый живой,
+  // чтобы агент не остался без идентичности.
+  const fresh = scored.filter(s => s.fresh).slice(0, 3);
+  const picked = fresh.length > 0 ? fresh : scored.slice(0, 1);
+  return picked.map(s => s.summary);
 }
 
 // Дедуп выдачи: жадный проход по отсортированным кандидатам, пропускаем тех,
@@ -91,6 +117,7 @@ export async function retrieveArchive(
   const baseFilter = `
     AND t.summary IS NOT NULL
     AND t.is_meaningful IS NOT FALSE
+    AND t.superseded_at IS NULL
     AND t.label IS DISTINCT FROM 'skill:self_knowledge'
     AND t.title IS DISTINCT FROM 'О себе'
     ${botThreadFilter}

@@ -5,6 +5,7 @@
 import type { ChatCall, Db, PolisadMessage, SummarizeResult } from './types.ts';
 import { generateEmbedding } from './embeddings.ts';
 import { scoreMeaningful } from './meaningful.ts';
+import { markSupersededFacts } from './supersede.ts';
 
 const SUMMARIZE_SYSTEM_PROMPT = `Ты — Мысль, персональный ИИ-ассистент. Проанализируй диалог и верни JSON-объект:
 {
@@ -101,6 +102,11 @@ export async function summarizeThreadCore(
           [`[${embedding.join(',')}]`, threadId, userId]
         );
       }
+
+      // Перезапись: сверяем новый факт с прежними, помечаем устаревшие.
+      // Fire-and-forget — не блокируем и не роняем саммаризацию.
+      markSupersededFacts(db, callChat, userId, threadId, summary)
+        .catch((e: any) => console.warn('[polisad/summarize] supersede skipped:', e?.message));
     }
   }
 

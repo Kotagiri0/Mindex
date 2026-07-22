@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { activationScore, ACTIVATION_DECAY, SIM_WEIGHT } from '../../../src/polisad/activation.ts';
+import { activationScore, baseLevelActivation, isFactStillFresh, ACTIVATION_DECAY, SIM_WEIGHT, PROFILE_STALE_THRESHOLD } from '../../../src/polisad/activation.ts';
 import { foldOverflowMessages, CONTEXT_WINDOW } from '../../../src/polisad/temporal.ts';
 
 test('activationScore: без обращений — чистая семантика', () => {
@@ -33,6 +33,38 @@ test('activationScore: отрицательная масса не ломает �
 
 test('ACTIVATION_DECAY — классическое значение ACT-R', () => {
   assert.equal(ACTIVATION_DECAY, 0.5);
+});
+
+// ── base-level activation: устаревание фактов ────────────────────────────────
+
+test('baseLevelActivation: свежий факт активен (B ≥ 0)', () => {
+  // факт записан сегодня, ни разу не подкреплён
+  assert.ok(baseLevelActivation(0.1, 0) >= 0);
+});
+
+test('baseLevelActivation: падает с возрастом', () => {
+  const fresh = baseLevelActivation(1, 0);
+  const old = baseLevelActivation(60, 0);
+  assert.ok(old < fresh);
+});
+
+test('isFactStillFresh: старый неподкреплённый факт — промолчать', () => {
+  // ~2 месяца забвения, ноль обращений → ниже порога
+  assert.equal(isFactStillFresh(60, 0), false);
+});
+
+test('isFactStillFresh: свежий факт — навязываем', () => {
+  assert.equal(isFactStillFresh(0.5, 0), true);
+});
+
+test('isFactStillFresh: старый, но подкреплённый факт остаётся живым', () => {
+  // тот же 60-дневный факт, но тема недавно всплывала (масса обращений ~1)
+  assert.equal(isFactStillFresh(60, 0), false);
+  assert.equal(isFactStillFresh(60, 1), true);
+});
+
+test('PROFILE_STALE_THRESHOLD — отрицательный порог тишины', () => {
+  assert.ok(PROFILE_STALE_THRESHOLD < 0);
 });
 
 test('foldOverflowMessages: ≤ CONTEXT_WINDOW записей — пустая свёртка', () => {

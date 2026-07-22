@@ -24,9 +24,14 @@ export {
   logRetrieval,
   recordCoRetrieval,
   jaccard,
+  baseLevelActivation,
+  isFactStillFresh,
   ACTIVATION_DECAY,
   SIM_WEIGHT,
+  BASE_LEVEL_DECAY,
+  PROFILE_STALE_THRESHOLD,
 } from './activation.ts';
+export { markSupersededFacts } from './supersede.ts';
 export { stemRu, extractKeywords } from './morphology.ts';
 export { getProfileSummaries, retrieveArchive } from './retrieve.ts';
 export {

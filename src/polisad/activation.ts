@@ -49,6 +49,46 @@ export const ASSOC_MASS_SQL = `
       )
   ), 0)`;
 
+// ── Base-level activation: устаревание факта (по ACT-R, base-level learning) ──
+//
+// activationScore выше — про релевантность треда ЗАПРОСУ (similarity + история).
+// Здесь другое: насколько факт вообще «жив» сам по себе, безотносительно запроса.
+// Нужно для слоя профиля, который инжектится БЕЗУСЛОВНО — отсюда «бородатые
+// факты о тебе», которые ассистент пихает в сообщение, хотя им год.
+//
+//   B = ln( age^(-d) + Σ tᵢ^(-d) )
+//
+//   age   — возраст факта в днях (первое «обращение» — само создание)
+//   Σ tᵢ  — масса повторных обращений (тема всплывала → факт подкреплён)
+//   d     — тот же DECAY забывания
+//
+// Свежий факт: age мал → age^(-d) велик → B высокая.
+// Старый и ни разу не подкреплённый: age^(-d) → 0 → B уходит в минус.
+// Старый, но подкреплённый (тема всплывала): Σ tᵢ спасает → B держится.
+//
+// Факт с B ниже PROFILE_STALE_THRESHOLD — кандидат «промолчать»: семантически
+// он, может, и подходит, но давно не подтверждался, поэтому навязывать его не надо.
+export const BASE_LEVEL_DECAY = ACTIVATION_DECAY;
+
+// Порог тишины. При d=0.5 и нуле подкреплений факт уходит под порог примерно
+// после трёх недель забвения: -0.5·ln(21) ≈ -1.52. Одно недавнее всплытие темы
+// поднимает массу обращений до ~1 → B ≈ 0 → факт снова «жив».
+export const PROFILE_STALE_THRESHOLD = -1.5;
+
+// Минимальный возраст — час, чтобы только что записанный факт не давал ∞.
+const MIN_AGE_DAYS = 0.0417;
+
+export function baseLevelActivation(ageDays: number, accessMass = 0): number {
+  const age = Math.max(ageDays, MIN_AGE_DAYS);
+  const creationTerm = Math.pow(age, -BASE_LEVEL_DECAY);
+  return Math.log(creationTerm + Math.max(0, accessMass));
+}
+
+// Удобный предикат: стоит ли факт навязывать (true) или лучше промолчать (false).
+export function isFactStillFresh(ageDays: number, accessMass = 0): boolean {
+  return baseLevelActivation(ageDays, accessMass) >= PROFILE_STALE_THRESHOLD;
+}
+
 export function activationScore(similarity: number, accessMass: number, assocMass = 0): number {
   const accessBoost = Math.min(Math.log(1 + Math.max(0, accessMass)), ACTIVATION_MAX_BOOST);
   const assocBoost = Math.min(Math.log(1 + Math.max(0, assocMass)), ASSOC_MAX_BOOST);
@@ -134,6 +174,13 @@ export async function ensurePolisadSchema(db: Db): Promise<void> {
   // Поля детектора повторных запросов (фундамент feedback loop)
   await db.query(`ALTER TABLE polisad_retrieval_log ADD COLUMN IF NOT EXISTS keywords TEXT`);
   await db.query(`ALTER TABLE polisad_retrieval_log ADD COLUMN IF NOT EXISTS repeated_query BOOLEAN`);
+
+  // Перезапись фактов: когда новая информация отменяет старый факт о пользователе
+  // («уволился из X» отменяет «работает в X»), старый тред помечается superseded —
+  // и навсегда выпадает из профиля и RAG. Additive, данные не трогаем.
+  // superseded_by — id треда, чья информация отменила этот факт (для аудита).
+  await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMPTZ`);
+  await db.query(`ALTER TABLE user_threads ADD COLUMN IF NOT EXISTS superseded_by TEXT`);
 
   // Миграция типов для таблиц, созданных ранее с UUID-колонками (прод).
   // ALTER COLUMN TYPE только если колонка ещё uuid — иначе no-op без перезаписи.
