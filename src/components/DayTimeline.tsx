@@ -601,6 +601,14 @@ function TimelineBlock({
           </div>
         )}
         {!task.agent && task.origin === 'telegram' && <TelegramMark />}
+        {task.scheduleId && (
+          <span
+            title="Повторяется по расписанию"
+            style={{ flexShrink: 0, fontSize: 12, lineHeight: 1, opacity: 0.75, pointerEvents: 'none' }}
+          >
+            🔁
+          </span>
+        )}
         <span
           style={{
             fontFamily: M,

@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 import { Pool } from 'pg';
-import { startBot, startNotificationScheduler, startProactiveScheduler } from './server-bot.ts';
+import { startBot, startNotificationScheduler, startProactiveScheduler, startScheduleRunner } from './server-bot.ts';
 
 dotenv.config();
 
@@ -23,6 +23,7 @@ const botToken = process.env.TELEGRAM_BOT_TOKEN;
 if (botToken) {
   startNotificationScheduler(botToken, db).catch(e => console.error('[Bot] Ошибка планировщика уведомлений:', e));
   startProactiveScheduler(botToken, db);
+  startScheduleRunner(botToken, db).catch(e => console.error('[Bot] Ошибка планировщика расписаний:', e));
 } else {
   console.warn('[Bot] TELEGRAM_BOT_TOKEN не задан — планировщики не запущены');
 }

@@ -139,7 +139,8 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000)",
       "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:3000)",
       "Bash(ssh-keygen -R 135.106.167.222)",
-      "Bash(nslookup mysle-beta.ru)"
+      "Bash(nslookup mysle-beta.ru)",
+      "Bash(node --import tsx --test tests/unit/kora/schedule.test.ts)"
     ],
     "additionalDirectories": [
       "D:\\",

@@ -227,6 +227,8 @@ function TaskRow({ task, onToggle, onClick }: { task: Task; onToggle: () => void
         {task.name}
       </span>
 
+      {task.scheduleId && <span title="Повторяется по расписанию" style={{ fontSize: 12, flexShrink: 0, opacity: 0.75 }}>🔁</span>}
+
       {task.time && (
         <span style={{ fontFamily: M, fontSize: 13, color: 'rgba(34,34,36,0.4)', flexShrink: 0 }}>
           {task.time}{task.endTime ? ` – ${task.endTime}` : ''}

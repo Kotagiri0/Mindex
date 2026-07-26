@@ -69,6 +69,57 @@ function IntegrationRow({ name, desc }: { name: string; desc: string }) {
   );
 }
 
+interface ScheduleItem {
+  id: string;
+  title: string;
+  kind: 'task' | 'agent';
+  schedule: string;
+  nextRunAt: string;
+}
+
+/** Блок управления расписаниями: список активных + отмена. Работает и на
+ * десктопе, и в мобиле (Settings.tsx общий для обоих стеков). */
+function SchedulesSection() {
+  const [items, setItems] = useState<ScheduleItem[] | null>(null);
+
+  const load = () => {
+    apiFetch('/api/schedules')
+      .then(r => r.json())
+      .then(d => setItems(Array.isArray(d.schedules) ? d.schedules : []))
+      .catch(() => setItems([]));
+  };
+  useEffect(load, []);
+
+  const cancel = (id: string) => {
+    setItems(prev => (prev ? prev.filter(s => s.id !== id) : prev)); // оптимистично
+    apiFetch(`/api/schedules/${id}`, { method: 'DELETE' }).catch(load);
+  };
+
+  if (items === null) return null;
+
+  return (
+    <div>
+      {items.length === 0 ? (
+        <div style={{ fontFamily: M, fontSize: 13, color: 'var(--text-muted)', padding: '6px 0' }}>
+          Пока нет. Скажи Мысли: «каждое утро в 9 присылай план дня».
+        </div>
+      ) : (
+        items.map(s => (
+          <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 0', borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontFamily: M, fontSize: 14, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {s.kind === 'agent' ? '🤖 ' : '🔁 '}{s.title}
+              </div>
+              <div style={{ fontFamily: M, fontSize: 12, color: 'var(--text-muted)' }}>{s.schedule}</div>
+            </div>
+            <PillButton label="Отменить" onClick={() => cancel(s.id)} danger />
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
 function TelegramRow() {
   const [step, setStep] = useState<'idle' | 'code' | 'done'>('idle');
   const [code, setCode] = useState('');
@@ -510,6 +561,10 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
             <div style={{ fontFamily: M, fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Интеграции</div>
             <TelegramRow />
             <GoogleCalendarRow />
+
+            {/* Schedules */}
+            <div style={{ fontFamily: M, fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '32px 0 12px' }}>Расписания</div>
+            <SchedulesSection />
           </div>
         </div>
       </div>
@@ -626,6 +681,17 @@ export default function SettingsScreen({ settings, setSettings, onBack, onLogout
           </div>
           <TelegramRow />
           <GoogleCalendarRow />
+        </div>
+
+        {/* Schedules */}
+        <SectionDivider />
+        <div style={{ paddingTop: 16, marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <div style={{ fontFamily: M, fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>
+              Расписания
+            </div>
+          </div>
+          <SchedulesSection />
         </div>
 
         {/* Account */}

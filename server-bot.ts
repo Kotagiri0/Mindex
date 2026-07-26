@@ -37,6 +37,9 @@ import { InMemorySkillStore, skillListTool, skillLoadTool, skillsCatalog } from 
 import { artifactSlidesTool, artifactSiteTool, type ArtifactResult } from './src/kora/artifacts.ts';
 import { confirmPending, rejectPending, resolveUserReply } from './src/kora/hitl.ts';
 import { PgPendingStore, PgGateAuditLog, ensureKoraTables } from './src/kora/pg-stores.ts';
+import { localTimeToUtc } from './src/lib/tz.ts';
+import { scheduleTools } from './src/kora/schedule-tools.ts';
+import { ensureScheduleTables, claimDueJobs, type ScheduledJob } from './src/kora/schedule-store.ts';
 
 const execFileAsync = promisify(execFile);
 
@@ -1852,6 +1855,10 @@ function buildKoraBotRegistry(
     execute: async (args) => executeTool('delete_task', args, db, userId),
   });
 
+  // Расписания — паритет с веб-путём (server.ts). Срабатывание обрабатывает
+  // startScheduleRunner ниже в этом же процессе бота.
+  for (const tool of scheduleTools(db, userId)) registry.register(tool);
+
   return { registry, executor };
 }
 
@@ -2399,6 +2406,11 @@ export async function startBot(db: Pool): Promise<void> {
   // из обоих серверов при каждом старте.
   await ensureKoraTables(db).catch((e: any) => console.warn('[kora-bot] ensureKoraTables failed:', e?.message));
 
+  // Расписания: таблица scheduled_jobs + метка schedule_id на задачах (паритет
+  // миграций с server.ts — правило «дублируем миграции в обоих бэкендах»).
+  await ensureScheduleTables(db).catch((e: any) => console.warn('[schedule-bot] ensureScheduleTables failed:', e?.message));
+  await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS schedule_id TEXT;`).catch(() => {});
+
   // HITL-гейт (docs/PORTING_TO_TS.md, раздел 5): отложенные harmful-действия
   // и append-only аудит-лог решений по ним.
   await db.query(`
@@ -2567,26 +2579,8 @@ export function startProactiveScheduler(token: string, db: Pool): void {
 // Конвертирует локальное время пользователя (date + time строки) в UTC Date.
 // Работает корректно при любом TZ сервера (включая UTC в Docker).
 // Пример: "2026-05-22", "15:00", "Europe/Moscow" → 2026-05-22T12:00:00.000Z
-function localTimeToUtc(dateStr: string, timeStr: string, tz: string): Date {
-  // Парсим как UTC-момент (точка отсчёта)
-  const utcGuess = new Date(`${dateStr}T${timeStr}:00Z`);
-  // Смотрим какое время показывает Intl.DateTimeFormat в нужной TZ для этого момента
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-    hour12: false,
-  }).formatToParts(utcGuess);
-  const get = (t: string) => parts.find(p => p.type === t)?.value || '00';
-  const asTzMs = Date.UTC(
-    Number(get('year')), Number(get('month')) - 1, Number(get('day')),
-    Number(get('hour')) % 24, Number(get('minute')), Number(get('second'))
-  );
-  // offset = насколько TZ опережает UTC в этот момент
-  const offsetMs = asTzMs - utcGuess.getTime();
-  // Возвращаем UTC-эквивалент локального времени пользователя
-  return new Date(utcGuess.getTime() - offsetMs);
-}
+// localTimeToUtc вынесён в src/lib/tz.ts (единая точка правды для нотификатора
+// и планировщика расписаний). Импортируется вверху файла.
 
 export async function startNotificationScheduler(token: string, db: Pool): Promise<void> {
   const REMIND_BEFORE_MS = 15 * 60 * 1000;
@@ -2737,4 +2731,92 @@ export async function startNotificationScheduler(token: string, db: Pool): Promi
   setInterval(scan, SCAN_INTERVAL_MS);
   scan();
   console.log(`[Notif] Планировщик запущен: сканирование каждые ${SCAN_INTERVAL_MS / 1000}с, горизонт ${HORIZON_MS / 60000}мин, точность отправки ±1с`);
+}
+
+// ─── Планировщик расписаний (scheduled_jobs) ─────────────────────────────────
+// Отдельная петля от нотификатора: у расписаний своя семантика (повтор,
+// автозапуск КОРЫ). claimDueJobs атомарно переносит созревшие джобы на
+// следующий запуск (CAS по next_run_at) — сработать дважды нельзя.
+
+/** kind='task': материализует вхождение расписания как реальную задачу на
+ * сегодня. Дальше оно живёт в календаре и попадает под обычный нотификатор
+ * (напоминание за 15 мин). Метка schedule_id даёт бейдж 🔁. */
+async function fireScheduleTask(db: Pool, job: ScheduledJob): Promise<void> {
+  const todayLocal = new Date().toLocaleDateString('sv-SE', { timeZone: job.timezone });
+  const id = crypto.randomUUID();
+  await db.query(
+    `INSERT INTO user_tasks (id, user_id, name, time, date, done, type, subtasks, created_at, updated_at, schedule_id)
+     VALUES ($1, $2, $3, $4, $5, false, 'regular', '[]'::jsonb, NOW(), NOW(), $6)`,
+    [id, job.userId, job.title, job.timeOfDay || '', todayLocal, job.id]
+  );
+  console.log(`[Schedule] task-вхождение создано job=${job.id} date=${todayLocal}`);
+}
+
+/** kind='agent': headless-прогон КОРЫ с сохранённой инструкцией, ответ — в
+ * Telegram. HITL: если агент захочет гейт-действие, оно уйдёт в pending под
+ * активный тред пользователя, и ответом придёт запрос на подтверждение —
+ * пользователь подтвердит следующим сообщением обычным путём (processKoraTurn). */
+async function runScheduledAgent(token: string, db: Pool, job: ScheduledJob): Promise<void> {
+  const apiKey = process.env.ROUTERAI_API_KEY;
+  if (!apiKey) { console.warn('[Schedule] ROUTERAI_API_KEY не задан — agent-джоб пропущен'); return; }
+
+  const { rows } = await db.query(
+    `SELECT telegram_chat_id FROM user_profiles WHERE user_id = $1`, [job.userId]
+  );
+  const chatId = rows[0]?.telegram_chat_id;
+  if (!chatId) { console.warn(`[Schedule] у user=${job.userId} нет telegram_chat_id — agent-джоб пропущен`); return; }
+
+  const userTz = await getUserTimezone(db, job.userId);
+  const thread = await loadBotThread(db, job.userId, userTz, apiKey);
+
+  const store = new PgPendingStore(db);
+  const audit = new PgGateAuditLog(db);
+  const { registry, executor } = buildKoraBotRegistry(job.userId, db, Number(chatId), token);
+  const generate = koraBotGenerate(apiKey);
+
+  const result = await runOrchestrated({
+    userMsg: job.instruction || job.title,
+    history: [],
+    registry,
+    generate,
+    ctx: { userId: job.userId },
+    onEvent: () => {},
+    isWriteAction: (action) => {
+      if (action.tool === 'сервис.call') return isWriteServiceAction(executor, action.args);
+      return registry.get(action.tool)?.isWrite ?? false;
+    },
+    promptOptions: {
+      persona: `${KORA_BOT_PERSONA}\n\nТекущие дата и время: ${getKoraNowContext(userTz)}`,
+      skillsCatalog: skillsCatalog(koraBotSkillStore),
+    },
+    hitl: { store, audit, userId: job.userId, threadId: thread.id },
+  });
+
+  const header = `🔁 ${job.title}\n\n`;
+  await sendFinalMessage(token, Number(chatId), header + result.answer);
+  console.log(`[Schedule] agent-джоб доставлен job=${job.id}`);
+}
+
+export async function startScheduleRunner(token: string, db: Pool): Promise<void> {
+  const SCAN_INTERVAL_MS = 30 * 1000;
+
+  const scan = async () => {
+    try {
+      const due = await claimDueJobs(db, new Date());
+      for (const job of due) {
+        try {
+          if (job.kind === 'agent') await runScheduledAgent(token, db, job);
+          else await fireScheduleTask(db, job);
+        } catch (e: any) {
+          console.error(`[Schedule] сработка job=${job.id} упала:`, e?.message);
+        }
+      }
+    } catch (e: any) {
+      console.error('[Schedule] scan error:', e?.message);
+    }
+  };
+
+  setInterval(scan, SCAN_INTERVAL_MS);
+  scan();
+  console.log(`[Schedule] Планировщик расписаний запущен: сканирование каждые ${SCAN_INTERVAL_MS / 1000}с`);
 }

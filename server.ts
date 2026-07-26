@@ -39,6 +39,9 @@ import { InMemorySkillStore, skillListTool, skillLoadTool, skillsCatalog } from 
 import { artifactSlidesTool, artifactSiteTool, type ArtifactResult } from './src/kora/artifacts.ts';
 import { confirmPending, rejectPending, resolveUserReply } from './src/kora/hitl.ts';
 import { PgPendingStore, PgGateAuditLog, ensureKoraTables } from './src/kora/pg-stores.ts';
+import { scheduleTools } from './src/kora/schedule-tools.ts';
+import { ensureScheduleTables, listJobs as listScheduleJobs, cancelJob as cancelScheduleJob, jobToSpec as scheduleJobToSpec } from './src/kora/schedule-store.ts';
+import { describeSchedule } from './src/kora/schedule.ts';
 
 dotenv.config();
 
@@ -1446,7 +1449,7 @@ app.get("/api/data/bootstrap", requireAuth, async (req, res) => {
         `
           SELECT id, name, time, date, done, type, calendar_event_id, subtasks,
                  thread_id, description, location, end_time, category, time_source,
-                 suggested_time, suggested_end_time
+                 suggested_time, suggested_end_time, schedule_id
           FROM user_tasks
           WHERE user_id = $1
           ORDER BY updated_at DESC, created_at DESC
@@ -1492,6 +1495,7 @@ app.get("/api/data/bootstrap", requireAuth, async (req, res) => {
         timeSource: row.time_source || undefined,
         suggestedTime: row.suggested_time || undefined,
         suggestedEndTime: row.suggested_end_time || undefined,
+        scheduleId: row.schedule_id || undefined,
       })),
       threads: threadsRes.rows.map((row) => ({
         id: row.id,
@@ -2661,12 +2665,49 @@ function buildKoraRegistry(userId: string): { registry: ToolRegistry; executor: 
   registry.register(serviceListTool(executor));
   registry.register(serviceCallTool(executor));
 
+  // Расписания (повторяющиеся задачи + автозапуск КОРЫ). Срабатывание — в боте
+  // (server-bot.ts::startScheduleRunner), здесь только заведение/список/отмена.
+  if (db) for (const tool of scheduleTools(db, userId)) registry.register(tool);
+
   return { registry, executor };
 }
 
 function sseSend(res: express.Response, event: string, data: unknown) {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
+
+// ── Расписания: список/отмена для блока управления в настройках ───────────────
+app.get("/api/schedules", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  if (!db) return res.status(503).json({ error: 'БД недоступна' });
+  try {
+    const jobs = await listScheduleJobs(db, userId, true);
+    res.json({
+      schedules: jobs.map((j) => ({
+        id: j.id,
+        title: j.title,
+        kind: j.kind,
+        schedule: describeSchedule(scheduleJobToSpec(j)),
+        nextRunAt: j.nextRunAt.toISOString(),
+      })),
+    });
+  } catch (e: any) {
+    console.error('[schedule] list error:', e?.message);
+    res.status(500).json({ error: 'Не удалось получить расписания' });
+  }
+});
+
+app.delete("/api/schedules/:id", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  if (!db) return res.status(503).json({ error: 'БД недоступна' });
+  try {
+    const ok = await cancelScheduleJob(db, String(req.params.id), userId);
+    res.json({ success: ok });
+  } catch (e: any) {
+    console.error('[schedule] cancel error:', e?.message);
+    res.status(500).json({ error: 'Не удалось отменить расписание' });
+  }
+});
 
 app.post("/api/agent/turn", requireAuth, aiRateLimit, async (req, res) => {
   const userId = (req as any).userId;
@@ -2828,7 +2869,10 @@ const startServer = async () => {
   // Добавляем колонку notified_at если её нет
   if (db) {
     await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ;`).catch(() => {});
+    // Связь сработавшего вхождения расписания с самим расписанием (метка 🔁).
+    await db.query(`ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS schedule_id TEXT;`).catch(() => {});
     await ensureKoraTables(db).catch((e) => console.warn('[kora] ensureKoraTables failed:', e?.message));
+    await ensureScheduleTables(db).catch((e) => console.warn('[schedule] ensureScheduleTables failed:', e?.message));
   }
 
   if (process.env.NODE_ENV !== "production") {

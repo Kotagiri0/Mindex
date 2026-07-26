@@ -279,6 +279,7 @@ function TaskRow({
           textDecoration: task.done ? 'line-through' : 'none',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{task.name}</span>
+        {task.scheduleId && <span title="Повторяется по расписанию" style={{ fontSize: 12, flexShrink: 0, opacity: 0.75 }}>🔁</span>}
         {task.time && <span style={{ fontFamily: M, fontSize: 14, color: 'var(--text-30)', flexShrink: 0 }}>{task.time}</span>}
         {hasSubs && (
           <button onClick={e => { e.stopPropagation(); setExpanded(v => !v); }} style={{

@@ -48,6 +48,8 @@ export interface Task {
   agent?: 'working' | 'needs' | 'done';
   /** Источник задачи. 'telegram' — пришла из бота (показываем метку источника). */
   origin?: 'telegram';
+  /** id расписания, если задача — сработавшее вхождение повторяющегося расписания. Показываем бейдж 🔁. */
+  scheduleId?: string;
 }
 
 export interface Message {
