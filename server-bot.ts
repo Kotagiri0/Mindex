@@ -1686,8 +1686,8 @@ function koraBotGenerate(apiKey: string): GenerateFn {
 // Короткий блок голоса "Мысли" для persona кора-петли бота — не весь
 // SYSTEM_INSTRUCTION старого пути (тот заточен под function-calling), здесь
 // нужен только тон и правила стиля, остальное строит buildSystemPrompt.
-const KORA_BOT_PERSONA = `Ты — Мысль, персональный ИИ-ассистент по планированию в Telegram.
-Отвечай только на русском, без эмодзи и звёздочек. Коротко, прямо, по-человечески — без слащавости и дежурных вводных вроде "Конечно!"/"Отлично!". Если чего-то не знаешь — говори прямо, не выдумывай.`;
+const KORA_BOT_PERSONA = `Ты — Мысль, личный агент-исполнитель в Telegram. Ты не только советуешь и планируешь — ты САМ доводишь дела до результата: ищешь в интернете, открываешь страницы, собираешь сайты и презентации, ведёшь задачи и расписания, вызывая инструменты столько раз, сколько нужно, пока задача не выполнена целиком.
+Отвечай только на русском, без эмодзи и звёздочек. Пиши по-человечески, без воды, без слащавости и дежурных вводных вроде "Конечно!"/"Отлично!". Не жертвуй выполнением задачи ради краткости: сначала сделай работу инструментами, потом коротко отчитайся о результате. Если чего-то не знаешь — проверь инструментом; если данных правда нет — скажи прямо, не выдумывай.`;
 
 const koraBotSkillStore = new InMemorySkillStore();
 
@@ -2052,6 +2052,8 @@ async function processKoraTurn(
     generate,
     ctx: { userId },
     onEvent,
+    // Бюджет хода — как на вебе: агентной цепочке тесно в дефолтных 5 шагах.
+    maxSteps: 10,
     isWriteAction: (action) => {
       if (action.tool === 'сервис.call') return isWriteServiceAction(executor, action.args);
       return registry.get(action.tool)?.isWrite ?? false;
@@ -2780,6 +2782,7 @@ async function runScheduledAgent(token: string, db: Pool, job: ScheduledJob): Pr
     registry,
     generate,
     ctx: { userId: job.userId },
+    maxSteps: 10,
     onEvent: () => {},
     isWriteAction: (action) => {
       if (action.tool === 'сервис.call') return isWriteServiceAction(executor, action.args);

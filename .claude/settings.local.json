@@ -140,7 +140,10 @@
       "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:3000)",
       "Bash(ssh-keygen -R 135.106.167.222)",
       "Bash(nslookup mysle-beta.ru)",
-      "Bash(node --import tsx --test tests/unit/kora/schedule.test.ts)"
+      "Bash(node --import tsx --test tests/unit/kora/schedule.test.ts)",
+      "Bash(node --import tsx \"D:\\\\tmp\\\\claude\\\\d--Mindex-1\\\\cf07c0ed-dee1-4037-b467-c3074f5d1936\\\\scratchpad\\\\agent-smoke.ts\")",
+      "Bash(node --import tsx _smoke_tmp.ts)",
+      "Bash(echo \"exit=$?\")"
     ],
     "additionalDirectories": [
       "D:\\",
