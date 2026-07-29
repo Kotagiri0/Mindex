@@ -13,6 +13,7 @@ import { ProxyAgent, setGlobalDispatcher, Agent, fetch as undiciFetch } from 'un
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as polisad from './src/polisad/index.ts';
+import { buildReplyContext, stripReplyContext, type TgReplyTarget } from './src/lib/telegram-reply.ts';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -48,6 +49,9 @@ interface TgMessage {
   forward_from?: TgUser;
   forward_from_chat?: { title?: string };
   caption?: string;
+  reply_to_message?: TgReplyTarget;
+  quote?: { text?: string };
+  external_reply?: unknown;
 }
 interface TgCallbackQuery {
   id: string;
@@ -900,7 +904,9 @@ async function processWithAI(
   sink?: StreamSink
 ): Promise<{ aiResponse: string; newMessages: StoredMessage[] }> {
   const now = () => new Date().toISOString();
-  const userMsg: StoredMessage = { role: 'user', content: userText, time: now() };
+  // В историю треда пишем текст без служебного маркера реплая — его видит
+  // только модель в этом запросе, а веб-интерфейс рендерит ту же историю.
+  const userMsg: StoredMessage = { role: 'user', content: stripReplyContext(userText), time: now() };
   const userTz = await getUserTimezone(db, userId);
 
   // Один шаг LLM. При наличии sink — стримим текст вживую; если стрим упал,
@@ -1648,6 +1654,12 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
   if (isForwarded) {
     const source = message.forward_from_chat?.title || message.forward_from?.first_name || '';
     userText = `[Пересланное сообщение${source ? ` от "${source}"` : ''}]\n${userText}\n\n[Вытащи из этого события дату, время и название. Добавь как задачу если там есть конкретное мероприятие или дедлайн]`;
+  }
+
+  // ── Реплай — пользователь нажал «Ответить» на конкретное сообщение ────────
+  const replyContext = buildReplyContext(message);
+  if (replyContext) {
+    userText = `${replyContext}\n${userText}`;
   }
 
   // Обновляем last_active_at
