@@ -2197,7 +2197,7 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
       const nowIso = new Date().toISOString();
       await saveBotThread(db, webUserId, thread.id, [
         ...existingMessages,
-        { role: 'user', content: userText, time: nowIso },
+        { role: 'user', content: stripReplyContext(userText), time: nowIso },
         { role: 'assistant', content: answer, time: nowIso },
       ]);
     } catch (e: any) {
