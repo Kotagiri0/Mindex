@@ -2180,6 +2180,11 @@ async function processUpdate(update: any, token: string, db: Pool, apiKey: strin
   const replyContext = buildReplyContext(message);
   if (replyContext) {
     userText = `${replyContext}\n${userText}`;
+    console.log(`[Bot] реплай учтён: ${replyContext.slice(0, 100)}`);
+  } else if (message.reply_to_message) {
+    // Telegram реплай прислал, но вытащить из него текст не вышло — важно
+    // видеть отдельно от случая «реплая не было вовсе».
+    console.log('[Bot] реплай пришёл, но цитату собрать не из чего');
   }
 
   // Обновляем last_active_at
@@ -2334,7 +2339,7 @@ async function startLongPolling(token: string, db: Pool, apiKey: string): Promis
     setImmediate(poll);
   };
 
-  console.log('[Bot] Long-polling запущен, ожидаю сообщений...');
+  console.log('[Bot] Long-polling запущен, ожидаю сообщений... [сборка: реплаи вкл.]');
   poll();
 }
 
