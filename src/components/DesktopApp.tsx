@@ -23,7 +23,7 @@ import NoteView from './NoteView';
 import NoteEditor from './NoteEditor';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
-import { uuid } from '../lib/utils';
+import { uuid, safeParseToolArgs } from '../lib/utils';
 import { getCurrentUser, apiFetch } from '../lib/auth';
 import { runAgentTurn, koraEnabled } from '../lib/kora-client';
 import type { GraphNode } from '../kora/graph';
@@ -825,6 +825,11 @@ function ChatView({
 
       let history = [...current.messages, userMsg];
       const turnMsgs: typeof history = [];
+      // Обрыв ответа модели на max_tokens режет JSON аргумента посреди строки —
+      // раньше это ронял весь цикл необработанным исключением. Помечаем факт
+      // обрыва и после цикла говорим об этом пользователю голосом Мысли, без
+      // технических деталей (правило синхронизации с AIChat.tsx — см. CLAUDE.md).
+      let hadToolParseError = false;
       let response = await generateResponse(history);
 
       while (response.tool_calls) {
@@ -834,7 +839,16 @@ function ChatView({
 
         for (const call of response.tool_calls) {
           const { name } = call.function;
-          const args = JSON.parse(call.function.arguments);
+          const parsed = safeParseToolArgs(call.function.arguments);
+          if (parsed.ok === false) {
+            // Именно этот вызов сломан (обычно последний в обрубленном ответе) —
+            // пропускаем его, остальные вызовы этого же ответа обрабатываем ниже.
+            console.error('[DesktopApp] Не удалось разобрать аргументы tool_call, вызов пропущен:', name, call.function.arguments, parsed.error);
+            hadToolParseError = true;
+            toolResults.push({ role: 'tool' as const, tool_call_id: call.id, content: JSON.stringify({ error: 'не выполнено — ответ модели был обрезан' }), time: nowTime() });
+            continue;
+          }
+          const args = parsed.args;
           let result: any;
 
           if (name === 'get_tasks') {
@@ -913,6 +927,33 @@ function ChatView({
             }));
             setIsTyping(false);
             return;
+          } else if (name === 'add_recurring_task') {
+            // Плавающая задача без конечной даты — эндпоинт переиспользует тот
+            // же scheduled_jobs-механизм, что и КОРА (server.ts POST /api/schedules).
+            try {
+              const res = await apiFetch('/api/schedules', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: args.title, schedule_type: args.schedule_type, time: args.time, weekdays: args.weekdays }),
+              });
+              result = await res.json();
+            } catch (e) {
+              result = { error: 'не удалось создать расписание' };
+            }
+          } else if (name === 'list_recurring_tasks') {
+            try {
+              const res = await apiFetch('/api/schedules');
+              result = await res.json();
+            } catch (e) {
+              result = { error: 'не удалось получить список расписаний' };
+            }
+          } else if (name === 'cancel_recurring_task') {
+            try {
+              const res = await apiFetch(`/api/schedules/${encodeURIComponent(args.id)}`, { method: 'DELETE' });
+              result = await res.json();
+            } catch (e) {
+              result = { error: 'не удалось отменить расписание' };
+            }
           }
 
           toolResults.push({ role: 'tool' as const, tool_call_id: call.id, content: JSON.stringify(result ?? { status: 'ok' }), time: nowTime() });
@@ -920,10 +961,24 @@ function ChatView({
 
         turnMsgs.push(...toolResults);
         history = [...history, assistantMsg, ...toolResults];
+
+        // Не гоняем модель по кругу дальше в этом же ходу — при том же max_tokens
+        // она может опять упереться в лимит на следующей порции вызовов. Уже
+        // сохранённое сохранено, остальное пользователь попросит следующим сообщением.
+        if (hadToolParseError) break;
+
         response = await generateResponse(history);
       }
 
-      const finalMsg = { role: 'assistant' as const, content: response.content || 'Готово!', reasoning_content: response.reasoning_content, time: nowTime(), sources: response.sources };
+      const finalMsg = {
+        role: 'assistant' as const,
+        content: hadToolParseError
+          ? 'Не получилось сделать всё за раз — часть уже добавлена. Скажи «продолжи», доделаю остальное'
+          : (response.content || 'Готово!'),
+        reasoning_content: response.reasoning_content,
+        time: nowTime(),
+        sources: response.sources
+      };
       setThreads(prev => (Array.isArray(prev) ? prev : []).map(t => {
         if (t.id === threadId) {
           const hasUser = t.messages.some(m => m.role === 'user' && m.content === userMsg.content && m.time === userMsg.time);

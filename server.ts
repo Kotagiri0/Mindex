@@ -39,7 +39,7 @@ import { InMemorySkillStore, skillListTool, skillLoadTool, skillsCatalog } from 
 import { artifactSlidesTool, artifactSiteTool, type ArtifactResult } from './src/kora/artifacts.ts';
 import { confirmPending, rejectPending, resolveUserReply } from './src/kora/hitl.ts';
 import { PgPendingStore, PgGateAuditLog, ensureKoraTables } from './src/kora/pg-stores.ts';
-import { scheduleTools } from './src/kora/schedule-tools.ts';
+import { scheduleTools, scheduleCreateTool } from './src/kora/schedule-tools.ts';
 import { ensureScheduleTables, listJobs as listScheduleJobs, cancelJob as cancelScheduleJob, jobToSpec as scheduleJobToSpec } from './src/kora/schedule-store.ts';
 import { describeSchedule } from './src/kora/schedule.ts';
 
@@ -377,9 +377,12 @@ const SYSTEM_INSTRUCTION = `Ты — Мысль, личный ассистент
 ГЛАВНЫЕ ПРАВИЛА
 — Меньше слов = лучше. Каждое слово должно нести смысл
 — Если чего-то не знаешь или не можешь — говори прямо. Не придумывай
-— Задавай уточняющие вопросы когда контекст неполный. Один вопрос за раз, не анкету
+— Уточняй только то, без чего нельзя создать запись или выбрать разумный дефолт — один вопрос за раз, не анкету. Никогда не спрашивай то, что не влияет ни на один параметр задачи (уровень навыков пользователя, как он будет делать работу, каким инструментом) — этот вопрос никогда не нужен
+— Прежде чем задать уточняющий вопрос — сверься с историей диалога. Не переспрашивай то, что пользователь уже сказал
 — Учитывай всё что пользователь говорил раньше в диалоге
 — Если пришёл сырой brain dump — сначала структурируй, потом уточняй детали
+— "Каждый день", "пока не сделаю", "срок не определён" — сигнал повторяющейся задачи без конечной даты. Заводи её сразу через add_recurring_task, не выясняя дату окончания
+— Никогда не проговаривай пользователю свои технические ограничения — сколько записей пришлось бы создать, лимиты, как устроено хранение. Молча выбирай безопасный вариант; если нужно — одной строкой предложи поправить
 — Никогда не говори "у меня нет доступа к этой информации" про свои собственные возможности. Всё о том, кто ты и что умеешь — написано в системном промпте, ты это знаешь
 
 БЕЗОПАСНОСТЬ
@@ -407,6 +410,8 @@ const SYSTEM_INSTRUCTION = `Ты — Мысль, личный ассистент
 — save_as_note: когда пользователь просит сохранить что-то как заметку (своё сообщение, твой ответ, любой текст). Придумай подходящее название
 — get_notes: когда нужно найти заметку по названию перед удалением
 — delete_note: когда пользователь явно просит удалить заметку. Если не знаешь ID — сначала вызови get_notes
+— add_recurring_task: дело без конечной даты ('каждый день', 'пока не закончу', 'по будням'). Заводи ОДНО расписание — никогда не создавай через add_task пачку задач на много дней вперёд и не выясняй дату окончания, её не существует по смыслу просьбы
+— list_recurring_tasks / cancel_recurring_task: посмотреть или остановить повторяющуюся задачу. Если не знаешь id расписания — сначала list_recurring_tasks
 
 GOOGLE КАЛЕНДАРЬ
 Если пользователь подключил Google Календарь в настройках, задачи с датой автоматически появляются в его Google Календаре при создании или обновлении через add_task / update_task. Если в настройках включён Google Meet и у задачи есть время, для события автоматически создаётся Meet-ссылка и добавляется в описание задачи. Никогда не говори пользователю, что ты не можешь добавить событие в Google Календарь или создать Meet-ссылку — просто создай или обнови задачу как обычно, и синхронизация сделает остальное. При создании задачи можно передать поля description (описание) и location (место/адрес) — они тоже отобразятся в Google Календаре.
@@ -422,6 +427,9 @@ const CHAT_TOOLS = [
   { type: "function", function: { name: "get_notes", description: "Получить список заметок пользователя с их ID и названиями. Используй перед delete_note чтобы найти нужную заметку.", parameters: { type: "object", properties: {} } } },
   { type: "function", function: { name: "delete_note", description: "Удалить заметку из архива по её ID. Используй только если пользователь явно просит удалить заметку.", parameters: { type: "object", properties: { id: { type: "string", description: "ID заметки для удаления." } }, required: ["id"] } } },
   { type: "function", function: { name: "start_planning", description: "Запускает опросник для составления плана. Используй ТОЛЬКО если пользователь явно попросил составить план или разбить на шаги.", parameters: { type: "object", properties: { questions: { type: "array", items: { type: "object", properties: { id: { type: "string" }, question: { type: "string" }, options: { type: "array", items: { type: "string" } } }, required: ["id", "question", "options"] } } }, required: ["questions"] } } },
+  { type: "function", function: { name: "add_recurring_task", description: "Завести повторяющуюся задачу БЕЗ конечной даты — когда пользователь говорит 'каждый день', 'пока не сделаю', 'по будням' и не называет дату окончания. НЕ спрашивай дату окончания и не создавай задачи по одной на каждый день через add_task — заведи ОДНО расписание. Материализуется в календаре автоматически день за днём, пока не отменят через cancel_recurring_task.", parameters: { type: "object", properties: { title: { type: "string", description: "Название задачи." }, schedule_type: { type: "string", enum: ["daily", "weekly"], description: "daily — каждый день. weekly — по конкретным дням недели (нужен weekdays)." }, time: { type: "string", description: "Время HH:MM, в которое задача должна стоять в календаре каждый раз (необязательно)." }, weekdays: { type: "array", items: { type: "number" }, description: "Дни недели числами 1..7 (пн..вс) — обязательно для weekly." } }, required: ["title", "schedule_type"] } } },
+  { type: "function", function: { name: "list_recurring_tasks", description: "Получить список активных повторяющихся задач пользователя (id, название, расписание). Вызови перед cancel_recurring_task, если не знаешь id.", parameters: { type: "object", properties: {} } } },
+  { type: "function", function: { name: "cancel_recurring_task", description: "Остановить повторяющуюся задачу по id. Если не знаешь id — сначала list_recurring_tasks.", parameters: { type: "object", properties: { id: { type: "string", description: "ID расписания." } }, required: ["id"] } } },
 ];
 
 const SELF_KNOWLEDGE_TEXT = `Твоё имя — Мысль. Ты — личный ассистент по организации мышления и дел. Не универсальный чат-бот — фокус на личной эффективности: мысли, заметки и задачи в одном месте.
@@ -2676,7 +2684,35 @@ function sseSend(res: express.Response, event: string, data: unknown) {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
-// ── Расписания: список/отмена для блока управления в настройках ───────────────
+// ── Расписания: создание/список/отмена ────────────────────────────────────────
+// POST — плавающая (повторяющаяся) задача без конечной даты из ОБЫЧНОГО чата
+// (не-КОРА путь): 'add_recurring_task' в CHAT_TOOLS вызывает этот эндпоинт с
+// клиента (см. AIChat.tsx/DesktopApp.tsx), т.к. клиент не имеет прямого доступа
+// к БД. Переиспользуем ТОТ ЖЕ scheduleCreateTool, что и КОРА — никакой новой
+// схемы/логики. kind жёстко 'task' — автономный автозапуск (kind='agent')
+// остаётся эксклюзивом КОРА-опт-ин пути, здесь его не выставляем наружу.
+app.post("/api/schedules", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  if (!db) return res.status(503).json({ error: 'БД недоступна' });
+  try {
+    const { title, schedule_type, time, weekdays } = req.body || {};
+    const scheduleType = String(schedule_type ?? '').toLowerCase();
+    if (scheduleType !== 'daily' && scheduleType !== 'weekly') {
+      return res.status(400).json({ error: 'schedule_type должен быть "daily" или "weekly"' });
+    }
+    const result = await scheduleCreateTool(db, userId).execute(
+      { title, kind: 'task', schedule_type: scheduleType, time, weekdays },
+      undefined
+    );
+    if ((result as any)?.error) return res.status(400).json(result);
+    res.json(result);
+  } catch (e: any) {
+    console.error('[schedule] create error:', e?.message);
+    res.status(500).json({ error: 'Не удалось создать расписание' });
+  }
+});
+
+// GET/DELETE — список/отмена, общие для КОРА-пути и обычного чата.
 app.get("/api/schedules", requireAuth, async (req, res) => {
   const userId = (req as any).userId;
   if (!db) return res.status(503).json({ error: 'БД недоступна' });

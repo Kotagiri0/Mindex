@@ -39,7 +39,7 @@ import { artifactSlidesTool, artifactSiteTool, type ArtifactResult } from './src
 import { confirmPending, rejectPending, resolveUserReply } from './src/kora/hitl.ts';
 import { PgPendingStore, PgGateAuditLog, ensureKoraTables } from './src/kora/pg-stores.ts';
 import { localTimeToUtc } from './src/lib/tz.ts';
-import { scheduleTools } from './src/kora/schedule-tools.ts';
+import { scheduleTools, scheduleCreateTool, scheduleListTool, scheduleCancelTool } from './src/kora/schedule-tools.ts';
 import { ensureScheduleTables, claimDueJobs, type ScheduledJob } from './src/kora/schedule-store.ts';
 
 const execFileAsync = promisify(execFile);
@@ -154,9 +154,12 @@ function getSystemInstruction(tz = 'Europe/Moscow'): string {
 ГЛАВНЫЕ ПРАВИЛА
 — Меньше слов = лучше. Каждое слово должно нести смысл
 — Если чего-то не знаешь или не можешь — говори прямо. Не придумывай
-— Задавай уточняющие вопросы когда контекст неполный. Один вопрос за раз, не анкету
+— Уточняй только то, без чего нельзя создать запись или выбрать разумный дефолт — один вопрос за раз, не анкету. Никогда не спрашивай то, что не влияет ни на один параметр задачи (уровень навыков пользователя, как он будет делать работу, каким инструментом) — этот вопрос никогда не нужен
+— Прежде чем задать уточняющий вопрос — сверься с историей диалога. Не переспрашивай то, что пользователь уже сказал
 — Учитывай всё что пользователь говорил раньше в диалоге
 — Если пришёл сырой brain dump — сначала структурируй, потом уточняй детали
+— "Каждый день", "пока не сделаю", "срок не определён" — сигнал повторяющейся задачи без конечной даты. Заводи её сразу через add_recurring_task, не выясняя дату окончания
+— Никогда не проговаривай пользователю свои технические ограничения — сколько записей пришлось бы создать, лимиты, как устроено хранение. Молча выбирай безопасный вариант; если нужно — одной строкой предложи поправить
 — Никогда не говори "у меня нет доступа к этой информации" про свои собственные возможности
 
 ПАМЯТЬ — КРИТИЧНО
@@ -169,6 +172,7 @@ function getSystemInstruction(tz = 'Europe/Moscow'): string {
 — Перед добавлением или переносом задачи сперва вызови get_tasks на нужную дату и посмотри, что там уже стоит. Если похожая задача уже есть — не добавляй дубль.
 — Перенос/сдвиг задачи — это ТОЛЬКО update_task по id существующей задачи. Никогда не создавай новую похожую и не удаляй старую ради переноса — это плодит дубли.
 — Одна просьба = одно действие. Не вызывай один и тот же инструмент с теми же данными повторно.
+— Дело без конечной даты ('каждый день', 'пока не закончу', 'по будням') — это add_recurring_task, ОДИН вызов. Никогда не создавай через add_task пачку задач на много дней вперёд и не выясняй дату окончания, если пользователь её не назвал. list_recurring_tasks / cancel_recurring_task — посмотреть или остановить; если не знаешь id — сначала list_recurring_tasks.
 
 ПЕРЕСТРОЙКА РАСПИСАНИЯ
 Когда пользователь сдвигает задачу:
@@ -302,6 +306,45 @@ const botTools: any[] = [
           label: { type: 'string', description: 'Текст напоминания — что именно напомнить.' }
         },
         required: ['remind_at_iso', 'label']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'add_recurring_task',
+      description: 'Завести повторяющуюся задачу БЕЗ конечной даты — когда пользователь говорит "каждый день", "пока не сделаю", "по будням" и не называет дату окончания. НЕ спрашивай дату окончания и не создавай через add_task пачку задач на много дней вперёд — заведи ОДНО расписание. Материализуется в календаре автоматически день за днём, пока не отменят через cancel_recurring_task.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Название задачи.' },
+          schedule_type: { type: 'string', enum: ['daily', 'weekly'], description: 'daily — каждый день. weekly — по конкретным дням недели (нужен weekdays).' },
+          time: { type: 'string', description: 'ЛОКАЛЬНОЕ время HH:MM (МСК), в которое задача должна стоять в календаре каждый раз (необязательно). НЕ переводить в UTC.' },
+          weekdays: { type: 'array', items: { type: 'number' }, description: 'Дни недели числами 1..7 (пн..вс) — обязательно для weekly.' }
+        },
+        required: ['title', 'schedule_type']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_recurring_tasks',
+      description: 'Получить список активных повторяющихся задач пользователя (id, название, расписание). Вызови перед cancel_recurring_task, если не знаешь id.',
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'cancel_recurring_task',
+      description: 'Остановить повторяющуюся задачу по id. Если не знаешь id — сначала list_recurring_tasks.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'ID расписания.' }
+        },
+        required: ['id']
       }
     }
   }
@@ -619,6 +662,26 @@ async function executeTool(name: string, args: any, db: Pool, userId: string): P
         );
         return { success: true, id, remind_at: remindAt.toISOString() };
       }
+    }
+    case 'add_recurring_task': {
+      // Плавающая задача без конечной даты — переиспользуем ТОТ ЖЕ
+      // scheduleCreateTool, что и КОРА (schedule-tools.ts), никакой новой
+      // логики. kind жёстко 'task': автономный автозапуск (kind='agent')
+      // остаётся эксклюзивом КОРА-опт-ин пути, в обычном чате не выставляем.
+      const scheduleType = String(args.schedule_type ?? '').toLowerCase();
+      if (scheduleType !== 'daily' && scheduleType !== 'weekly') {
+        return { error: 'schedule_type должен быть "daily" или "weekly"' };
+      }
+      return scheduleCreateTool(db, userId).execute(
+        { title: args.title, kind: 'task', schedule_type: scheduleType, time: args.time, weekdays: args.weekdays },
+        undefined
+      );
+    }
+    case 'list_recurring_tasks': {
+      return scheduleListTool(db, userId).execute({}, undefined);
+    }
+    case 'cancel_recurring_task': {
+      return scheduleCancelTool(db, userId).execute({ id: args.id }, undefined);
     }
     default:
       return { error: 'Unknown tool' };

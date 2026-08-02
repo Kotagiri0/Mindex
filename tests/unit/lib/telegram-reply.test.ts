@@ -2,32 +2,38 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildReplyContext, stripReplyContext, REPLY_QUOTE_LIMIT } from '../../../src/lib/telegram-reply';
 
-test('ответ на сообщение бота → маркер "твоё сообщение" с цитатой', () => {
+// Директивный суффикс, который теперь идёт после цитаты в маркерах "твоё"/"своё
+// сообщение" — вынесен в константу, чтобы не размазывать длинную строку по
+// полусотне assert.equal и не разъехаться с реальным текстом в исходнике.
+const OWN_SUFFIX = '. Речь именно о нём — опирайся на него, а не на последнее по времени.';
+const EXTERNAL_SUFFIX = '. Речь именно о нём.';
+
+test('ответ на сообщение бота → маркер "твоё сообщение" с цитатой и директивной инструкцией', () => {
   const result = buildReplyContext({
     reply_to_message: { from: { is_bot: true }, text: 'Купи молоко' },
   });
-  assert.equal(result, '[Отвечает на твоё сообщение: "Купи молоко"]');
+  assert.equal(result, `[Отвечает на твоё сообщение: "Купи молоко"${OWN_SUFFIX}]`);
 });
 
 test('ответ на своё сообщение (is_bot отсутствует) → маркер "своё сообщение"', () => {
   const result = buildReplyContext({
     reply_to_message: { from: { id: 1 }, text: 'Напомни завтра' },
   });
-  assert.equal(result, '[Отвечает на своё сообщение: "Напомни завтра"]');
+  assert.equal(result, `[Отвечает на своё сообщение: "Напомни завтра"${OWN_SUFFIX}]`);
 });
 
 test('ответ на своё сообщение (is_bot: false) → маркер "своё сообщение"', () => {
   const result = buildReplyContext({
     reply_to_message: { from: { is_bot: false }, text: 'Ещё раз' },
   });
-  assert.equal(result, '[Отвечает на своё сообщение: "Ещё раз"]');
+  assert.equal(result, `[Отвечает на своё сообщение: "Ещё раз"${OWN_SUFFIX}]`);
 });
 
 test('reply_to_message есть, но поле from отсутствует полностью → "своё сообщение"', () => {
   const result = buildReplyContext({
     reply_to_message: { text: 'Без поля from' },
   });
-  assert.equal(result, '[Отвечает на своё сообщение: "Без поля from"]');
+  assert.equal(result, `[Отвечает на своё сообщение: "Без поля from"${OWN_SUFFIX}]`);
 });
 
 test('quote.text приоритетнее reply_to_message.text', () => {
@@ -35,14 +41,14 @@ test('quote.text приоритетнее reply_to_message.text', () => {
     reply_to_message: { from: { is_bot: true }, text: 'Полный текст сообщения целиком' },
     quote: { text: 'выделенный фрагмент' },
   });
-  assert.equal(result, '[Отвечает на твоё сообщение: "выделенный фрагмент"]');
+  assert.equal(result, `[Отвечает на твоё сообщение: "выделенный фрагмент"${OWN_SUFFIX}]`);
 });
 
 test('fallback на caption, когда text отсутствует', () => {
   const result = buildReplyContext({
     reply_to_message: { from: { is_bot: true }, caption: 'Подпись к фото' },
   });
-  assert.equal(result, '[Отвечает на твоё сообщение: "Подпись к фото"]');
+  assert.equal(result, `[Отвечает на твоё сообщение: "Подпись к фото"${OWN_SUFFIX}]`);
 });
 
 test('короткая цитата (в пределах лимита) возвращается как есть, без разделителя', () => {
@@ -50,7 +56,7 @@ test('короткая цитата (в пределах лимита) возв�
   const result = buildReplyContext({
     reply_to_message: { from: { is_bot: true }, text },
   });
-  assert.equal(result, `[Отвечает на твоё сообщение: "${text}"]`);
+  assert.equal(result, `[Отвечает на твоё сообщение: "${text}"${OWN_SUFFIX}]`);
 });
 
 test('обрезка длинной цитаты — голова + хвост через " … "', () => {
@@ -60,7 +66,7 @@ test('обрезка длинной цитаты — голова + хвост �
     reply_to_message: { from: { is_bot: true }, text: longText },
   });
   assert.ok(result);
-  const match = result!.match(/^\[Отвечает на твоё сообщение: "(.*)"\]$/s);
+  const match = result!.match(/^\[Отвечает на твоё сообщение: "(.*)"\. Речь именно о нём/s);
   assert.ok(match, 'маркер должен соответствовать ожидаемому формату');
   const quote = match![1];
 
@@ -84,7 +90,7 @@ test('эмодзи ровно на границе обрезки не ломае
     reply_to_message: { from: { is_bot: true }, text: longText },
   });
   assert.ok(result);
-  const match = result!.match(/^\[Отвечает на твоё сообщение: "(.*)"\]$/s);
+  const match = result!.match(/^\[Отвечает на твоё сообщение: "(.*)"\. Речь именно о нём/s);
   const quote = match![1];
 
   // Нет одиночных суррогатов — строка состоит из целых code points.
@@ -101,21 +107,21 @@ test('схлопывание переводов строк и лишних пр�
   const result = buildReplyContext({
     reply_to_message: { from: { is_bot: true }, text: 'Строка1\n\n  Строка2\t\tСтрока3' },
   });
-  assert.equal(result, '[Отвечает на твоё сообщение: "Строка1 Строка2 Строка3"]');
+  assert.equal(result, `[Отвечает на твоё сообщение: "Строка1 Строка2 Строка3"${OWN_SUFFIX}]`);
 });
 
 test('вырезание [ и ] и замена " на \' внутри цитаты', () => {
   const result = buildReplyContext({
     reply_to_message: { from: { is_bot: true }, text: 'текст [служебный маркер] и "кавычки"' },
   });
-  assert.equal(result, '[Отвечает на твоё сообщение: "текст служебный маркер и \'кавычки\'"]');
+  assert.equal(result, `[Отвечает на твоё сообщение: "текст служебный маркер и 'кавычки'"${OWN_SUFFIX}]`);
 });
 
 test('скобки с пробелами внутри не оставляют двойных пробелов', () => {
   const result = buildReplyContext({
     reply_to_message: { from: { is_bot: true }, text: 'смотри [ вот это ] дальше' },
   });
-  assert.equal(result, '[Отвечает на твоё сообщение: "смотри вот это дальше"]');
+  assert.equal(result, `[Отвечает на твоё сообщение: "смотри вот это дальше"${OWN_SUFFIX}]`);
   assert.ok(!result!.includes('  '), 'в цитате не должно быть двойных пробелов');
 });
 
@@ -124,7 +130,7 @@ test('external_reply + quote без reply_to_message → "из другого ч
     external_reply: {},
     quote: { text: 'цитата из чужого чата' },
   });
-  assert.equal(result, '[Отвечает на сообщение из другого чата: "цитата из чужого чата"]');
+  assert.equal(result, `[Отвечает на сообщение из другого чата: "цитата из чужого чата"${EXTERNAL_SUFFIX}]`);
 });
 
 test('reply на голосовое без текста (своё) → маркер без цитаты', () => {
@@ -160,20 +166,20 @@ test('цитата из одних пробелов → null', () => {
   assert.equal(result, null);
 });
 
-// ─── stripReplyContext ──────────────────────────────────────────────────────
+// ─── stripReplyContext: новая (директивная) форма ──────────────────────────
 
-test('stripReplyContext снимает маркер "твоё сообщение"', () => {
-  const marker = '[Отвечает на твоё сообщение: "цитата"]';
+test('stripReplyContext снимает маркер "твоё сообщение" (новая форма, с инструкцией)', () => {
+  const marker = `[Отвечает на твоё сообщение: "цитата"${OWN_SUFFIX}]`;
   assert.equal(stripReplyContext(`${marker}\nтекст пользователя`), 'текст пользователя');
 });
 
-test('stripReplyContext снимает маркер "своё сообщение"', () => {
-  const marker = '[Отвечает на своё сообщение: "цитата"]';
+test('stripReplyContext снимает маркер "своё сообщение" (новая форма, с инструкцией)', () => {
+  const marker = `[Отвечает на своё сообщение: "цитата"${OWN_SUFFIX}]`;
   assert.equal(stripReplyContext(`${marker}\nтекст пользователя`), 'текст пользователя');
 });
 
-test('stripReplyContext снимает маркер "из другого чата"', () => {
-  const marker = '[Отвечает на сообщение из другого чата: "цитата"]';
+test('stripReplyContext снимает маркер "из другого чата" (новая форма, с инструкцией)', () => {
+  const marker = `[Отвечает на сообщение из другого чата: "цитата"${EXTERNAL_SUFFIX}]`;
   assert.equal(stripReplyContext(`${marker}\nтекст пользователя`), 'текст пользователя');
 });
 
@@ -188,20 +194,42 @@ test('stripReplyContext не трогает текст без маркера', (
 });
 
 test('stripReplyContext не трогает маркер в середине текста', () => {
-  const text = 'привет\n[Отвечает на твоё сообщение: "цитата"]\nещё текст';
+  const text = `привет\n[Отвечает на твоё сообщение: "цитата"${OWN_SUFFIX}]\nещё текст`;
   assert.equal(stripReplyContext(text), text);
 });
 
 test('stripReplyContext: round-trip — маркер + \\n + текст возвращает исходный текст', () => {
-  const marker = '[Отвечает на твоё сообщение: "цитата"]';
+  const marker = `[Отвечает на твоё сообщение: "цитата"${OWN_SUFFIX}]`;
   const text = 'исходный текст пользователя';
   assert.equal(stripReplyContext(marker + '\n' + text), text);
 });
 
 test('stripReplyContext: многострочный текст пользователя — снимается только маркер', () => {
-  const marker = '[Отвечает на своё сообщение: "цитата"]';
+  const marker = `[Отвечает на своё сообщение: "цитата"${OWN_SUFFIX}]`;
   const text = 'строка первая\nстрока вторая\nстрока третья';
   assert.equal(stripReplyContext(`${marker}\n${text}`), text);
+});
+
+// ─── stripReplyContext: обратная совместимость со СТАРОЙ формой ───────────
+// В БД уже есть сообщения, сохранённые ДО этого фикса — с пассивным маркером
+// без директивной инструкции (маркер заканчивался сразу на кавычку + "]").
+// REPLY_MARKER_RE намеренно делает суффикс-инструкцию опциональной, чтобы эти
+// старые записи тоже очищались от маркера при выдаче в веб-интерфейс/историю,
+// а не оставались с "мусором" в тексте навсегда.
+
+test('обратная совместимость: старая форма "твоё сообщение" (без инструкции) тоже снимается', () => {
+  const marker = '[Отвечает на твоё сообщение: "цитата"]';
+  assert.equal(stripReplyContext(`${marker}\nтекст пользователя`), 'текст пользователя');
+});
+
+test('обратная совместимость: старая форма "своё сообщение" (без инструкции) тоже снимается', () => {
+  const marker = '[Отвечает на своё сообщение: "цитата"]';
+  assert.equal(stripReplyContext(`${marker}\nтекст пользователя`), 'текст пользователя');
+});
+
+test('обратная совместимость: старая форма "из другого чата" (без инструкции) тоже снимается', () => {
+  const marker = '[Отвечает на сообщение из другого чата: "цитата"]';
+  assert.equal(stripReplyContext(`${marker}\nтекст пользователя`), 'текст пользователя');
 });
 
 // ─── round-trip: buildReplyContext → stripReplyContext ─────────────────────
@@ -262,6 +290,18 @@ test('регрессия: "[Отвечает на своё сообщение: �
   assert.equal(stripReplyContext(text), text);
 });
 
+// Важное отличие от регрессии выше: '[Отвечает на твоё сообщение: "x"]' — это
+// НЕ мусорный "похожий" текст, а ТОЧНО старая (пре-фикс) форма нашего же
+// маркера — просто без директивной инструкции. Она больше не каноническая
+// (buildReplyContext такую больше не строит), но снимать её обязаны — иначе
+// сообщения, сохранённые в БД до этого изменения, никогда не очистятся.
+// Поэтому, в отличие от истинных регрессионных случаев выше, здесь ожидаем
+// именно снятие маркера, а не сохранение текста как есть.
+test('старая (пре-фикс) форма маркера с цитатой "x" снимается — обратная совместимость с БД', () => {
+  const text = '[Отвечает на твоё сообщение: "x"]\nтекст';
+  assert.equal(stripReplyContext(text), 'текст');
+});
+
 // ─── эмодзи на границе ХВОСТА (последние 200 code points) ──────────────────
 
 test('эмодзи ровно на границе хвоста (QUOTE_TAIL=200) не ломается на суррогат', () => {
@@ -275,7 +315,7 @@ test('эмодзи ровно на границе хвоста (QUOTE_TAIL=200) 
     reply_to_message: { from: { is_bot: true }, text: longText },
   });
   assert.ok(result);
-  const match = result!.match(/^\[Отвечает на твоё сообщение: "(.*)"\]$/s);
+  const match = result!.match(/^\[Отвечает на твоё сообщение: "(.*)"\. Речь именно о нём/s);
   assert.ok(match, 'маркер должен соответствовать ожидаемому формату');
   const quote = match![1];
 
@@ -297,5 +337,26 @@ test('quote.text === "" (пустая строка) → цитата берёт�
     reply_to_message: { from: { is_bot: true }, text: 'Текст из reply_to_message' },
     quote: { text: '' },
   });
-  assert.equal(result, '[Отвечает на твоё сообщение: "Текст из reply_to_message"]');
+  assert.equal(result, `[Отвечает на твоё сообщение: "Текст из reply_to_message"${OWN_SUFFIX}]`);
+});
+
+// ─── цитата с точкой и тире внутри ──────────────────────────────────────────
+// Символьный класс цитаты в REPLY_MARKER_RE ([^\]\n]*) запрещает только "]" и
+// перевод строки — точка и тире (в т.ч. само тире директивной инструкции)
+// внутри цитаты его не путают. Проверяем на реальной связке build → strip.
+
+test('round-trip: цитата с точкой и тире внутри — маркер собирается и снимается корректно', () => {
+  assertRoundTrip({
+    reply_to_message: { from: { is_bot: true }, text: 'Встреча в 15:00 — не забудь. Возьми ноутбук.' },
+  });
+});
+
+test('цитата с точкой и тире — маркер строится с корректной директивной инструкцией на конце', () => {
+  const result = buildReplyContext({
+    reply_to_message: { from: { is_bot: true }, text: 'Встреча в 15:00 — не забудь. Возьми ноутбук.' },
+  });
+  assert.equal(
+    result,
+    `[Отвечает на твоё сообщение: "Встреча в 15:00 — не забудь. Возьми ноутбук."${OWN_SUFFIX}]`,
+  );
 });

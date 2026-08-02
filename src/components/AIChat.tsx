@@ -10,7 +10,7 @@ import AgentThread from './AgentThread';
 import { Thread, Screen, Message, Task, SubTask } from '../types';
 import { generateResponse } from '../lib/groq';
 import { db } from '../lib/db';
-import { uuid } from '../lib/utils';
+import { uuid, safeParseToolArgs } from '../lib/utils';
 import { apiFetch } from '../lib/auth';
 import { runAgentTurn, koraEnabled } from '../lib/kora-client';
 import type { GraphNode } from '../kora/graph';
@@ -295,6 +295,11 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
 
       let conversationHistory: Message[] = [...currentThread.messages, userMsg];
       const turnMessages: Message[] = [];
+      // Обрыв ответа модели на max_tokens (см. server.ts) режет JSON аргумента
+      // прямо посреди строки — раньше это ронял весь цикл необработанным
+      // исключением. Помечаем факт обрыва и после цикла говорим об этом
+      // пользователю голосом Мысли, без технических деталей.
+      let hadToolParseError = false;
 
       let response = await generateResponse(conversationHistory);
 
@@ -311,8 +316,22 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
 
         for (const call of response.tool_calls) {
           const { name } = call.function;
-          const args = JSON.parse(call.function.arguments);
           const id = call.id;
+          const parsed = safeParseToolArgs(call.function.arguments);
+          if (parsed.ok === false) {
+            // Именно этот вызов сломан (обычно последний в обрубленном ответе) —
+            // пропускаем его, но остальные вызовы в этом же ответе обрабатываем ниже.
+            console.error('[AIChat] Не удалось разобрать аргументы tool_call, вызов пропущен:', name, call.function.arguments, parsed.error);
+            hadToolParseError = true;
+            toolResults.push({
+              role: 'tool',
+              tool_call_id: id,
+              content: JSON.stringify({ error: 'не выполнено — ответ модели был обрезан' }),
+              time: ft()
+            });
+            continue;
+          }
+          const args = parsed.args;
           let result;
 
           if (name === 'get_notes') {
@@ -430,6 +449,33 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
               body: JSON.stringify({ messages: [{ role: 'user', content: content.trim() }], threadId: noteId }),
             }).catch(() => {});
             result = { status: 'success', noteId };
+          } else if (name === 'add_recurring_task') {
+            // Плавающая задача без конечной даты — эндпоинт переиспользует тот
+            // же scheduled_jobs-механизм, что и КОРА (server.ts POST /api/schedules).
+            try {
+              const res = await apiFetch('/api/schedules', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: args.title, schedule_type: args.schedule_type, time: args.time, weekdays: args.weekdays }),
+              });
+              result = await res.json();
+            } catch (e) {
+              result = { error: 'не удалось создать расписание' };
+            }
+          } else if (name === 'list_recurring_tasks') {
+            try {
+              const res = await apiFetch('/api/schedules');
+              result = await res.json();
+            } catch (e) {
+              result = { error: 'не удалось получить список расписаний' };
+            }
+          } else if (name === 'cancel_recurring_task') {
+            try {
+              const res = await apiFetch(`/api/schedules/${encodeURIComponent(args.id)}`, { method: 'DELETE' });
+              result = await res.json();
+            } catch (e) {
+              result = { error: 'не удалось отменить расписание' };
+            }
           }
 
           toolResults.push({
@@ -448,10 +494,22 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
           ...toolResults
         ];
 
+        // Не гоняем модель по кругу дальше в этом же ходу — при том же max_tokens
+        // она может опять упереться в лимит на следующей порции вызовов. Молча
+        // сохранённое уже сохранено, остальное пользователь попросит следующим сообщением.
+        if (hadToolParseError) break;
+
         response = await generateResponse(conversationHistory);
       }
 
-      const assistantMsg: Message = { role: 'assistant', content: response.content || 'Готово!', time: ft(), sources: response.sources };
+      const assistantMsg: Message = {
+        role: 'assistant',
+        content: hadToolParseError
+          ? 'Не получилось сделать всё за раз — часть уже добавлена. Скажи «продолжи», доделаю остальное'
+          : (response.content || 'Готово!'),
+        time: ft(),
+        sources: response.sources
+      };
       if (isFirstMessage) generateTitle(text, assistantMsg.content);
 
       setThreads(prev => prev.map(t => {
