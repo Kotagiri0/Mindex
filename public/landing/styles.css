@@ -1,6 +1,6 @@
 /* ───────── Мысль · Landing ───────── */
 .header-link {
-  font-family: 'Muller', sans-serif;
+  font-family: 'Mulish', sans-serif;
   font-size: 14px;
   color: rgba(255, 255, 255, 0.8);
   text-decoration: none;
@@ -19,22 +19,22 @@
   font-display: swap;
 }
 @font-face {
-  font-family: 'Muller';
-  src: url('/landing/assets/fonts/MullerRegular.ttf') format('truetype');
+  font-family: 'Mulish';
+  src: url('/landing/assets/fonts/Mulish-Regular.ttf') format('truetype');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
-  font-family: 'Muller';
-  src: url('/landing/assets/fonts/MullerMedium.ttf') format('truetype');
+  font-family: 'Mulish';
+  src: url('/landing/assets/fonts/Mulish-Medium.ttf') format('truetype');
   font-weight: 500;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
-  font-family: 'Muller';
-  src: url('/landing/assets/fonts/MullerBold.ttf') format('truetype');
+  font-family: 'Mulish';
+  src: url('/landing/assets/fonts/Mulish-Bold.ttf') format('truetype');
   font-weight: 700;
   font-style: normal;
   font-display: swap;
@@ -55,8 +55,8 @@
   --section: clamp(60px, 9vh, 100px);
 
   --font-display: 'Random Grotesque Spacious', 'Helvetica Neue', sans-serif;
-  --font-body: 'Muller', 'Helvetica Neue', sans-serif;
-  --font-accent: 'Muller', 'Helvetica Neue', sans-serif;
+  --font-body: 'Mulish', 'Helvetica Neue', sans-serif;
+  --font-accent: 'Mulish', 'Helvetica Neue', sans-serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }

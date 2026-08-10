@@ -38,7 +38,7 @@ interface EditTaskModalProps {
   liveGraph?: GraphNode[] | null;
 }
 
-const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const M = "'Mulish', 'Helvetica Neue', Helvetica, sans-serif";
 
 export default function EditTaskModal({ task, isCreate, initialDate, onClose, onUpdate, onDelete, thread, onSendThreadMessage, threadBusy, liveGraph }: EditTaskModalProps) {
   const [name, setName] = useState('');
@@ -373,7 +373,7 @@ function FieldBox({ children, style }: { children: React.ReactNode; style?: Reac
 
 const nativeTimeStyle = (hasValue: boolean): React.CSSProperties => ({
   width: 0, flex: 1, border: 'none', outline: 'none', background: 'transparent',
-  fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 15,
+  fontFamily: "'Mulish', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 15,
   fontWeight: hasValue ? 500 : 400,
   color: hasValue ? '#0B0D10' : 'rgba(11,13,16,0.3)',
   WebkitAppearance: 'none',
@@ -383,14 +383,14 @@ const nativeTimeStyle = (hasValue: boolean): React.CSSProperties => ({
 
 const inputStyle = (hasValue: boolean): React.CSSProperties => ({
   width: '100%', border: 'none', outline: 'none', background: 'transparent',
-  fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+  fontFamily: "'Mulish', 'Helvetica Neue', Helvetica, sans-serif",
   fontSize: 15,
   fontWeight: hasValue ? 500 : 400,
   color: hasValue ? '#0B0D10' : 'rgba(11,13,16,0.3)',
 });
 
 const valueStyle = (hasValue: boolean): React.CSSProperties => ({
-  fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+  fontFamily: "'Mulish', 'Helvetica Neue', Helvetica, sans-serif",
   fontSize: 15,
   fontWeight: hasValue ? 500 : 400,
   color: hasValue ? '#0B0D10' : 'rgba(11,13,16,0.3)',
@@ -402,7 +402,7 @@ const nativeInputStyle = (hasValue: boolean, _placeholder: string): React.CSSPro
   border: 'none',
   outline: 'none',
   background: 'transparent',
-  fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+  fontFamily: "'Mulish', 'Helvetica Neue', Helvetica, sans-serif",
   fontSize: 15,
   fontWeight: hasValue ? 500 : 400,
   color: hasValue ? '#0B0D10' : 'rgba(11,13,16,0.3)',

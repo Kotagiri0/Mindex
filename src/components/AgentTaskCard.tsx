@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 
-const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const M = "'Mulish', 'Helvetica Neue', Helvetica, sans-serif";
 
 export type AgentTaskCardStatus = 'done' | 'working' | 'needs' | 'pending';
 

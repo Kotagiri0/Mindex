@@ -27,7 +27,7 @@ function ThinkingPhrase() {
   }, []);
   return (
     <span style={{
-      fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+      fontFamily: "'Mulish', 'Helvetica Neue', Helvetica, sans-serif",
       fontSize: 14, color: 'rgba(34,34,36,0.4)', fontStyle: 'italic',
     }}>
       {THINKING_PHRASES[idx]}
@@ -1001,8 +1001,8 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
               width: m.role === 'user' ? undefined : '100%',
             }}>
               <div style={m.role === 'user'
-                ? { background: 'rgba(9,14,23,0.07)', borderRadius: 18, borderBottomRightRadius: 4, padding: '10px 14px', fontSize: 15, lineHeight: 1.5, color: '#222224', fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif" }
-                : { fontSize: 15, lineHeight: 1.75, color: '#222224', fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", width: '100%' }
+                ? { background: 'rgba(9,14,23,0.07)', borderRadius: 18, borderBottomRightRadius: 4, padding: '10px 14px', fontSize: 15, lineHeight: 1.5, color: '#222224', fontFamily: "'Mulish', 'Helvetica Neue', Helvetica, sans-serif" }
+                : { fontSize: 15, lineHeight: 1.75, color: '#222224', fontFamily: "'Mulish', 'Helvetica Neue', Helvetica, sans-serif", width: '100%' }
               }>
                 {/* Живой граф процесса (ТЗ раздел 8): прикреплён к ЭТОМУ сообщению,
                     не к отдельному блоку — переживает следующий ход, можно вернуться и посмотреть.
@@ -1135,7 +1135,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                           display: 'flex', alignItems: 'center', gap: 4,
                           background: openSourcesIdx === i ? 'rgba(34,34,36,0.08)' : 'none',
                           border: 'none', cursor: 'pointer', padding: '2px 8px', borderRadius: 20,
-                          fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+                          fontFamily: "'Mulish', 'Helvetica Neue', Helvetica, sans-serif",
                           fontSize: 12, color: openSourcesIdx === i ? '#222224' : '#bbb',
                           transition: 'color 0.12s, background 0.12s',
                         }}
@@ -1183,7 +1183,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                                 display: 'block', width: '100%', textAlign: 'left',
                                 padding: '8px 14px', fontSize: 13, color: item.color,
                                 background: 'none', border: 'none', cursor: 'pointer',
-                                fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+                                fontFamily: "'Mulish', 'Helvetica Neue', Helvetica, sans-serif",
                                 transition: 'background 0.1s',
                               }}
                               onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
@@ -1246,7 +1246,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                 }}
               >
                 <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(34,34,36,0.12)', margin: '12px auto 20px' }} />
-                <div style={{ padding: '0 20px 8px', fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase' as const, color: 'rgba(34,34,36,0.35)' }}>
+                <div style={{ padding: '0 20px 8px', fontFamily: "'Mulish', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase' as const, color: 'rgba(34,34,36,0.35)' }}>
                   Из архива · {sources.length}
                 </div>
                 {sources.map((s, si) => {
@@ -1269,16 +1269,16 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                         width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
                         background: 'rgba(34,34,36,0.07)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 12, fontWeight: 600, color: 'rgba(34,34,36,0.4)',
+                        fontFamily: "'Mulish', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 12, fontWeight: 600, color: 'rgba(34,34,36,0.4)',
                       }}>
                         {si + 1}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 14, color: '#222224', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontFamily: "'Mulish', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 14, color: '#222224', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {s.title}
                         </div>
                         {s.snippet && (
-                          <div style={{ fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 12, color: 'rgba(34,34,36,0.4)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', marginTop: 2 }}>
+                          <div style={{ fontFamily: "'Mulish', 'Helvetica Neue', Helvetica, sans-serif", fontSize: 12, color: 'rgba(34,34,36,0.4)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', marginTop: 2 }}>
                             {s.snippet}
                           </div>
                         )}
@@ -1316,7 +1316,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
                 marginBottom: 6, borderLeft: '2px solid #aaa',
               }}
             >
-              <span style={{ flex: 1, fontSize: 12, color: '#888', fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ flex: 1, fontSize: 12, color: '#888', fontFamily: "'Mulish', 'Helvetica Neue', Helvetica, sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {replyQuote.length > 100 ? replyQuote.slice(0, 100) + '...' : replyQuote}
               </span>
               <button onClick={() => setReplyQuote(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#aaa', padding: 0, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
@@ -1331,7 +1331,7 @@ export default function AIChat({ threadId, threads, setThreads, tasks, setTasks,
             rows={1}
             className="w-full bg-transparent outline-none"
             style={{
-              fontFamily: "'Muller', 'Helvetica Neue', Helvetica, sans-serif",
+              fontFamily: "'Mulish', 'Helvetica Neue', Helvetica, sans-serif",
               fontSize: '15px',
               color: '#222224',
               resize: 'none',

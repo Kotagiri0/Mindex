@@ -5,7 +5,7 @@ import { db } from '../lib/db';
 import { uuid } from '../lib/utils';
 import { useVoiceInput, isMobileDevice } from '../lib/useVoiceInput';
 
-const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const M = "'Mulish', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
 const FG = '#0B0D10';
 const BG = '#f0f0f0';

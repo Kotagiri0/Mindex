@@ -10,7 +10,7 @@ import {
 } from '../lib/timeline';
 import PrimeMascot from './PrimeMascot';
 
-const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const M = "'Mulish', 'Helvetica Neue', Helvetica, sans-serif";
 
 /** Высота одного часа в px по умолчанию. Меняется щипком (pinch-zoom). */
 const HOUR_H_DEFAULT = 88;

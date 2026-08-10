@@ -1,16 +1,16 @@
 /* ════════════════════════════════════════════════════════════════
    Мысль — лендинг v2. Палитра и композиция со скринов:
-   нейтральный серый фон + пастельные стикеры, шрифт Muller.
+   нейтральный серый фон + пастельные стикеры, шрифт Mulish.
    ════════════════════════════════════════════════════════════════ */
 
 @font-face {
-  font-family: 'Muller';
-  src: url('/landing/assets/fonts/MullerRegular.ttf') format('truetype');
+  font-family: 'Mulish';
+  src: url('/landing/assets/fonts/Mulish-Regular.ttf') format('truetype');
   font-weight: 400; font-style: normal; font-display: swap;
 }
 @font-face {
-  font-family: 'Muller';
-  src: url('/landing/assets/fonts/MullerMedium.ttf') format('truetype');
+  font-family: 'Mulish';
+  src: url('/landing/assets/fonts/Mulish-Medium.ttf') format('truetype');
   font-weight: 500; font-style: normal; font-display: swap;
 }
 :root {
@@ -46,7 +46,7 @@
 html { scroll-behavior: smooth; scroll-padding-top: 76px; }
 
 body {
-  font-family: 'Muller', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Mulish', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--bg);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;

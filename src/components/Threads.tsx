@@ -18,7 +18,7 @@ interface ThreadsProps {
   onSubScreenChange?: (active: boolean) => void;
 }
 
-const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const M = "'Mulish', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
 
 export default function Threads({ threads, setThreads, tasks, onNavigate, onOpenThread, onSubScreenChange }: ThreadsProps) {

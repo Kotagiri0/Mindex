@@ -3,24 +3,24 @@
 /* ─── Fonts ──────────────────────────────────────────────────────────────── */
 
 @font-face {
-  font-family: 'Muller';
-  src: url('/src/assets/fonts/MullerRegular.ttf') format('truetype');
+  font-family: 'Mulish';
+  src: url('/src/assets/fonts/Mulish-Regular.ttf') format('truetype');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'Muller';
-  src: url('/src/assets/fonts/MullerMedium.ttf') format('truetype');
+  font-family: 'Mulish';
+  src: url('/src/assets/fonts/Mulish-Medium.ttf') format('truetype');
   font-weight: 500;
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'Muller';
-  src: url('/src/assets/fonts/MullerBold.ttf') format('truetype');
+  font-family: 'Mulish';
+  src: url('/src/assets/fonts/Mulish-Bold.ttf') format('truetype');
   font-weight: 700;
   font-style: normal;
   font-display: swap;
@@ -68,7 +68,7 @@
 /* ─── Tailwind theme vars (for modal/auth components) ────────────────────── */
 
 @theme {
-  --font-sans: 'Muller', 'Helvetica Neue', Helvetica, sans-serif;
+  --font-sans: 'Mulish', 'Helvetica Neue', Helvetica, sans-serif;
   --color-bg: #f9f9f9;
   --color-surface: #ffffff;
   --color-surface2: #f2f2f2;
@@ -107,7 +107,7 @@ body {
   background: #f9f9f9; /* hardcoded fallback before CSS vars load */
   background: var(--bg);
   color: var(--text-primary);
-  font-family: 'Muller', 'Helvetica Neue', Helvetica, sans-serif;
+  font-family: 'Mulish', 'Helvetica Neue', Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;

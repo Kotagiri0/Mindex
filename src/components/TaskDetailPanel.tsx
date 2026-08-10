@@ -8,7 +8,7 @@ import PrimeMascot from './PrimeMascot';
 import TaskThread from './TaskThread';
 import type { GraphNode } from '../kora/graph';
 
-const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const M = "'Mulish', 'Helvetica Neue', Helvetica, sans-serif";
 
 export interface TaskCreatePatch {
   name: string;

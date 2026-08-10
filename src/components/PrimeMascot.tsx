@@ -111,7 +111,7 @@ interface PrimeMascotProps {
   mood?: PrimeMood;
 }
 
-const M = "'Muller', sans-serif";
+const M = "'Mulish', sans-serif";
 
 // Внутренние типы кадров анимации (без импорта типов framer — они не экспортируются стабильно
 // из 'motion/react' на верхнем уровне; корректность значений мы контролируем сами).

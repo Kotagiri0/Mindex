@@ -11,7 +11,7 @@ interface TaskItemProps {
   onToggleSubtask?: (taskId: string, subtaskId: string) => void | Promise<void>;
 }
 
-const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const M = "'Mulish', 'Helvetica Neue', Helvetica, sans-serif";
 
 export default function TaskItem({ task, onToggle, onClick, onToggleSubtask }: TaskItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);

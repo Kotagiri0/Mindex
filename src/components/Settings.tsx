@@ -15,7 +15,7 @@ import {
   type GoogleCalendarItem,
 } from '../lib/google-calendar';
 
-const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const M = "'Mulish', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
 
 interface SettingsProps {

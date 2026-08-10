@@ -7,7 +7,7 @@ import { useYandexLogin } from '../lib/useYandexLogin';
 
 // Дизайн-токены публичной страницы — те же, что у экрана входа (off-white, тёмный акцент).
 const F = "'Random Grotesque', sans-serif";
-const M = "'Muller', sans-serif";
+const M = "'Mulish', sans-serif";
 const BG = '#f0f0f0';
 const FG = '#222224';
 

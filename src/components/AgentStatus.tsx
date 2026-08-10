@@ -18,7 +18,7 @@ interface AgentStatusProps {
   compact?: boolean;
 }
 
-const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const M = "'Mulish', 'Helvetica Neue', Helvetica, sans-serif";
 
 // Склонение «задача/задачи/задач»
 function pluralTasks(n: number): string {

@@ -5,7 +5,7 @@ import type { GraphNode, GraphNodeStatus } from '../kora/graph';
 
 export type { GraphNode, GraphNodeStatus };
 
-const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const M = "'Mulish', 'Helvetica Neue', Helvetica, sans-serif";
 
 interface AgentThreadProps {
   nodes: GraphNode[];

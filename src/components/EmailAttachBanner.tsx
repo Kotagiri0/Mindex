@@ -8,7 +8,7 @@ interface EmailAttachBannerProps {
 }
 
 const F = "'Random Grotesque', sans-serif";
-const M = "'Muller', sans-serif";
+const M = "'Mulish', sans-serif";
 
 
 async function sendOtp(email: string): Promise<void> {

@@ -6,7 +6,7 @@ import { db } from '../lib/db';
 import { useVoiceInput } from '../lib/useVoiceInput';
 import { SettingsIcon } from './icons';
 
-const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const M = "'Mulish', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
 const DAY_NAMES = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
 

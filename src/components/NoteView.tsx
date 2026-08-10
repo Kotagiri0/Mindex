@@ -5,7 +5,7 @@ import { Thread, Task } from '../types';
 import { db } from '../lib/db';
 import { apiFetch } from '../lib/auth';
 
-const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const M = "'Mulish', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
 
 function renderMarkdown(text: string): React.ReactNode[] {

@@ -4,7 +4,7 @@ import { Loader2, Check, Copy } from 'lucide-react';
 import { getSessionToken, apiFetch } from '../lib/auth';
 
 const F = "'Random Grotesque', sans-serif";
-const M = "'Muller', sans-serif";
+const M = "'Mulish', sans-serif";
 const BG = '#f0f0f0';
 const FG = '#222224';
 

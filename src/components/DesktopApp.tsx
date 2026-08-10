@@ -30,7 +30,7 @@ import type { GraphNode } from '../kora/graph';
 import { useVoiceInput } from '../lib/useVoiceInput';
 import { useTaskThread } from '../hooks/useTaskThread';
 
-const M = "'Muller', 'Helvetica Neue', Helvetica, sans-serif";
+const M = "'Mulish', 'Helvetica Neue', Helvetica, sans-serif";
 const F = "'Random Grotesque', sans-serif";
 
 const DAY_NAMES_RU = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
