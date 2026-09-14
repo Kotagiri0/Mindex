@@ -52,14 +52,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Normalize image repository
+        run: echo "IMAGE_REPOSITORY=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:sha-${{ github.event.workflow_run.head_sha }}
-            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ env.IMAGE_REPOSITORY }}:sha-${{ github.event.workflow_run.head_sha }}
+            ghcr.io/${{ env.IMAGE_REPOSITORY }}:latest
 
   deploy-staging:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
